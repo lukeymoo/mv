@@ -1,1 +1,0 @@
-clang++     CMakeFiles/main.dir/mvDevice.cpp.o CMakeFiles/main.dir/mvKeyboard.cpp.o CMakeFiles/main.dir/mvMouse.cpp.o CMakeFiles/main.dir/mvException.cpp.o CMakeFiles/main.dir/mvWindow.cpp.o CMakeFiles/main.dir/main.cpp.o  -o build/main  -lgcc -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi -lstdc++fs 
