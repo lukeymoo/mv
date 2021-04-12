@@ -258,6 +258,33 @@ mvMouse.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvMouse.cpp.s
 .PHONY : mvMouse.cpp.s
 
+mvSwap.o: mvSwap.cpp.o
+
+.PHONY : mvSwap.o
+
+# target to build an object file
+mvSwap.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvSwap.cpp.o
+.PHONY : mvSwap.cpp.o
+
+mvSwap.i: mvSwap.cpp.i
+
+.PHONY : mvSwap.i
+
+# target to preprocess a source file
+mvSwap.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvSwap.cpp.i
+.PHONY : mvSwap.cpp.i
+
+mvSwap.s: mvSwap.cpp.s
+
+.PHONY : mvSwap.s
+
+# target to generate assembly for a file
+mvSwap.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvSwap.cpp.s
+.PHONY : mvSwap.cpp.s
+
 mvWindow.o: mvWindow.cpp.o
 
 .PHONY : mvWindow.o
@@ -309,6 +336,9 @@ help:
 	@echo "... mvMouse.o"
 	@echo "... mvMouse.i"
 	@echo "... mvMouse.s"
+	@echo "... mvSwap.o"
+	@echo "... mvSwap.i"
+	@echo "... mvSwap.s"
 	@echo "... mvWindow.o"
 	@echo "... mvWindow.i"
 	@echo "... mvWindow.s"
