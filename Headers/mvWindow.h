@@ -17,8 +17,8 @@
 #include "mvSwap.h"
 #include "mvInit.h"
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 768
 
 const std::vector<const char *> requestedValidationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -60,6 +60,12 @@ namespace mv
         void createCommandBuffers(void);
         void createSynchronizationPrimitives(void);
         void setupDepthStencil(void);
+        void setupRenderPass(void);
+        void createPipelineCache(void);
+        void setupFramebuffer(void);
+
+        void destroyCommandBuffers(void);
+        void destroyCommandPool(void);
 
     public:
         bool goodInit = true;
@@ -71,19 +77,24 @@ namespace mv
     protected: // Graphics
         uint32_t windowWidth = 0;
         uint32_t windowHeight = 0;
+        
         VkInstance m_Instance = nullptr;
         VkPhysicalDevice m_PhysicalDevice = nullptr;
         VkDevice m_Device = nullptr;
         VkQueue m_GraphicsQueue = nullptr;
         VkCommandPool m_CommandPool = nullptr;
+        VkRenderPass m_RenderPass = nullptr;
+        VkPipelineCache m_PipelineCache = nullptr;
+
         Swap swapChain;
 
         std::vector<VkCommandBuffer> cmdBuffers;
+        std::vector<VkFramebuffer> frameBuffers;
         std::vector<VkFence> waitFences;
 
         VkSubmitInfo submitInfo = {};
 
-        VkFormat format{};
+        VkFormat depthFormat{};
         VkPhysicalDeviceFeatures features = {};
         VkPhysicalDeviceProperties properties = {};
         VkPhysicalDeviceMemoryProperties memoryProperties = {};
@@ -95,6 +106,14 @@ namespace mv
             VkSemaphore renderComplete;
         } semaphores;
 
+        struct
+        {
+            VkImage image = nullptr;
+            VkDeviceMemory mem = nullptr;
+            VkImageView view = nullptr;
+        } depthStencil;
+        
+
     private: // Window Management
         xcb_connection_t *connection;
         xcb_window_t window;
@@ -104,7 +123,6 @@ namespace mv
     };
 };
 
-#define W_EXCEPT(string) throw Exception(__LINE__, __FILE__, string)
 #define VK_CHECK(result)                                                \
     if (result != VK_SUCCESS)                                           \
     {                                                                   \

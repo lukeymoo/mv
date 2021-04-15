@@ -16,9 +16,9 @@ namespace mv
         explicit Device(VkPhysicalDevice physicaldevice);
         ~Device();
 
-        VkPhysicalDevice m_PhysicalDevice = nullptr;
-        VkDevice m_Device = nullptr;
-        VkQueue m_GraphicsQueue = nullptr;
+        VkPhysicalDevice physicalDevice = nullptr;
+        VkDevice device = nullptr;
+        VkQueue graphicsQueue = nullptr;
 
         VkPhysicalDeviceFeatures enabledFeatures = {};
         VkPhysicalDeviceProperties properties = {};

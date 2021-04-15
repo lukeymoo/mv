@@ -67,7 +67,49 @@ mv::Window::Window(int w, int h, const char *title)
 
 mv::Window::~Window(void)
 {
-    // add here
+    swapChain.cleanup();
+    destroyCommandBuffers();
+
+    if (m_RenderPass)
+    {
+        vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+    }
+    if (!frameBuffers.empty())
+    {
+        for (size_t i = 0; i < frameBuffers.size(); i++)
+        {
+            if (frameBuffers[i])
+            {
+                vkDestroyFramebuffer(m_Device, frameBuffers[i], nullptr);
+            }
+        }
+    }
+
+    if (depthStencil.image)
+    {
+        vkDestroyImage(m_Device, depthStencil.image, nullptr);
+    }
+    if (depthStencil.view)
+    {
+        vkDestroyImageView(m_Device, depthStencil.view, nullptr);
+    }
+    if (depthStencil.mem)
+    {
+        vkFreeMemory(m_Device, depthStencil.mem, nullptr);
+    }
+
+    if (m_PipelineCache)
+    {
+        vkDestroyPipelineCache(m_Device, m_PipelineCache, nullptr);
+    }
+
+    destroyCommandPool();
+    vkDestroySemaphore(m_Device, semaphores.renderComplete, nullptr);
+    vkDestroySemaphore(m_Device, semaphores.presentComplete, nullptr);
+    for (auto &fence : waitFences)
+    {
+        vkDestroyFence(m_Device, fence, nullptr);
+    }
     delete device;
 
     if (m_Instance)
@@ -83,7 +125,7 @@ void mv::Window::go(void)
     // initialize vulkan
     if (!initVulkan())
     {
-        W_EXCEPT("Failed to initialize Vulkan");
+        throw std::runtime_error("Failed to initialize Vulkan");
     }
 
     swapChain.initSurface(connection, window);
@@ -92,6 +134,9 @@ void mv::Window::go(void)
     createCommandBuffers();
     createSynchronizationPrimitives();
     setupDepthStencil();
+    setupRenderPass();
+    createPipelineCache();
+    setupFramebuffer();
 
     while ((event = xcb_wait_for_event(connection))) // replace this as it is a blocking call
     {
@@ -111,14 +156,14 @@ bool mv::Window::initVulkan(void)
     // Create instance
     if (createInstance() != VK_SUCCESS)
     {
-        W_EXCEPT("Failed to create vulkan instance");
+        throw std::runtime_error("Failed to create vulkan instance");
     }
 
     uint32_t deviceCount = 0;
     VK_CHECK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr));
     if (deviceCount == 0)
     {
-        W_EXCEPT("No adapters found on system");
+        throw std::runtime_error("No adapters found on system");
     }
     std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
     VK_CHECK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, physicalDevices.data()));
@@ -134,13 +179,13 @@ bool mv::Window::initVulkan(void)
     device = new mv::Device(m_PhysicalDevice);
     if (device->createLogicalDevice(features, requestedDeviceExtensions) != VK_SUCCESS)
     {
-        W_EXCEPT("Failed to create logical device");
+        throw std::runtime_error("Failed to create logical device");
     }
 
-    m_Device = device->m_Device;
+    m_Device = device->device;
 
     // get format
-    format = device->getSupportedDepthFormat(m_PhysicalDevice);
+    depthFormat = device->getSupportedDepthFormat(m_PhysicalDevice);
 
     // get graphics queue
     vkGetDeviceQueue(m_Device, device->queueFamilyIndices.graphics, 0, &m_GraphicsQueue);
@@ -224,8 +269,166 @@ VkResult mv::Window::createInstance(void)
     return vkCreateInstance(&createInfo, nullptr, &m_Instance);
 }
 
+void mv::Window::createCommandBuffers(void)
+{
+    cmdBuffers.resize(swapChain.imageCount);
+
+    VkCommandBufferAllocateInfo allocInfo = mv::initializer::commandBufferAllocateInfo(m_CommandPool,
+                                                                                       VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                                                                       static_cast<uint32_t>(cmdBuffers.size()));
+    if (vkAllocateCommandBuffers(m_Device, &allocInfo, cmdBuffers.data()) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate command buffers");
+    }
+    return;
+}
+
+void mv::Window::createSynchronizationPrimitives(void)
+{
+    VkFenceCreateInfo fenceInfo = mv::initializer::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+    waitFences.resize(cmdBuffers.size());
+    for (auto &fence : waitFences)
+    {
+        if (vkCreateFence(m_Device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create wait fence");
+        }
+    }
+    return;
+}
+
 void mv::Window::setupDepthStencil(void)
 {
+    // Create depth test image
+    VkImageCreateInfo imageCI{};
+    imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageCI.imageType = VK_IMAGE_TYPE_2D;
+    imageCI.format = depthFormat;
+    imageCI.extent = {windowWidth, windowHeight, 1};
+    imageCI.mipLevels = 1;
+    imageCI.arrayLayers = 1;
+    imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageCI.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    if (vkCreateImage(m_Device, &imageCI, nullptr, &depthStencil.image) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create depth stencil image");
+    }
+    return;
+}
+
+void mv::Window::setupRenderPass(void)
+{
+    std::array<VkAttachmentDescription, 2> attachments = {};
+    // Color attachment
+    attachments[0].format = swapChain.colorFormat;
+    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    // Depth attachment
+    attachments[1].format = depthFormat;
+    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference colorRef = {};
+    colorRef.attachment = 0;
+    colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference depthRef = {};
+    depthRef.attachment = 1;
+    depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpassDesc = {};
+    subpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpassDesc.colorAttachmentCount = 1;
+    subpassDesc.pColorAttachments = &colorRef;
+    subpassDesc.pDepthStencilAttachment = &depthRef;
+    subpassDesc.inputAttachmentCount = 0;
+    subpassDesc.pInputAttachments = nullptr;
+    subpassDesc.preserveAttachmentCount = 0;
+    subpassDesc.pPreserveAttachments = nullptr;
+    subpassDesc.pResolveAttachments = nullptr;
+
+    std::array<VkSubpassDependency, 2> dependencies = {};
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    renderPassInfo.pAttachments = attachments.data();
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpassDesc;
+    renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+    renderPassInfo.pDependencies = dependencies.data();
+
+    if (vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create render pass");
+    }
+    return;
+}
+
+void mv::Window::createPipelineCache(void)
+{
+    VkPipelineCacheCreateInfo pcinfo = {};
+    pcinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    if (vkCreatePipelineCache(m_Device, &pcinfo, nullptr, &m_PipelineCache) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create pipeline cache");
+    }
+    return;
+}
+
+void mv::Window::setupFramebuffer(void)
+{
+    VkImageView attachments[2];
+
+    attachments[1] = depthStencil.view;
+
+    VkFramebufferCreateInfo framebufferInfo = {};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = m_RenderPass;
+    framebufferInfo.attachmentCount = 2;
+    framebufferInfo.pAttachments = attachments;
+    framebufferInfo.width = windowWidth;
+    framebufferInfo.height = windowHeight;
+    framebufferInfo.layers = 1;
+
+    // Framebuffer per swap image
+    frameBuffers.resize(swapChain.imageCount);
+    for (size_t i = 0; i < frameBuffers.size(); i++)
+    {
+        attachments[0] = swapChain.buffers[i].view;
+        if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &frameBuffers[i]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create frame buffer");
+        }
+    }
     return;
 }
 
@@ -234,19 +437,19 @@ void mv::Window::checkValidationSupport(void)
     uint32_t layerCount = 0;
     if (vkEnumerateInstanceLayerProperties(&layerCount, nullptr) != VK_SUCCESS)
     {
-        W_EXCEPT("Failed to query supported instance layer count");
+        throw std::runtime_error("Failed to query supported instance layer count");
     }
 
     if (layerCount == 0 && !requestedValidationLayers.empty())
     {
-        W_EXCEPT("No supported validation layers found");
+        throw std::runtime_error("No supported validation layers found");
     }
 
     std::vector<VkLayerProperties> availableLayers(layerCount);
     if (vkEnumerateInstanceLayerProperties(&layerCount,
                                            availableLayers.data()) != VK_SUCCESS)
     {
-        W_EXCEPT("Failed to query supported instance layer list");
+        throw std::runtime_error("Failed to query supported instance layer list");
     }
 
     std::string prelude = "The following instance layers were not found...\n";
@@ -271,7 +474,7 @@ void mv::Window::checkValidationSupport(void)
 
     if (!failed.empty())
     {
-        W_EXCEPT(prelude + failed);
+        throw std::runtime_error(prelude + failed);
     }
     else
     {
@@ -280,30 +483,20 @@ void mv::Window::checkValidationSupport(void)
     return;
 }
 
-void mv::Window::createCommandBuffers(void)
+void mv::Window::destroyCommandBuffers(void)
 {
-    cmdBuffers.resize(swapChain.imageCount);
-
-    VkCommandBufferAllocateInfo allocInfo = mv::initializer::commandBufferAllocateInfo(m_CommandPool,
-                                                                                       VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                                                                       static_cast<uint32_t>(cmdBuffers.size()));
-    if (vkAllocateCommandBuffers(m_Device, &allocInfo, cmdBuffers.data()) != VK_SUCCESS)
+    if (!cmdBuffers.empty())
     {
-        std::runtime_error("Failed to allocate command buffers");
+        vkFreeCommandBuffers(m_Device, m_CommandPool, static_cast<uint32_t>(cmdBuffers.size()), cmdBuffers.data());
     }
     return;
 }
 
-void mv::Window::createSynchronizationPrimitives(void)
+void mv::Window::destroyCommandPool(void)
 {
-    VkFenceCreateInfo fenceInfo = mv::initializer::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    waitFences.resize(cmdBuffers.size());
-    for (auto &fence : waitFences)
+    if (m_CommandPool != nullptr)
     {
-        if (vkCreateFence(m_Device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
-        {
-            std::runtime_error("Failed to create wait fence");
-        }
+        vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
     }
     return;
 }
@@ -315,12 +508,12 @@ void mv::Window::checkInstanceExt(void)
                                                &instanceExtensionCount,
                                                nullptr) != VK_SUCCESS)
     {
-        W_EXCEPT("Failed to query instance supported extension count");
+        throw std::runtime_error("Failed to query instance supported extension count");
     }
 
     if (instanceExtensionCount == 0 && !requestedInstanceExtensions.empty())
     {
-        W_EXCEPT("No instance level extensions supported by device");
+        throw std::runtime_error("No instance level extensions supported by device");
     }
 
     std::vector<VkExtensionProperties> availableInstanceExtensions(instanceExtensionCount);
@@ -328,7 +521,7 @@ void mv::Window::checkInstanceExt(void)
                                                &instanceExtensionCount,
                                                availableInstanceExtensions.data()) != VK_SUCCESS)
     {
-        W_EXCEPT("Failed to query instance supported extensions list");
+        throw std::runtime_error("Failed to query instance supported extensions list");
     }
 
     std::string prelude = "The following instance extensions were not found...\n";
@@ -355,7 +548,7 @@ void mv::Window::checkInstanceExt(void)
 
     if (!failed.empty())
     {
-        W_EXCEPT(prelude + failed);
+        throw std::runtime_error(prelude + failed);
     }
 
     return;

@@ -1,5 +1,24 @@
 #include "mvSwap.h"
 
+void mv::Swap::cleanup(void)
+{
+    if (swapchain != nullptr)
+    {
+        for (uint32_t i = 0; i < imageCount; i++)
+        {
+            vkDestroyImageView(device, buffers[i].view, nullptr);
+        }
+    }
+    if(surface != nullptr)
+    {
+        fpDestroySwapchainKHR(device, swapchain, nullptr);
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+    }
+    swapchain = nullptr;
+    surface = nullptr;
+    return;
+}
+
 void mv::Swap::initSurface(xcb_connection_t *conn, xcb_window_t &window)
 {
     VkXcbSurfaceCreateInfoKHR surfaceInfo = {};
@@ -10,7 +29,7 @@ void mv::Swap::initSurface(xcb_connection_t *conn, xcb_window_t &window)
     this->window = window;
     if (vkCreateXcbSurfaceKHR(instance, &surfaceInfo, nullptr, &surface) != VK_SUCCESS)
     {
-        std::runtime_error("Failed to create xcb surface");
+        throw std::runtime_error("Failed to create xcb surface");
     }
 
     // get queue family prop
@@ -60,13 +79,13 @@ void mv::Swap::initSurface(xcb_connection_t *conn, xcb_window_t &window)
     // failed to find queues
     if (graphicsIndex == UINT32_MAX || presentIndex == UINT32_MAX)
     {
-        std::runtime_error("Failed to find graphics AND present support");
+        throw std::runtime_error("Failed to find graphics AND present support");
     }
 
     // dont support separate queue operations
     if (graphicsIndex != presentIndex)
     {
-        std::runtime_error("This app does not support separate graphics and present queues yet");
+        throw std::runtime_error("This app does not support separate graphics and present queues yet");
     }
 
     queueIndex = graphicsIndex;
@@ -136,20 +155,20 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
     VkSurfaceCapabilitiesKHR capabilities{};
     if (fpGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities) != VK_SUCCESS)
     {
-        std::runtime_error("Error getting surface capabilities");
+        throw std::runtime_error("Error getting surface capabilities");
     }
 
     // get present modes
     uint32_t presentCount = 0;
     if (fpGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentCount, nullptr) != VK_SUCCESS)
     {
-        std::runtime_error("Error getting count of present modes");
+        throw std::runtime_error("Error getting count of present modes");
     }
     assert(presentCount > 0);
     std::vector<VkPresentModeKHR> presentModes(presentCount);
     if (fpGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentCount, presentModes.data()) != VK_SUCCESS)
     {
-        std::runtime_error("Failed to retreive list of present modes");
+        throw std::runtime_error("Failed to retreive list of present modes");
     }
 
     VkExtent2D swapExtent = {};
@@ -157,6 +176,7 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
     xcb_get_geometry_cookie_t cookie;
     xcb_get_geometry_reply_t *reply;
 
+    // Prefer to configure extent from a direct response from x server
     cookie = xcb_get_geometry(conn, window);
     if ((reply = xcb_get_geometry_reply(conn, cookie, NULL)))
     {
@@ -168,7 +188,7 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
                   << "Width -> " << *w << std::endl
                   << "Height-> " << *h << std::endl;
     }
-    else
+    else // Use the extent given by vulkan surface capabilities check earlier
     {
         *w = capabilities.currentExtent.width;
         *h = capabilities.currentExtent.height;
@@ -246,20 +266,20 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
 
     if (fpCreateSwapchainKHR(device, &swapCI, nullptr, &swapchain) != VK_SUCCESS)
     {
-        std::runtime_error("Failed to create swap chain");
+        throw std::runtime_error("Failed to create swap chain");
     }
 
     // get swap images
     if (fpGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr) != VK_SUCCESS)
     {
-        std::runtime_error("Failed to query swap chain image count");
+        throw std::runtime_error("Failed to query swap chain image count");
     }
     assert(imageCount > 0);
 
     images.resize(imageCount);
     if (fpGetSwapchainImagesKHR(device, swapchain, &imageCount, images.data()) != VK_SUCCESS)
     {
-        std::runtime_error("Failed to retreive swap chain images");
+        throw std::runtime_error("Failed to retreive swap chain images");
     }
 
     // create our swapchain buffer objs representing swap image & swap image view
@@ -287,7 +307,7 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
         viewCI.image = buffers[i].image;
         if (vkCreateImageView(device, &viewCI, nullptr, &buffers[i].view) != VK_SUCCESS)
         {
-            std::runtime_error("Failed to create view into swapchain image");
+            throw std::runtime_error("Failed to create view into swapchain image");
         }
     }
     return;
