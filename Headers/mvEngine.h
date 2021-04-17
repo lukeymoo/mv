@@ -8,7 +8,7 @@
 
 namespace mv
 {
-    class Engine : public mv::Window
+    class Engine : public mv::MWindow
     {
     public:
         struct Object
@@ -33,9 +33,13 @@ namespace mv
         VkDescriptorPool descriptorPool = nullptr;
         VkDescriptorSetLayout descriptorLayout = nullptr;
 
+        Engine &operator=(const Engine &) = delete;
+        Engine(const Engine &) = delete;
+
         Engine(int w, int h, const char *title);
         ~Engine() // Cleanup
         {
+            vkDeviceWaitIdle(device->device);
             if (pipeline)
             {
                 vkDestroyPipeline(device->device, pipeline, nullptr);

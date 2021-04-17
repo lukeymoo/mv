@@ -1,9 +1,9 @@
 #ifndef HEADERS_MVSWAP_H_
 #define HEADERS_MVSWAP_H_
 
-#include <xcb/xcb.h>
+#include <X11/Xlib.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_xcb.h>
+#include <vulkan/vulkan_xlib.h>
 
 #include <iostream>
 #include <string.h>
@@ -44,14 +44,14 @@ namespace mv
         VkColorSpaceKHR colorSpace = {};
         VkSwapchainKHR swapchain = nullptr;
         uint32_t imageCount = 0; // swap chain image count
-        xcb_connection_t *conn;
-        xcb_window_t window;
+        Display* display;
+        Window window;
 
         std::vector<VkImage> images; // swapchain image handles
         std::vector<SwapChainBuffer> buffers;
         uint32_t queueIndex = UINT32_MAX; // graphics queue index
 
-        void initSurface(xcb_connection_t *conn, xcb_window_t &window);
+        void initSurface(Display *disp, Window &window);
         void create(uint32_t *width, uint32_t *height);
         void connect(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
         void cleanup(void);

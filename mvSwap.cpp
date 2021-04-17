@@ -19,15 +19,15 @@ void mv::Swap::cleanup(void)
     return;
 }
 
-void mv::Swap::initSurface(xcb_connection_t *conn, xcb_window_t &window)
+void mv::Swap::initSurface(Display *disp, Window &window)
 {
-    VkXcbSurfaceCreateInfoKHR surfaceInfo = {};
+    VkXlibSurfaceCreateInfoKHR surfaceInfo = {};
     surfaceInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-    surfaceInfo.connection = conn;
+    surfaceInfo.dpy = disp;
     surfaceInfo.window = window;
-    this->conn = conn;
+    this->display = disp;
     this->window = window;
-    if (vkCreateXcbSurfaceKHR(instance, &surfaceInfo, nullptr, &surface) != VK_SUCCESS)
+    if (vkCreateXlibSurfaceKHR(instance, &surfaceInfo, nullptr, &surface) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create xcb surface");
     }

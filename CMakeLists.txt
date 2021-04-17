@@ -39,4 +39,4 @@ add_executable(main ${HEADERS} ${SOURCES})
 
 target_include_directories(main PUBLIC Headers/)
 
-target_link_libraries(main gcc vulkan dl pthread xcb X11 Xxf86vm Xrandr Xi stdc++fs)
+target_link_libraries(main gcc vulkan dl X11 Xxf86vm Xrandr Xi stdc++fs)

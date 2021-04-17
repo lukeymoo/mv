@@ -32,7 +32,7 @@ mv::Window::Window(int w, int h, const char *title)
     values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS |
                 XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_POINTER_MOTION |
                 XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW |
-                XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE;
+                XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
     // create window
     window = xcb_generate_id(connection);
@@ -48,6 +48,8 @@ mv::Window::Window(int w, int h, const char *title)
                       screen->root_visual,
                       mask, values);
 
+    xcb_flush(connection);
+
     xcb_change_property(connection,
                         XCB_PROP_MODE_REPLACE,
                         window,
@@ -57,9 +59,15 @@ mv::Window::Window(int w, int h, const char *title)
                         strlen(title),
                         title);
 
+    xcb_intern_atom_cookie_t protocols_cookie = xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
+    xcb_intern_atom_reply_t *protocols_reply = xcb_intern_atom_reply(connection, protocols_cookie, 0);
+    xcb_intern_atom_cookie_t delete_cookie = xcb_intern_atom(connection, 0, 16, "WM_DELETE_WINDOW");
+    xcb_intern_atom_reply_t *delete_reply = xcb_intern_atom_reply(connection, delete_cookie, 0);
+    xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, (*protocols_reply).atom, 4, 32, 1, &(*delete_reply).atom);
+    free(protocols_reply);
+
     // map window
     xcb_map_window(connection, window);
-
     xcb_flush(connection);
 
     return;
@@ -67,8 +75,33 @@ mv::Window::Window(int w, int h, const char *title)
 
 mv::Window::~Window(void)
 {
+    vkDeviceWaitIdle(m_Device);
     swapChain.cleanup();
     destroyCommandBuffers();
+
+    std::cout << std::endl
+              << std::endl;
+    for (size_t i = 0; i < static_cast<uint32_t>(waitFences.size()); i++)
+    {
+        std::cout << "wait fences ... " << waitFences[i] << " index => " << i << std::endl;
+    }
+
+    // for (auto &fence : waitFences)
+    // {
+    //     std::cout << "wait fence des => " << fence << std::endl;
+    //     if (fence != nullptr)
+    //     {
+    //         vkDestroyFence(m_Device, fence, nullptr);
+    //     }
+    // }
+    for (auto &fence : inFlightFences)
+    {
+        std::cout << "flight fence des => " << fence << std::endl;
+        if (fence != nullptr)
+        {
+            vkDestroyFence(m_Device, fence, nullptr);
+        }
+    }
 
     if (m_RenderPass)
     {
@@ -106,16 +139,17 @@ mv::Window::~Window(void)
     destroyCommandPool();
     vkDestroySemaphore(m_Device, semaphores.renderComplete, nullptr);
     vkDestroySemaphore(m_Device, semaphores.presentComplete, nullptr);
-    for (auto &fence : waitFences)
+
+    if (device)
     {
-        vkDestroyFence(m_Device, fence, nullptr);
+        delete device;
     }
-    delete device;
 
     if (m_Instance)
     {
         vkDestroyInstance(m_Instance, nullptr);
     }
+    xcb_destroy_window(connection, window);
     xcb_disconnect(connection);
     return;
 }
@@ -306,13 +340,24 @@ void mv::Window::createCommandBuffers(void)
 void mv::Window::createSynchronizationPrimitives(void)
 {
     VkFenceCreateInfo fenceInfo = mv::initializer::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    waitFences.resize(cmdBuffers.size());
-    for (auto &fence : waitFences)
+    waitFences.resize(cmdBuffers.size(), VK_NULL_HANDLE);
+    // for (auto &fence : waitFences)
+    // {
+    //     if (vkCreateFence(m_Device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
+    //     {
+    //         throw std::runtime_error("Failed to create wait fence");
+    //     }
+    //     std::cout << "Wait fence AFTER => " << fence << std::endl;
+    // }
+
+    inFlightFences.resize(MAX_IN_FLIGHT);
+    for (auto &fence : inFlightFences)
     {
         if (vkCreateFence(m_Device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
         {
-            throw std::runtime_error("Failed to create wait fence");
+            throw std::runtime_error("Failed to create in flight fence");
         }
+        std::cout << "flight fence AFTER => " << fence << std::endl;
     }
     return;
 }

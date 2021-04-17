@@ -1,7 +1,7 @@
 #include "mvEngine.h"
 
 mv::Engine::Engine(int w, int h, const char *title)
-    : Window(w, h, title)
+    : MWindow(w, h, title)
 {
     return;
 }
@@ -20,18 +20,102 @@ void mv::Engine::go(void)
 
     preparePipeline();
 
+    for (int i = 0; i < swapChain.imageCount; i++)
+    {
+        recordCommandBuffer(i);
+    }
+
     // Record commands to already created command buffers(per swap)
     // Create pipeline and tie all resources together
+    uint32_t imageIndex = 0;
+    size_t currentFrame = 0;
 
-    while ((event = xcb_wait_for_event(connection))) // replace this as it is a blocking call
+    while (running)
     {
-        switch (event->response_type & ~0x80)
+
+        event = xcb_poll_for_event(connection);
+
+        if (event) // replace this as it is a blocking call
         {
-        default:
-            break;
+            switch (event->response_type & 0x7f)
+            {
+            case XCB_CLIENT_MESSAGE:
+                std::cout << "client message\n";
+                if ((*(xcb_client_message_event_t *)event).data.data32[0] == (*delete_reply).atom)
+                {
+                    running = false;
+                    std::cout << "quitting" << std::endl;
+                    free(delete_reply);
+                }
+                break;
+            default:
+                break;
+            }
+
+            if (event)
+            {
+                free(event);
+            }
         }
 
-        free(event);
+        /*
+            DRAW
+        */
+        vkWaitForFences(device->device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+        currentFrame = (currentFrame + 1) & 2;
+
+        if (vkAcquireNextImageKHR(device->device, swapChain.swapchain, UINT64_MAX, semaphores.presentComplete, VK_NULL_HANDLE, &imageIndex) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to obtain next swap image");
+        }
+
+        // TODO
+        // case checking
+
+        if (waitFences[imageIndex] != VK_NULL_HANDLE)
+        {
+            vkWaitForFences(device->device, 1, &waitFences[imageIndex], VK_TRUE, UINT64_MAX);
+        }
+
+        // mark in use
+        waitFences[imageIndex] = inFlightFences[currentFrame];
+
+        VkSubmitInfo submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        VkSemaphore waitSemaphores[] = {semaphores.presentComplete};
+        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = waitSemaphores;
+        submitInfo.pWaitDstStageMask = waitStages;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &cmdBuffers[imageIndex];
+        VkSemaphore renderSemaphores[] = {semaphores.renderComplete};
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = renderSemaphores;
+
+        vkResetFences(device->device, 1, &inFlightFences[currentFrame]);
+
+        if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to submit queue");
+        }
+
+        VkPresentInfoKHR presentInfo = {};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.pNext = nullptr;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = renderSemaphores;
+        VkSwapchainKHR swapchains[] = {swapChain.swapchain};
+        presentInfo.swapchainCount = 1;
+        presentInfo.pSwapchains = swapchains;
+        presentInfo.pImageIndices = &imageIndex;
+        presentInfo.pResults = nullptr;
+
+        if (vkQueuePresentKHR(m_GraphicsQueue, &presentInfo) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to present");
+        }
     }
     return;
 }
@@ -157,7 +241,7 @@ void mv::Engine::preparePipeline(void)
     vp.height = windowHeight;
     vp.minDepth = 0.0f;
     vp.maxDepth = 1.0f;
-    
+
     sc.offset = {0, 0};
     sc.extent = swapChain.swapExtent;
 
@@ -224,24 +308,39 @@ void mv::Engine::preparePipeline(void)
 
 void mv::Engine::recordCommandBuffer(uint32_t imageIndex)
 {
-    // VkCommandBufferBeginInfo beginInfo = {};
-    // beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    // beginInfo.pNext = nullptr;
-    // beginInfo.flags = 0;
-    // beginInfo.pInheritanceInfo = nullptr;
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.pNext = nullptr;
+    beginInfo.flags = 0;
+    beginInfo.pInheritanceInfo = nullptr;
 
-    // if (vkBeginCommandBuffer(cmdBuffers[imageIndex], &beginInfo) != VK_SUCCESS)
-    // {
-    //     throw std::runtime_error("Failed to begin recording to command buffer");
-    // }
+    if (vkBeginCommandBuffer(cmdBuffers[imageIndex], &beginInfo) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to begin recording to command buffer");
+    }
 
-    // VkRenderPassBeginInfo passInfo = {};
-    // passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    // passInfo.pNext = nullptr;
-    // passInfo.renderPass = m_RenderPass;
-    // passInfo.framebuffer = frameBuffers[imageIndex];
-    // passInfo.clearValueCount = 1;
-    // passInfo.pClearValues = &clearvals
+    std::array<VkClearValue, 2> cls;
+    cls[0].color = {{1.0f, 0.0f, 0.0f}};
+    cls[1].depthStencil = {1.0f, 0};
+    VkRenderPassBeginInfo passInfo = {};
+    passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    passInfo.pNext = nullptr;
+    passInfo.renderPass = m_RenderPass;
+    passInfo.framebuffer = frameBuffers[imageIndex];
+    passInfo.clearValueCount = static_cast<uint32_t>(cls.size());
+    passInfo.pClearValues = cls.data();
+
+    vkCmdBeginRenderPass(cmdBuffers[imageIndex], &passInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(cmdBuffers[imageIndex],
+                      VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      pipeline);
+
+    vkCmdEndRenderPass(cmdBuffers[imageIndex]);
+
+    if (vkEndCommandBuffer(cmdBuffers[imageIndex]) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to end command buffer recording");
+    }
 
     return;
 }

@@ -1,9 +1,9 @@
 #ifndef HEADERS_MVWINDOW_H_
 #define HEADERS_MVWINDOW_H_
 
-#include <xcb/xcb.h>
+#include <X11/Xlib.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_xcb.h>
+#include <vulkan/vulkan_xlib.h>
 
 #include <filesystem>
 #include <fstream>
@@ -19,6 +19,7 @@
 #include "mvSwap.h"
 #include "mvInit.h"
 
+const size_t MAX_IN_FLIGHT = 2;
 #define WINDOW_WIDTH 1024
 #define WINDOW_HEIGHT 768
 
@@ -35,7 +36,7 @@ const std::vector<const char *> requestedDeviceExtensions = {
 
 namespace mv
 {
-    class Window
+    class MWindow
     {
     public:
         class Exception : public BException
@@ -48,8 +49,11 @@ namespace mv
         };
 
     public:
-        Window(int w, int h, const char *title);
-        ~Window();
+        MWindow(int w, int h, const char *title);
+        ~MWindow();
+
+        MWindow &operator=(const MWindow &) = delete;
+        MWindow(const MWindow &) = delete;
 
         VkResult createInstance(void);
 
@@ -78,9 +82,10 @@ namespace mv
         mv::Device *device;
 
     protected: // Graphics
-        xcb_connection_t *connection;
-        xcb_window_t window;
-        xcb_generic_event_t *event;
+        Display* display;
+        Window window;
+        XEvent event;
+
         int screen;
         bool running = true;
 
@@ -100,6 +105,7 @@ namespace mv
         std::vector<VkCommandBuffer> cmdBuffers;
         std::vector<VkFramebuffer> frameBuffers;
         std::vector<VkFence> waitFences;
+        std::vector<VkFence> inFlightFences;
 
         VkSubmitInfo submitInfo = {};
 
