@@ -120,7 +120,7 @@ mv::Window::~Window(void)
     return;
 }
 
-void mv::Window::go(void)
+void mv::Window::prepare(void)
 {
     // initialize vulkan
     if (!initVulkan())
@@ -137,19 +137,39 @@ void mv::Window::go(void)
     setupRenderPass();
     createPipelineCache();
     setupFramebuffer();
-
-    while ((event = xcb_wait_for_event(connection))) // replace this as it is a blocking call
-    {
-        switch (event->response_type & ~0x80)
-        {
-        default:
-            break;
-        }
-
-        free(event);
-    }
     return;
 }
+
+// void mv::Window::go(void)
+// {
+//     // initialize vulkan
+//     if (!initVulkan())
+//     {
+//         throw std::runtime_error("Failed to initialize Vulkan");
+//     }
+
+//     swapChain.initSurface(connection, window);
+//     m_CommandPool = device->createCommandPool(swapChain.queueIndex);
+//     swapChain.create(&windowWidth, &windowHeight);
+//     createCommandBuffers();
+//     createSynchronizationPrimitives();
+//     setupDepthStencil();
+//     setupRenderPass();
+//     createPipelineCache();
+//     setupFramebuffer();
+
+//     while ((event = xcb_wait_for_event(connection))) // replace this as it is a blocking call
+//     {
+//         switch (event->response_type & ~0x80)
+//         {
+//         default:
+//             break;
+//         }
+
+//         free(event);
+//     }
+//     return;
+// }
 
 bool mv::Window::initVulkan(void)
 {
@@ -314,6 +334,46 @@ void mv::Window::setupDepthStencil(void)
     if (vkCreateImage(m_Device, &imageCI, nullptr, &depthStencil.image) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create depth stencil image");
+    }
+
+    // Allocate memory for image
+    VkMemoryRequirements memReq = {};
+    vkGetImageMemoryRequirements(m_Device, depthStencil.image, &memReq);
+
+    VkMemoryAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReq.size;
+    allocInfo.memoryTypeIndex = device->getMemoryType(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &depthStencil.mem) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate memory for depth stencil image");
+    }
+    if (vkBindImageMemory(m_Device, depthStencil.image, depthStencil.mem, 0) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to bind depth stencil image and memory");
+    }
+
+    // Create view
+    VkImageViewCreateInfo ivInfo = {};
+    ivInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ivInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    ivInfo.image = depthStencil.image;
+    ivInfo.format = depthFormat;
+    ivInfo.subresourceRange.baseMipLevel = 0;
+    ivInfo.subresourceRange.levelCount = 1;
+    ivInfo.subresourceRange.baseArrayLayer = 0;
+    ivInfo.subresourceRange.layerCount = 1;
+    ivInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    // for stencil + depth formats
+    if (depthFormat >= VK_FORMAT_D16_UNORM_S8_UINT)
+    {
+        ivInfo.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    }
+
+    if (vkCreateImageView(m_Device, &ivInfo, nullptr, &depthStencil.view) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create depth stencil image view");
     }
     return;
 }

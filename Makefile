@@ -177,6 +177,33 @@ mvDevice.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvDevice.cpp.s
 .PHONY : mvDevice.cpp.s
 
+mvEngine.o: mvEngine.cpp.o
+
+.PHONY : mvEngine.o
+
+# target to build an object file
+mvEngine.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvEngine.cpp.o
+.PHONY : mvEngine.cpp.o
+
+mvEngine.i: mvEngine.cpp.i
+
+.PHONY : mvEngine.i
+
+# target to preprocess a source file
+mvEngine.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvEngine.cpp.i
+.PHONY : mvEngine.cpp.i
+
+mvEngine.s: mvEngine.cpp.s
+
+.PHONY : mvEngine.s
+
+# target to generate assembly for a file
+mvEngine.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvEngine.cpp.s
+.PHONY : mvEngine.cpp.s
+
 mvException.o: mvException.cpp.o
 
 .PHONY : mvException.o
@@ -327,6 +354,9 @@ help:
 	@echo "... mvDevice.o"
 	@echo "... mvDevice.i"
 	@echo "... mvDevice.s"
+	@echo "... mvEngine.o"
+	@echo "... mvEngine.i"
+	@echo "... mvEngine.s"
 	@echo "... mvException.o"
 	@echo "... mvException.i"
 	@echo "... mvException.s"

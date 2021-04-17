@@ -40,6 +40,8 @@ namespace mv
         VkResult createLogicalDevice(VkPhysicalDeviceFeatures enabledFeatures, std::vector<const char *> requestedExtensions);
         VkCommandPool createCommandPool(uint32_t queueIndex, VkCommandPoolCreateFlags createFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
+        uint32_t getMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties, VkBool32 *memTypeFound = nullptr) const;
+
         uint32_t getQueueFamilyIndex(VkQueueFlags queueFlag);
         bool extensionSupported(std::string ext);
         VkFormat getSupportedDepthFormat(VkPhysicalDevice physicalDevice);

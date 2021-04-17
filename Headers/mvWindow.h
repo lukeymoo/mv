@@ -49,12 +49,13 @@ namespace mv
         Window(int w, int h, const char *title);
         ~Window();
 
-        void go(void);
-
         VkResult createInstance(void);
-        bool initVulkan(void);
+
+        //void go(void);
+        void prepare(void);
 
     private:
+        bool initVulkan(void);
         void checkValidationSupport(void);
         void checkInstanceExt(void);
         void createCommandBuffers(void);
@@ -75,9 +76,15 @@ namespace mv
         mv::Device *device;
 
     protected: // Graphics
+        xcb_connection_t *connection;
+        xcb_window_t window;
+        xcb_generic_event_t *event;
+        int screen;
+        bool running = true;
+        
         uint32_t windowWidth = 0;
         uint32_t windowHeight = 0;
-        
+
         VkInstance m_Instance = nullptr;
         VkPhysicalDevice m_PhysicalDevice = nullptr;
         VkDevice m_Device = nullptr;
@@ -112,14 +119,8 @@ namespace mv
             VkDeviceMemory mem = nullptr;
             VkImageView view = nullptr;
         } depthStencil;
-        
 
-    private: // Window Management
-        xcb_connection_t *connection;
-        xcb_window_t window;
-        xcb_generic_event_t *event;
-        int screen;
-        bool running = true;
+    private:
     };
 };
 

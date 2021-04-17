@@ -10,6 +10,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(HEADERS
+    Headers/mvEngine.h
     Headers/mvInit.h
     Headers/mvSwap.h
     Headers/mvDevice.h
@@ -19,6 +20,7 @@ set(HEADERS
     Headers/mvWindow.h)
 
 set(SOURCES
+    mvEngine.cpp
     mvSwap.cpp
     mvDevice.cpp
     mvKeyboard.cpp
