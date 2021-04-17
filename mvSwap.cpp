@@ -171,8 +171,6 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
         throw std::runtime_error("Failed to retreive list of present modes");
     }
 
-    VkExtent2D swapExtent = {};
-
     xcb_get_geometry_cookie_t cookie;
     xcb_get_geometry_reply_t *reply;
 

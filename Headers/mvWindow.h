@@ -5,6 +5,8 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_xcb.h>
 
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string.h>
 #include <memory>
@@ -81,7 +83,7 @@ namespace mv
         xcb_generic_event_t *event;
         int screen;
         bool running = true;
-        
+
         uint32_t windowWidth = 0;
         uint32_t windowHeight = 0;
 
@@ -119,6 +121,9 @@ namespace mv
             VkDeviceMemory mem = nullptr;
             VkImageView view = nullptr;
         } depthStencil;
+
+        std::vector<char> readFile(std::string filename);
+        VkShaderModule createShaderModule(const std::vector<char> &code);
 
     private:
     };

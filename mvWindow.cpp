@@ -661,3 +661,75 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageProcessor(VkDebugUtilsMessageSeverity
     }
     return VK_FALSE;
 }
+
+std::vector<char> mv::Window::readFile(std::string filename)
+{
+    size_t fileSize;
+    std::ifstream file;
+    std::vector<char> buffer;
+
+    // check if file exists
+    try
+    {
+        std::filesystem::exists(filename);
+        file.open(filename, std::ios::ate | std::ios::binary);
+
+        if (!file.is_open())
+        {
+            std::ostringstream oss;
+            oss << "Failed to open file " << filename;
+            throw std::runtime_error(oss.str());
+        }
+
+        // prepare buffer to hold shader bytecode
+        fileSize = (size_t)file.tellg();
+        buffer.resize(fileSize);
+
+        // go back to beginning of file and read in
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+        file.close();
+    }
+    catch (std::filesystem::filesystem_error &e)
+    {
+        std::ostringstream oss;
+        oss << "Filesystem Exception : " << e.what() << std::endl;
+        throw std::runtime_error(oss.str());
+    }
+    catch (std::exception &e)
+    {
+        std::ostringstream oss;
+        oss << "Standard Exception : " << e.what();
+        throw std::runtime_error(oss.str());
+    }
+    catch (...)
+    {
+        throw std::runtime_error("Unhandled exception while loading a file");
+    }
+
+    if (buffer.empty())
+    {
+        throw std::runtime_error("File reading operation returned empty buffer");
+    }
+
+    return buffer;
+}
+
+VkShaderModule mv::Window::createShaderModule(const std::vector<char> &code)
+{
+    VkShaderModule module;
+
+    VkShaderModuleCreateInfo moduleInfo{};
+    moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    moduleInfo.pNext = nullptr;
+    moduleInfo.flags = 0;
+    moduleInfo.codeSize = code.size();
+    moduleInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
+
+    if (vkCreateShaderModule(m_Device, &moduleInfo, nullptr, &module) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create shader module!");
+    }
+
+    return module;
+}

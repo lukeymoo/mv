@@ -182,3 +182,100 @@ VkFormat mv::Device::getSupportedDepthFormat(VkPhysicalDevice physicalDevice)
     }
     throw std::runtime_error("Failed to find good format");
 }
+
+VkResult mv::Device::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, VkBuffer *buffer, VkDeviceMemory *memory, void *data)
+{
+    VkBufferCreateInfo bufferInfo = mv::initializer::bufferCreateInfo(usageFlags, size);
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(device, &bufferInfo, nullptr, buffer) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create buffer");
+    }
+
+    // allocate memory for buffer
+    VkMemoryRequirements memreqs = {};
+    VkMemoryAllocateInfo allocInfo = mv::initializer::memoryAllocateInfo();
+
+    vkGetBufferMemoryRequirements(device, *buffer, &memreqs);
+    allocInfo.allocationSize = memreqs.size;
+    allocInfo.memoryTypeIndex = getMemoryType(memreqs.memoryTypeBits, memoryPropertyFlags);
+
+    if (vkAllocateMemory(device, &allocInfo, nullptr, memory) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate buffer memory");
+    }
+
+    if (data != nullptr)
+    {
+        void *mapped;
+        if (vkMapMemory(device, *memory, 0, size, 0, &mapped) != VK_SUCCESS)
+        {
+            memcpy(mapped, data, size);
+        }
+        // TODO
+        // add manual flush
+        // if ((memoryPropertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0)
+        // {
+        // }
+        vkUnmapMemory(device, *memory);
+    }
+
+    if (vkBindBufferMemory(device, *buffer, *memory, 0) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to bind buffer memory");
+    }
+
+    return VK_SUCCESS;
+}
+
+VkResult mv::Device::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, mv::Buffer *buffer, VkDeviceSize size, void *data)
+{
+    buffer->device = device;
+
+    // create buffer
+    VkBufferCreateInfo bufferInfo = mv::initializer::bufferCreateInfo(usageFlags, size);
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer->buffer) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create buffer");
+    }
+
+    // create memory
+    VkMemoryRequirements memreqs = {};
+    VkMemoryAllocateInfo allocInfo = mv::initializer::memoryAllocateInfo();
+
+    vkGetBufferMemoryRequirements(device, buffer->buffer, &memreqs);
+    allocInfo.allocationSize = memreqs.size;
+    allocInfo.memoryTypeIndex = getMemoryType(memreqs.memoryTypeBits, memoryPropertyFlags);
+
+    if (vkAllocateMemory(device, &allocInfo, nullptr, &buffer->memory) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate memory");
+    }
+
+    buffer->alignment = memreqs.alignment;
+    buffer->size = size;
+    buffer->usageFlags = usageFlags;
+    buffer->memoryPropertyFlags = memoryPropertyFlags;
+
+    // copy if necessary
+    if (data != nullptr)
+    {
+        if (buffer->map() != VK_SUCCESS)
+        {
+            throw std::runtime_error("Helper failed to map buffer");
+        }
+        memcpy(buffer->mapped, data, size);
+        // TODO
+        // add manual flush
+        // if ((memoryPropertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0)
+        // {
+        // }
+        buffer->unmap();
+    }
+
+    buffer->setupDescriptor();
+    
+    return buffer->bind();
+}

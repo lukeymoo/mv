@@ -150,6 +150,33 @@ main.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+mvBuffer.o: mvBuffer.cpp.o
+
+.PHONY : mvBuffer.o
+
+# target to build an object file
+mvBuffer.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvBuffer.cpp.o
+.PHONY : mvBuffer.cpp.o
+
+mvBuffer.i: mvBuffer.cpp.i
+
+.PHONY : mvBuffer.i
+
+# target to preprocess a source file
+mvBuffer.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvBuffer.cpp.i
+.PHONY : mvBuffer.cpp.i
+
+mvBuffer.s: mvBuffer.cpp.s
+
+.PHONY : mvBuffer.s
+
+# target to generate assembly for a file
+mvBuffer.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvBuffer.cpp.s
+.PHONY : mvBuffer.cpp.s
+
 mvDevice.o: mvDevice.cpp.o
 
 .PHONY : mvDevice.o
@@ -258,6 +285,33 @@ mvKeyboard.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvKeyboard.cpp.s
 .PHONY : mvKeyboard.cpp.s
 
+mvModel.o: mvModel.cpp.o
+
+.PHONY : mvModel.o
+
+# target to build an object file
+mvModel.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvModel.cpp.o
+.PHONY : mvModel.cpp.o
+
+mvModel.i: mvModel.cpp.i
+
+.PHONY : mvModel.i
+
+# target to preprocess a source file
+mvModel.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvModel.cpp.i
+.PHONY : mvModel.cpp.i
+
+mvModel.s: mvModel.cpp.s
+
+.PHONY : mvModel.s
+
+# target to generate assembly for a file
+mvModel.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvModel.cpp.s
+.PHONY : mvModel.cpp.s
+
 mvMouse.o: mvMouse.cpp.o
 
 .PHONY : mvMouse.o
@@ -351,6 +405,9 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... mvBuffer.o"
+	@echo "... mvBuffer.i"
+	@echo "... mvBuffer.s"
 	@echo "... mvDevice.o"
 	@echo "... mvDevice.i"
 	@echo "... mvDevice.s"
@@ -363,6 +420,9 @@ help:
 	@echo "... mvKeyboard.o"
 	@echo "... mvKeyboard.i"
 	@echo "... mvKeyboard.s"
+	@echo "... mvModel.o"
+	@echo "... mvModel.i"
+	@echo "... mvModel.s"
 	@echo "... mvMouse.o"
 	@echo "... mvMouse.i"
 	@echo "... mvMouse.s"

@@ -40,6 +40,7 @@ namespace mv
 
     public:
         VkFormat colorFormat = {};
+        VkExtent2D swapExtent = {};
         VkColorSpaceKHR colorSpace = {};
         VkSwapchainKHR swapchain = nullptr;
         uint32_t imageCount = 0; // swap chain image count

@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "mvInit.h"
+#include "mvBuffer.h"
+
 namespace mv
 {
     struct Device
@@ -45,6 +48,9 @@ namespace mv
         uint32_t getQueueFamilyIndex(VkQueueFlags queueFlag);
         bool extensionSupported(std::string ext);
         VkFormat getSupportedDepthFormat(VkPhysicalDevice physicalDevice);
+
+        VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, VkBuffer *buffer, VkDeviceMemory *memory, void *data = nullptr);
+        VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, mv::Buffer *buffer, VkDeviceSize size, void *data = nullptr);
     };
 };
 
