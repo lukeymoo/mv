@@ -9,7 +9,7 @@ void mv::Swap::cleanup(void)
             vkDestroyImageView(device, buffers[i].view, nullptr);
         }
     }
-    if(surface != nullptr)
+    if (surface != nullptr)
     {
         fpDestroySwapchainKHR(device, swapchain, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -22,7 +22,7 @@ void mv::Swap::cleanup(void)
 void mv::Swap::initSurface(Display *disp, Window &window)
 {
     VkXlibSurfaceCreateInfoKHR surfaceInfo = {};
-    surfaceInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+    surfaceInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
     surfaceInfo.dpy = disp;
     surfaceInfo.window = window;
     this->display = disp;
@@ -171,20 +171,24 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
         throw std::runtime_error("Failed to retreive list of present modes");
     }
 
-    xcb_get_geometry_cookie_t cookie;
-    xcb_get_geometry_reply_t *reply;
+    Window rw;
+    int rx, ry;           // returned x/y
+    uint rwidth, rheight; // returned width/height
+    uint rborder;         // returned  border width
+    uint rdepth;
 
     // Prefer to configure extent from a direct response from x server
-    cookie = xcb_get_geometry(conn, window);
-    if ((reply = xcb_get_geometry_reply(conn, cookie, NULL)))
+    if (XGetGeometry(display,
+                      window, &rw, &rx, &ry,
+                      &rwidth, &rheight, &rborder, &rdepth))
     {
-        *w = reply->width;
-        *h = reply->height;
+        *w = static_cast<uint32_t>(rwidth);
+        *h = static_cast<uint32_t>(rheight);
         swapExtent.width = *w;
         swapExtent.height = *h;
         std::cout << "[+] Swap extent configured by x server response" << std::endl
-                  << "Width -> " << *w << std::endl
-                  << "Height-> " << *h << std::endl;
+                  << "\tWidth -> " << *w << std::endl
+                  << "\tHeight-> " << *h << std::endl;
     }
     else // Use the extent given by vulkan surface capabilities check earlier
     {
@@ -196,7 +200,6 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
                   << "Width -> " << *w << std::endl
                   << "Height-> " << *h << std::endl;
     }
-    free(reply);
 
     VkPresentModeKHR selectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
     // determine number of swap images

@@ -20,11 +20,6 @@ void mv::Engine::go(void)
 
     preparePipeline();
 
-    for (int i = 0; i < swapChain.imageCount; i++)
-    {
-        recordCommandBuffer(i);
-    }
-
     // Record commands to already created command buffers(per swap)
     // Create pipeline and tie all resources together
     uint32_t imageIndex = 0;
@@ -32,30 +27,9 @@ void mv::Engine::go(void)
 
     while (running)
     {
-
-        event = xcb_poll_for_event(connection);
-
-        if (event) // replace this as it is a blocking call
+        while (XPending(display))
         {
-            switch (event->response_type & 0x7f)
-            {
-            case XCB_CLIENT_MESSAGE:
-                std::cout << "client message\n";
-                if ((*(xcb_client_message_event_t *)event).data.data32[0] == (*delete_reply).atom)
-                {
-                    running = false;
-                    std::cout << "quitting" << std::endl;
-                    free(delete_reply);
-                }
-                break;
-            default:
-                break;
-            }
-
-            if (event)
-            {
-                free(event);
-            }
+            handleXEvent();
         }
 
         /*
@@ -63,7 +37,7 @@ void mv::Engine::go(void)
         */
         vkWaitForFences(device->device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
-        currentFrame = (currentFrame + 1) & 2;
+        currentFrame = (currentFrame + 1) & MAX_IN_FLIGHT;
 
         if (vkAcquireNextImageKHR(device->device, swapChain.swapchain, UINT64_MAX, semaphores.presentComplete, VK_NULL_HANDLE, &imageIndex) != VK_SUCCESS)
         {
@@ -77,6 +51,8 @@ void mv::Engine::go(void)
         {
             vkWaitForFences(device->device, 1, &waitFences[imageIndex], VK_TRUE, UINT64_MAX);
         }
+
+        recordCommandBuffer(imageIndex);
 
         // mark in use
         waitFences[imageIndex] = inFlightFences[currentFrame];
@@ -122,12 +98,27 @@ void mv::Engine::go(void)
 
 void mv::Engine::prepareUniforms(void)
 {
+    Object::Matrices tm;
+    tm.model = glm::mat4(1.0);
+    tm.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    tm.projection = glm::perspective(glm::radians(45.0f), swapChain.swapExtent.width / (float)swapChain.swapExtent.height, 0.1f, 10.0f);
+    tm.projection[1][1] *= -1;
+
     for (auto &obj : objects)
     {
         device->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                              &obj.uniformBuffer,
                              sizeof(Object::Matrices));
+        if (obj.uniformBuffer.map() != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to map object uniform buffer");
+        }
+    }
+
+    for (auto &obj : objects)
+    {
+        memcpy(obj.uniformBuffer.mapped, &tm, sizeof(Object::Matrices));
     }
     return;
 }
@@ -228,7 +219,7 @@ void mv::Engine::preparePipeline(void)
     viState.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
     viState.pVertexAttributeDescriptions = attributeDescription.data();
     VkPipelineInputAssemblyStateCreateInfo iaState = mv::initializer::inputAssemblyStateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rsState = mv::initializer::rasterizationStateInfo(VK_POLYGON_MODE_LINE, VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE, 0);
+    VkPipelineRasterizationStateCreateInfo rsState = mv::initializer::rasterizationStateInfo(VK_POLYGON_MODE_LINE, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
     VkPipelineColorBlendAttachmentState cbaState = mv::initializer::colorBlendAttachmentState(0xf, VK_FALSE);
     VkPipelineColorBlendStateCreateInfo cbState = mv::initializer::colorBlendStateInfo(1, &cbaState);
     VkPipelineDepthStencilStateCreateInfo dsState = mv::initializer::depthStencilStateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
@@ -237,8 +228,8 @@ void mv::Engine::preparePipeline(void)
     VkRect2D sc = {};
     vp.x = 0;
     vp.y = 0;
-    vp.width = windowWidth;
-    vp.height = windowHeight;
+    vp.width = static_cast<float>(windowWidth);
+    vp.height = static_cast<float>(windowHeight);
     vp.minDepth = 0.0f;
     vp.maxDepth = 1.0f;
 
@@ -295,6 +286,7 @@ void mv::Engine::preparePipeline(void)
     pipelineObjInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
     pipelineObjInfo.pStages = shaderStages.data();
     pipelineObjInfo.pVertexInputState = &viState;
+    pipelineObjInfo.pDynamicState = nullptr;
 
     if (vkCreateGraphicsPipelines(device->device, m_PipelineCache, 1, &pipelineObjInfo, nullptr, &pipeline) != VK_SUCCESS)
     {
@@ -320,13 +312,18 @@ void mv::Engine::recordCommandBuffer(uint32_t imageIndex)
     }
 
     std::array<VkClearValue, 2> cls;
-    cls[0].color = {{1.0f, 0.0f, 0.0f}};
+    cls[0].color = defaultClearColor;
     cls[1].depthStencil = {1.0f, 0};
+
     VkRenderPassBeginInfo passInfo = {};
     passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     passInfo.pNext = nullptr;
     passInfo.renderPass = m_RenderPass;
     passInfo.framebuffer = frameBuffers[imageIndex];
+    passInfo.renderArea.offset.x = 0;
+    passInfo.renderArea.offset.y = 0;
+    passInfo.renderArea.extent.width = swapChain.swapExtent.width;
+    passInfo.renderArea.extent.height = swapChain.swapExtent.height;
     passInfo.clearValueCount = static_cast<uint32_t>(cls.size());
     passInfo.pClearValues = cls.data();
 
@@ -334,6 +331,19 @@ void mv::Engine::recordCommandBuffer(uint32_t imageIndex)
     vkCmdBindPipeline(cmdBuffers[imageIndex],
                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                       pipeline);
+
+    model.bindBuffers(cmdBuffers[imageIndex]);
+    vkCmdBindDescriptorSets(cmdBuffers[imageIndex],
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            pipelineLayout,
+                            0,
+                            1,
+                            &objects[0].descriptorSet,
+                            0,
+                            nullptr);
+
+    //vkCmdDraw(cmdBuffers[imageIndex], static_cast<uint32_t>(model.vertices.count), 1, 0, 0);
+    vkCmdDrawIndexed(cmdBuffers[imageIndex], static_cast<uint32_t>(model.indices.count), 1, 0, 0, 0);
 
     vkCmdEndRenderPass(cmdBuffers[imageIndex]);
 

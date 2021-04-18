@@ -211,13 +211,14 @@ VkResult mv::Device::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropert
         void *mapped;
         if (vkMapMemory(device, *memory, 0, size, 0, &mapped) != VK_SUCCESS)
         {
-            memcpy(mapped, data, size);
+            throw std::runtime_error("Failed to map buffer memory during creation");
         }
         // TODO
         // add manual flush
         // if ((memoryPropertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0)
         // {
         // }
+        memcpy(mapped, data, size);
         vkUnmapMemory(device, *memory);
     }
 

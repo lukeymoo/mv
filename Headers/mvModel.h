@@ -77,14 +77,14 @@ namespace mv
 
         struct Vertices
         {
-            int count = 0;
+            uint32_t count = 0;
             VkBuffer buffer = nullptr;
             VkDeviceMemory memory = nullptr;
         } vertices;
 
         struct Indices
         {
-            int count = 0;
+            uint32_t count = 0;
             VkBuffer buffer = nullptr;
             VkDeviceMemory memory = nullptr;
         } indices;
@@ -95,15 +95,37 @@ namespace mv
 
         uint32_t imageCount = 0;
 
+        void bindBuffers(VkCommandBuffer cmdbuffer)
+        {
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vertices.buffer, offsets);
+            vkCmdBindIndexBuffer(cmdbuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+            return;
+        }
+
         void load(mv::Device *dvc, uint32_t swapchain_image_count)
         {
             assert(dvc);
 
             device = dvc;
 
-            std::vector<uint32_t> t_indices;
             std::vector<Vertex> t_vertices;
+            std::vector<uint32_t> t_indices;
 
+            // std::vector<Vertex> t_vertices = {
+            //     {{-0.5f, -0.5f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+            //     {{0.5f, -0.5f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+            //     {{0.5f, 0.5f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+            //     {{-0.5f, 0.5f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+
+            //     {{-0.5f, -0.5f, -0.5f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+            //     {{0.5f, -0.5f, -0.5f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+            //     {{0.5f, 0.5f, -0.5f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+            //     {{-0.5f, 0.5f, -0.5f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}}};
+
+            // std::vector<uint32_t> t_indices = {
+            //     0, 1, 2, 2, 3, 0,
+            //     4, 5, 6, 6, 7, 4};
             std::string warn, err;
 
             if (!tinyobj::LoadObj(&attribute, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()))
@@ -133,10 +155,13 @@ namespace mv
                 }
             }
 
+            vertices.count = static_cast<uint32_t>(t_vertices.size());
+            indices.count = static_cast<uint32_t>(t_indices.size());
+
             // create vertex buffer, load vertices data into it
             device->createBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                 t_vertices.size(),
+                                 vertices.count * sizeof(Vertex),
                                  &vertices.buffer,
                                  &vertices.memory,
                                  t_vertices.data());
@@ -144,7 +169,7 @@ namespace mv
             // create index buffer, load indices data into it
             device->createBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                 t_indices.size(),
+                                 indices.count * sizeof(uint32_t),
                                  &indices.buffer,
                                  &indices.memory,
                                  t_indices.data());

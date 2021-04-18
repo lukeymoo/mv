@@ -9,7 +9,7 @@ namespace mv
 {
     class Mouse
     {
-        friend class Window;
+        friend class MWindow;
 
     public:
         class Event

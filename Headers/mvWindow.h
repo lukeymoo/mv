@@ -2,6 +2,9 @@
 #define HEADERS_MVWINDOW_H_
 
 #include <X11/Xlib.h>
+#include <X11/XKBlib.h>
+#include <X11/XF86keysym.h>
+#include <X11/Xutil.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_xlib.h>
 
@@ -29,7 +32,7 @@ const std::vector<const char *> requestedValidationLayers = {
 const std::vector<const char *> requestedInstanceExtensions = {
     "VK_EXT_debug_utils",
     "VK_KHR_surface",
-    "VK_KHR_xcb_surface"};
+    "VK_KHR_xlib_surface"};
 
 const std::vector<const char *> requestedDeviceExtensions = {
     "VK_KHR_swapchain"};
@@ -60,6 +63,9 @@ namespace mv
         //void go(void);
         void prepare(void);
 
+        XEvent createEvent(const char *eventType);
+        void handleXEvent(void);
+
     private:
         bool initVulkan(void);
         void checkValidationSupport(void);
@@ -75,6 +81,7 @@ namespace mv
         void destroyCommandPool(void);
 
     public:
+        VkClearColorValue defaultClearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
         bool goodInit = true;
         Keyboard kbd;
         Mouse mouse;
@@ -82,7 +89,7 @@ namespace mv
         mv::Device *device;
 
     protected: // Graphics
-        Display* display;
+        Display *display;
         Window window;
         XEvent event;
 

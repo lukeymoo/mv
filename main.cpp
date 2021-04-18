@@ -7,13 +7,13 @@ int main(int argc, char *argv[])
   try
   {
     // Create class called Engine for example
-    // configure that class to extend mv::Window class
+    // configure that class to extend mv::MWindow class
     // Initialize and call Engine::prepare()
     // prepare comes from parent class Window
     // Then call extended class function go() with will contain game loop
 
     mv::Engine wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
-    //mv::Window wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
+    //mv::MWindow wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
     if (wnd.goodInit)
     {
       // main game loop, define in extended class

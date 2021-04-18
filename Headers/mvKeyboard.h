@@ -8,7 +8,7 @@ namespace mv
 {
     class Keyboard
     {
-        friend class Window;
+        friend class MWindow;
 
     public:
         class Event

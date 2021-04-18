@@ -85,11 +85,17 @@ namespace mv
         {
             VkPipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo = {};
             pipelineRasterizationStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            pipelineRasterizationStateCreateInfo.pNext = nullptr;
+            pipelineRasterizationStateCreateInfo.flags = flags;
+            pipelineRasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
+            pipelineRasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
             pipelineRasterizationStateCreateInfo.polygonMode = polygonMode;
             pipelineRasterizationStateCreateInfo.cullMode = cullMode;
             pipelineRasterizationStateCreateInfo.frontFace = frontFace;
-            pipelineRasterizationStateCreateInfo.flags = flags;
-            pipelineRasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
+            pipelineRasterizationStateCreateInfo.depthBiasEnable = VK_FALSE;
+            pipelineRasterizationStateCreateInfo.depthBiasConstantFactor = 0.0f;
+            pipelineRasterizationStateCreateInfo.depthBiasClamp = 0.0f;
+            pipelineRasterizationStateCreateInfo.depthBiasSlopeFactor = 0.0f;
             pipelineRasterizationStateCreateInfo.lineWidth = 1.0f;
             return pipelineRasterizationStateCreateInfo;
         }

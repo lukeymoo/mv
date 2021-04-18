@@ -1,6 +1,6 @@
 #include "mvWindow.h"
 
-mv::Window::Exception::Exception(int l, std::string f, std::string description)
+mv::MWindow::Exception::Exception(int l, std::string f, std::string description)
     : BException(l, f, description)
 {
     type = "Window Handler Exception";
@@ -8,83 +8,76 @@ mv::Window::Exception::Exception(int l, std::string f, std::string description)
     return;
 }
 
-mv::Window::Exception::~Exception(void)
+mv::MWindow::Exception::~Exception(void)
 {
     return;
 }
 
 /* Create window and initialize Vulkan */
-mv::Window::Window(int w, int h, const char *title)
+mv::MWindow::MWindow(int w, int h, const char *title)
+    : windowWidth(w), windowHeight(h)
 {
-    uint32_t mask = 0;
-    uint32_t values[2];
-
     // Connect to x server
-    connection = xcb_connect(NULL, NULL);
+    display = XOpenDisplay(NULL);
+    if (display == NULL)
+    {
+        throw std::runtime_error("Failed to open x server connection");
+    }
 
     // get first screen
-    const xcb_setup_t *setup = xcb_get_setup(connection);
-    xcb_screen_iterator_t iter = xcb_setup_roots_iterator(setup);
-    xcb_screen_t *screen = iter.data;
+    screen = DefaultScreen(display);
 
-    mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-    values[0] = screen->white_pixel;
-    values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS |
-                XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_POINTER_MOTION |
-                XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW |
-                XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    // Create window
+    window = XCreateSimpleWindow(display,
+                                 RootWindow(display, screen),
+                                 10, 10,
+                                 windowWidth, windowHeight,
+                                 1,
+                                 WhitePixel(display, screen),
+                                 BlackPixel(display, screen));
 
-    // create window
-    window = xcb_generate_id(connection);
-    xcb_create_window(connection,
-                      XCB_COPY_FROM_PARENT,
-                      window,
-                      screen->root,
-                      300, 300,
-                      WINDOW_WIDTH,
-                      WINDOW_HEIGHT,
-                      1,
-                      XCB_WINDOW_CLASS_INPUT_OUTPUT,
-                      screen->root_visual,
-                      mask, values);
+    Atom del_window = XInternAtom(display, "WM_DELETE_WINDOW", 0);
+    XSetWMProtocols(display, window, &del_window, 1);
 
-    xcb_flush(connection);
+    // Configure event masks
+    XSelectInput(display,
+                 window,
+                 FocusChangeMask |
+                     ButtonPressMask |
+                     ButtonReleaseMask |
+                     ExposureMask |
+                     KeyPressMask |
+                     KeyReleaseMask |
+                     PointerMotionMask |
+                     NoExpose |
+                     SubstructureNotifyMask);
 
-    xcb_change_property(connection,
-                        XCB_PROP_MODE_REPLACE,
-                        window,
-                        XCB_ATOM_WM_NAME,
-                        XCB_ATOM_STRING,
-                        8,
-                        strlen(title),
-                        title);
+    XStoreName(display, window, title);
 
-    xcb_intern_atom_cookie_t protocols_cookie = xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
-    xcb_intern_atom_reply_t *protocols_reply = xcb_intern_atom_reply(connection, protocols_cookie, 0);
-    xcb_intern_atom_cookie_t delete_cookie = xcb_intern_atom(connection, 0, 16, "WM_DELETE_WINDOW");
-    xcb_intern_atom_reply_t *delete_reply = xcb_intern_atom_reply(connection, delete_cookie, 0);
-    xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, (*protocols_reply).atom, 4, 32, 1, &(*delete_reply).atom);
-    free(protocols_reply);
+    // Display window
+    XMapWindow(display, window);
+    XFlush(display);
 
-    // map window
-    xcb_map_window(connection, window);
-    xcb_flush(connection);
+    int rs;
+    bool detectableResult;
+
+    /* Request X11 does not send autorepeat signals */
+    std::cout << "[+] Configuring keyboard input" << std::endl;
+    detectableResult = XkbSetDetectableAutoRepeat(display, true, &rs);
+
+    if (!detectableResult)
+    {
+        throw std::runtime_error("Could not disable auto repeat");
+    }
 
     return;
 }
 
-mv::Window::~Window(void)
+mv::MWindow::~MWindow(void)
 {
     vkDeviceWaitIdle(m_Device);
     swapChain.cleanup();
     destroyCommandBuffers();
-
-    std::cout << std::endl
-              << std::endl;
-    for (size_t i = 0; i < static_cast<uint32_t>(waitFences.size()); i++)
-    {
-        std::cout << "wait fences ... " << waitFences[i] << " index => " << i << std::endl;
-    }
 
     // for (auto &fence : waitFences)
     // {
@@ -96,7 +89,6 @@ mv::Window::~Window(void)
     // }
     for (auto &fence : inFlightFences)
     {
-        std::cout << "flight fence des => " << fence << std::endl;
         if (fence != nullptr)
         {
             vkDestroyFence(m_Device, fence, nullptr);
@@ -149,12 +141,16 @@ mv::Window::~Window(void)
     {
         vkDestroyInstance(m_Instance, nullptr);
     }
-    xcb_destroy_window(connection, window);
-    xcb_disconnect(connection);
+
+    if (display && window)
+    {
+        XDestroyWindow(display, window);
+        XCloseDisplay(display);
+    }
     return;
 }
 
-void mv::Window::prepare(void)
+void mv::MWindow::prepare(void)
 {
     // initialize vulkan
     if (!initVulkan())
@@ -162,7 +158,7 @@ void mv::Window::prepare(void)
         throw std::runtime_error("Failed to initialize Vulkan");
     }
 
-    swapChain.initSurface(connection, window);
+    swapChain.initSurface(display, window);
     m_CommandPool = device->createCommandPool(swapChain.queueIndex);
     swapChain.create(&windowWidth, &windowHeight);
     createCommandBuffers();
@@ -174,7 +170,7 @@ void mv::Window::prepare(void)
     return;
 }
 
-// void mv::Window::go(void)
+// void mv::MWindow::go(void)
 // {
 //     // initialize vulkan
 //     if (!initVulkan())
@@ -205,7 +201,7 @@ void mv::Window::prepare(void)
 //     return;
 // }
 
-bool mv::Window::initVulkan(void)
+bool mv::MWindow::initVulkan(void)
 {
     // Create instance
     if (createInstance() != VK_SUCCESS)
@@ -262,7 +258,7 @@ bool mv::Window::initVulkan(void)
     return true;
 }
 
-VkResult mv::Window::createInstance(void)
+VkResult mv::MWindow::createInstance(void)
 {
     // Ensure we have validation layers
 #ifndef NDEBUG
@@ -323,7 +319,7 @@ VkResult mv::Window::createInstance(void)
     return vkCreateInstance(&createInfo, nullptr, &m_Instance);
 }
 
-void mv::Window::createCommandBuffers(void)
+void mv::MWindow::createCommandBuffers(void)
 {
     cmdBuffers.resize(swapChain.imageCount);
 
@@ -337,18 +333,10 @@ void mv::Window::createCommandBuffers(void)
     return;
 }
 
-void mv::Window::createSynchronizationPrimitives(void)
+void mv::MWindow::createSynchronizationPrimitives(void)
 {
     VkFenceCreateInfo fenceInfo = mv::initializer::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
     waitFences.resize(cmdBuffers.size(), VK_NULL_HANDLE);
-    // for (auto &fence : waitFences)
-    // {
-    //     if (vkCreateFence(m_Device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
-    //     {
-    //         throw std::runtime_error("Failed to create wait fence");
-    //     }
-    //     std::cout << "Wait fence AFTER => " << fence << std::endl;
-    // }
 
     inFlightFences.resize(MAX_IN_FLIGHT);
     for (auto &fence : inFlightFences)
@@ -357,12 +345,11 @@ void mv::Window::createSynchronizationPrimitives(void)
         {
             throw std::runtime_error("Failed to create in flight fence");
         }
-        std::cout << "flight fence AFTER => " << fence << std::endl;
     }
     return;
 }
 
-void mv::Window::setupDepthStencil(void)
+void mv::MWindow::setupDepthStencil(void)
 {
     // Create depth test image
     VkImageCreateInfo imageCI{};
@@ -423,7 +410,7 @@ void mv::Window::setupDepthStencil(void)
     return;
 }
 
-void mv::Window::setupRenderPass(void)
+void mv::MWindow::setupRenderPass(void)
 {
     std::array<VkAttachmentDescription, 2> attachments = {};
     // Color attachment
@@ -440,8 +427,8 @@ void mv::Window::setupRenderPass(void)
     attachments[1].format = depthFormat;
     attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -498,7 +485,7 @@ void mv::Window::setupRenderPass(void)
     return;
 }
 
-void mv::Window::createPipelineCache(void)
+void mv::MWindow::createPipelineCache(void)
 {
     VkPipelineCacheCreateInfo pcinfo = {};
     pcinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
@@ -509,7 +496,7 @@ void mv::Window::createPipelineCache(void)
     return;
 }
 
-void mv::Window::setupFramebuffer(void)
+void mv::MWindow::setupFramebuffer(void)
 {
     VkImageView attachments[2];
 
@@ -520,8 +507,8 @@ void mv::Window::setupFramebuffer(void)
     framebufferInfo.renderPass = m_RenderPass;
     framebufferInfo.attachmentCount = 2;
     framebufferInfo.pAttachments = attachments;
-    framebufferInfo.width = windowWidth;
-    framebufferInfo.height = windowHeight;
+    framebufferInfo.width = swapChain.swapExtent.width;
+    framebufferInfo.height = swapChain.swapExtent.height;
     framebufferInfo.layers = 1;
 
     // Framebuffer per swap image
@@ -537,7 +524,7 @@ void mv::Window::setupFramebuffer(void)
     return;
 }
 
-void mv::Window::checkValidationSupport(void)
+void mv::MWindow::checkValidationSupport(void)
 {
     uint32_t layerCount = 0;
     if (vkEnumerateInstanceLayerProperties(&layerCount, nullptr) != VK_SUCCESS)
@@ -588,7 +575,7 @@ void mv::Window::checkValidationSupport(void)
     return;
 }
 
-void mv::Window::destroyCommandBuffers(void)
+void mv::MWindow::destroyCommandBuffers(void)
 {
     if (!cmdBuffers.empty())
     {
@@ -597,7 +584,7 @@ void mv::Window::destroyCommandBuffers(void)
     return;
 }
 
-void mv::Window::destroyCommandPool(void)
+void mv::MWindow::destroyCommandPool(void)
 {
     if (m_CommandPool != nullptr)
     {
@@ -606,7 +593,7 @@ void mv::Window::destroyCommandPool(void)
     return;
 }
 
-void mv::Window::checkInstanceExt(void)
+void mv::MWindow::checkInstanceExt(void)
 {
     uint32_t instanceExtensionCount = 0;
     if (vkEnumerateInstanceExtensionProperties(nullptr,
@@ -707,7 +694,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageProcessor(VkDebugUtilsMessageSeverity
     return VK_FALSE;
 }
 
-std::vector<char> mv::Window::readFile(std::string filename)
+std::vector<char> mv::MWindow::readFile(std::string filename)
 {
     size_t fileSize;
     std::ifstream file;
@@ -760,7 +747,7 @@ std::vector<char> mv::Window::readFile(std::string filename)
     return buffer;
 }
 
-VkShaderModule mv::Window::createShaderModule(const std::vector<char> &code)
+VkShaderModule mv::MWindow::createShaderModule(const std::vector<char> &code)
 {
     VkShaderModule module;
 
@@ -777,4 +764,53 @@ VkShaderModule mv::Window::createShaderModule(const std::vector<char> &code)
     }
 
     return module;
+}
+
+XEvent mv::MWindow::createEvent(const char *eventType)
+{
+	XEvent cev;
+
+	cev.xclient.type = ClientMessage;
+	cev.xclient.window = window;
+	cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
+	cev.xclient.format = 32;
+	cev.xclient.data.l[0] = XInternAtom(display, eventType, false);
+	cev.xclient.data.l[1] = CurrentTime;
+
+	return cev;
+}
+
+void mv::MWindow::handleXEvent(void)
+{
+	// count time for processing events
+	XNextEvent(display, &event);
+	KeySym key;
+	switch (event.type)
+	{
+	case KeyPress:
+		key = XLookupKeysym(&event.xkey, 0);
+		if (key == XK_Escape)
+		{
+			XEvent q = createEvent("WM_DELETE_WINDOW");
+			XSendEvent(display, window, false, ExposureMask, &q);
+		}
+		kbd.onKeyPress(static_cast<unsigned char>(key));
+		break;
+	case KeyRelease:
+		key = XLookupKeysym(&event.xkey, 0);
+		kbd.onKeyRelease(static_cast<unsigned char>(key));
+		break;
+	case MotionNotify:
+		mouse.onMouseMove(event.xmotion.x, event.xmotion.y);
+	case Expose:
+		break;
+		// configured to only capture WM_DELETE_WINDOW so we exit here
+	case ClientMessage:
+		std::cout << "[+] Exit requested" << std::endl;
+		running = false;
+		break;
+	default: // Unhandled events do nothing
+		break;
+	} // End of switch
+	return;
 }

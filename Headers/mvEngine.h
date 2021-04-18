@@ -1,7 +1,13 @@
 #ifndef HEADERS_MVENGINE_H_
 #define HEADERS_MVENGINE_H_
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include "mvWindow.h"
 #include "mvModel.h"
@@ -15,9 +21,9 @@ namespace mv
         {
             struct Matrices
             {
-                glm::mat4 model;
-                glm::mat4 view;
-                glm::mat4 projection;
+                alignas(16) glm::mat4 model;
+                alignas(16) glm::mat4 view;
+                alignas(16) glm::mat4 projection;
             } matrices;
 
             VkDescriptorSet descriptorSet;
