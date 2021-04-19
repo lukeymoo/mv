@@ -147,6 +147,9 @@ namespace mv
 
                     vertex.color = {1.0f, 0.0f, 0.0f, 1.0f};
 
+                    // TODO
+                    // Perform removal of duplicate vertices before adding
+
                     t_vertices.push_back(vertex);
                     vertices.count++;
 
