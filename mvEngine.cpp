@@ -131,7 +131,31 @@ void mv::Engine::go(void)
             handleXEvent();
         }
 
+
+        // Get input events
+        Keyboard::Event kbdEvent = kbd.readKey();
+        Mouse::Event mouseEvent = mouse.read();
+
+        // Handle input events
+        if (mouseEvent.getType() == Mouse::Event::Type::Move)
+        {
+        }
+
+        if (kbd.isKeyPressed('w'))
+        {
+        }
+        if (kbd.isKeyPressed('a'))
+        {
+        }
+        if (kbd.isKeyPressed('s'))
+        {
+        }
+        if (kbd.isKeyPressed('d'))
+        {
+        }
+        
         draw(currentFrame, imageIndex);
+
     }
     return;
 }
