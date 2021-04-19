@@ -66,6 +66,7 @@ void mv::Engine::cleanupSwapchain(void)
     return;
 }
 
+
 // Allows swapchain to keep up with window resize
 void mv::Engine::recreateSwapchain(void)
 {
