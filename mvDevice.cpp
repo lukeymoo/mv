@@ -239,7 +239,7 @@ VkResult mv::Device::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropert
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer->buffer) != VK_SUCCESS)
     {
-        throw std::runtime_error("Failed to create buffer");
+        throw std::runtime_error("Helper failed to create buffer");
     }
 
     // create memory
@@ -252,7 +252,7 @@ VkResult mv::Device::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropert
 
     if (vkAllocateMemory(device, &allocInfo, nullptr, &buffer->memory) != VK_SUCCESS)
     {
-        throw std::runtime_error("Failed to allocate memory");
+        throw std::runtime_error("Helper failed to allocate memory for buffer");
     }
 
     buffer->alignment = memreqs.alignment;
