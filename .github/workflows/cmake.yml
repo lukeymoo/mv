@@ -63,7 +63,7 @@ jobs:
         # Comma-separated list of files or patterns to exclude
         exclude: ''
         # Comma-separated list of apt packages to install
-        apt_packages: ''
+        apt_packages: libvulkan-dev
         # Maximum number of comments to post at once
         max_comments: 25
         # 
