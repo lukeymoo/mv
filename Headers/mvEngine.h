@@ -56,6 +56,7 @@ namespace mv
                 vkDestroyPipelineLayout(device->device, pipelineLayout, nullptr);
             }
 
+            // cleanup descriptor sets
             // free pool
             if (descriptorPool)
             {
@@ -75,13 +76,17 @@ namespace mv
             }
         }
 
+        void recreateSwapchain(void);
+
         void go(void);
         void recordCommandBuffer(uint32_t imageIndex);
+        void draw(size_t &current_frame, uint32_t &current_image_index);
 
-    private:
+    protected:
         void prepareUniforms(void);
-        void createDescriptorSets(void);
+        void createDescriptorSets(bool should_create_layout = true);
         void preparePipeline(void);
+        void cleanupSwapchain(void);
     };
 };
 

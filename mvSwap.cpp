@@ -1,21 +1,30 @@
 #include "mvSwap.h"
 
-void mv::Swap::cleanup(void)
+void mv::Swap::cleanup(bool should_detroy_surface)
 {
     if (swapchain != nullptr)
     {
         for (uint32_t i = 0; i < imageCount; i++)
         {
-            vkDestroyImageView(device, buffers[i].view, nullptr);
+            if (buffers[i].view)
+            {
+                vkDestroyImageView(device, buffers[i].view, nullptr);
+                buffers[i].view = nullptr;
+            }
+        }
+        fpDestroySwapchainKHR(device, swapchain, nullptr);
+        swapchain = nullptr;
+    }
+
+    if (should_detroy_surface)
+    {
+        if (surface != nullptr)
+        {
+            vkDestroySurfaceKHR(instance, surface, nullptr);
+            surface = nullptr;
         }
     }
-    if (surface != nullptr)
-    {
-        fpDestroySwapchainKHR(device, swapchain, nullptr);
-        vkDestroySurfaceKHR(instance, surface, nullptr);
-    }
     swapchain = nullptr;
-    surface = nullptr;
     return;
 }
 
@@ -179,8 +188,8 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
 
     // Prefer to configure extent from a direct response from x server
     if (XGetGeometry(display,
-                      window, &rw, &rx, &ry,
-                      &rwidth, &rheight, &rborder, &rdepth))
+                     window, &rw, &rx, &ry,
+                     &rwidth, &rheight, &rborder, &rdepth))
     {
         *w = static_cast<uint32_t>(rwidth);
         *h = static_cast<uint32_t>(rheight);

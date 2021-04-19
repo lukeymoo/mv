@@ -66,7 +66,7 @@ namespace mv
         XEvent createEvent(const char *eventType);
         void handleXEvent(void);
 
-    private:
+    protected:
         bool initVulkan(void);
         void checkValidationSupport(void);
         void checkInstanceExt(void);
@@ -79,6 +79,7 @@ namespace mv
 
         void destroyCommandBuffers(void);
         void destroyCommandPool(void);
+        void cleanupDepthStencil(void);
 
     public:
         VkClearColorValue defaultClearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};

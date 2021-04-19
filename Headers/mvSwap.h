@@ -54,7 +54,7 @@ namespace mv
         void initSurface(Display *disp, Window &window);
         void create(uint32_t *width, uint32_t *height);
         void connect(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
-        void cleanup(void);
+        void cleanup(bool should_destroy_surface = true);
     };
 };
 

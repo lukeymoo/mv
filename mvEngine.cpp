@@ -6,6 +6,99 @@ mv::Engine::Engine(int w, int h, const char *title)
     return;
 }
 
+void mv::Engine::cleanupSwapchain(void)
+{
+    // destroy command buffers
+    destroyCommandBuffers();
+    // destroy framebuffers
+    if (!frameBuffers.empty())
+    {
+        for (size_t i = 0; i < frameBuffers.size(); i++)
+        {
+            if (frameBuffers[i])
+            {
+                vkDestroyFramebuffer(m_Device, frameBuffers[i], nullptr);
+                frameBuffers[i] = nullptr;
+            }
+        }
+    }
+
+    cleanupDepthStencil();
+
+    // destroy pipeline
+    if (pipeline)
+    {
+        vkDestroyPipeline(m_Device, pipeline, nullptr);
+        pipeline = nullptr;
+    }
+    if (m_PipelineCache)
+    {
+        vkDestroyPipelineCache(m_Device, m_PipelineCache, nullptr);
+        m_PipelineCache = nullptr;
+    }
+    // destroy pipeline layout
+    if (pipelineLayout)
+    {
+        vkDestroyPipelineLayout(m_Device, pipelineLayout, nullptr);
+        pipelineLayout = nullptr;
+    }
+    // destroy render pass
+    if (m_RenderPass)
+    {
+        vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+        m_RenderPass = nullptr;
+    }
+    // descriptors pool
+    if (descriptorPool)
+    {
+        vkDestroyDescriptorPool(m_Device, descriptorPool, nullptr);
+        descriptorPool = nullptr;
+    }
+    // cleanup command pool
+    if (m_CommandPool)
+    {
+        vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
+        m_CommandPool = nullptr;
+    }
+
+    // cleanup swapchain
+    swapChain.cleanup(false);
+    return;
+}
+
+void mv::Engine::recreateSwapchain(void)
+{
+    std::cout << "[+] recreating swapchain" << std::endl;
+    vkDeviceWaitIdle(m_Device);
+
+    // Cleanup
+    cleanupSwapchain();
+
+    m_CommandPool = device->createCommandPool(swapChain.queueIndex);
+
+    // create swapchain
+    swapChain.create(&windowWidth, &windowHeight);
+
+    // create descriptor pool, dont recreate layout
+    createDescriptorSets(false);
+
+    // create render pass
+    setupRenderPass();
+
+    // create pipeline cache
+    createPipelineCache();
+
+    setupDepthStencil();
+
+    // create pipeline layout
+    // create pipeline
+    preparePipeline();
+    // create framebuffers
+    setupFramebuffer();
+    // create command buffers
+    createCommandBuffers();
+}
+
 void mv::Engine::go(void)
 {
     std::cout << "[+] Preparing vulkan" << std::endl;
@@ -37,66 +130,7 @@ void mv::Engine::go(void)
             handleXEvent();
         }
 
-        /*
-            DRAW
-        */
-        vkWaitForFences(device->device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-
-        currentFrame = (currentFrame + 1) & MAX_IN_FLIGHT;
-
-        if (vkAcquireNextImageKHR(device->device, swapChain.swapchain, UINT64_MAX, semaphores.presentComplete, VK_NULL_HANDLE, &imageIndex) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to obtain next swap image");
-        }
-
-        // TODO
-        // case checking
-
-        if (waitFences[imageIndex] != VK_NULL_HANDLE)
-        {
-            vkWaitForFences(device->device, 1, &waitFences[imageIndex], VK_TRUE, UINT64_MAX);
-        }
-
-        recordCommandBuffer(imageIndex);
-
-        // mark in use
-        waitFences[imageIndex] = inFlightFences[currentFrame];
-
-        VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        VkSemaphore waitSemaphores[] = {semaphores.presentComplete};
-        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = waitSemaphores;
-        submitInfo.pWaitDstStageMask = waitStages;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &cmdBuffers[imageIndex];
-        VkSemaphore renderSemaphores[] = {semaphores.renderComplete};
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = renderSemaphores;
-
-        vkResetFences(device->device, 1, &inFlightFences[currentFrame]);
-
-        if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to submit queue");
-        }
-
-        VkPresentInfoKHR presentInfo = {};
-        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.pNext = nullptr;
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = renderSemaphores;
-        VkSwapchainKHR swapchains[] = {swapChain.swapchain};
-        presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = swapchains;
-        presentInfo.pImageIndices = &imageIndex;
-        presentInfo.pResults = nullptr;
-
-        if (vkQueuePresentKHR(m_GraphicsQueue, &presentInfo) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to present");
-        }
+        draw(currentFrame, imageIndex);
     }
     return;
 }
@@ -128,25 +162,28 @@ void mv::Engine::prepareUniforms(void)
     return;
 }
 
-void mv::Engine::createDescriptorSets(void)
+void mv::Engine::createDescriptorSets(bool should_create_layout)
 {
-    // create layout
-    VkDescriptorSetLayoutBinding model = {};
-    model.binding = 0;
-    model.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    model.descriptorCount = 1;
-    model.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    std::vector<VkDescriptorSetLayoutBinding> bindings = {model};
-
-    VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo = {};
-    descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptorLayoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    descriptorLayoutInfo.pBindings = bindings.data();
-
-    if (vkCreateDescriptorSetLayout(device->device, &descriptorLayoutInfo, nullptr, &descriptorLayout) != VK_SUCCESS)
+    if (should_create_layout)
     {
-        throw std::runtime_error("Failed to create descriptor set layout");
+        // create layout
+        VkDescriptorSetLayoutBinding model = {};
+        model.binding = 0;
+        model.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        model.descriptorCount = 1;
+        model.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+        std::vector<VkDescriptorSetLayoutBinding> bindings = {model};
+
+        VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo = {};
+        descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorLayoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+        descriptorLayoutInfo.pBindings = bindings.data();
+
+        if (vkCreateDescriptorSetLayout(device->device, &descriptorLayoutInfo, nullptr, &descriptorLayout) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create descriptor set layout");
+        }
     }
 
     /*
@@ -362,4 +399,102 @@ void mv::Engine::recordCommandBuffer(uint32_t imageIndex)
     }
 
     return;
+}
+
+void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
+{
+    vkWaitForFences(device->device, 1, &inFlightFences[cur_frame], VK_TRUE, UINT64_MAX);
+
+    cur_frame = (cur_frame + 1) & MAX_IN_FLIGHT;
+
+    VkResult result;
+    result = vkAcquireNextImageKHR(device->device, swapChain.swapchain, UINT64_MAX, semaphores.presentComplete, VK_NULL_HANDLE, &cur_index);
+    switch (result)
+    {
+    case VK_ERROR_OUT_OF_DATE_KHR:
+        recreateSwapchain();
+        return;
+        break;
+    case VK_SUBOPTIMAL_KHR:
+        std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+        break;
+    case VK_SUCCESS:
+        break;
+    default: // unhandled error occurred
+        throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
+        break;
+    }
+
+    // TODO
+    // case checking
+
+    if (waitFences[cur_index] != VK_NULL_HANDLE)
+    {
+        vkWaitForFences(device->device, 1, &waitFences[cur_index], VK_TRUE, UINT64_MAX);
+    }
+
+    recordCommandBuffer(cur_index);
+
+    // mark in use
+    waitFences[cur_index] = inFlightFences[cur_frame];
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkSemaphore waitSemaphores[] = {semaphores.presentComplete};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmdBuffers[cur_index];
+    VkSemaphore renderSemaphores[] = {semaphores.renderComplete};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = renderSemaphores;
+
+    vkResetFences(device->device, 1, &inFlightFences[cur_frame]);
+
+    result = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, inFlightFences[cur_frame]);
+    switch (result)
+    {
+    case VK_ERROR_OUT_OF_DATE_KHR:
+        recreateSwapchain();
+        return;
+        break;
+    case VK_SUBOPTIMAL_KHR:
+        std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+        break;
+    case VK_SUCCESS:
+        break;
+    default: // unhandled error occurred
+        throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
+        break;
+    }
+
+    VkPresentInfoKHR presentInfo = {};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pNext = nullptr;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = renderSemaphores;
+    VkSwapchainKHR swapchains[] = {swapChain.swapchain};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &cur_index;
+    presentInfo.pResults = nullptr;
+
+    result = vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
+    switch (result)
+    {
+    case VK_ERROR_OUT_OF_DATE_KHR:
+        recreateSwapchain();
+        return;
+        break;
+    case VK_SUBOPTIMAL_KHR:
+        std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+        break;
+    case VK_SUCCESS:
+        break;
+    default: // unhandled error occurred
+        throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
+        break;
+    }
 }

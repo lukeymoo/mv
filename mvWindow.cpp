@@ -79,14 +79,6 @@ mv::MWindow::~MWindow(void)
     swapChain.cleanup();
     destroyCommandBuffers();
 
-    // for (auto &fence : waitFences)
-    // {
-    //     std::cout << "wait fence des => " << fence << std::endl;
-    //     if (fence != nullptr)
-    //     {
-    //         vkDestroyFence(m_Device, fence, nullptr);
-    //     }
-    // }
     for (auto &fence : inFlightFences)
     {
         if (fence != nullptr)
@@ -110,18 +102,7 @@ mv::MWindow::~MWindow(void)
         }
     }
 
-    if (depthStencil.image)
-    {
-        vkDestroyImage(m_Device, depthStencil.image, nullptr);
-    }
-    if (depthStencil.view)
-    {
-        vkDestroyImageView(m_Device, depthStencil.view, nullptr);
-    }
-    if (depthStencil.mem)
-    {
-        vkFreeMemory(m_Device, depthStencil.mem, nullptr);
-    }
+    cleanupDepthStencil();
 
     if (m_PipelineCache)
     {
@@ -146,6 +127,26 @@ mv::MWindow::~MWindow(void)
     {
         XDestroyWindow(display, window);
         XCloseDisplay(display);
+    }
+    return;
+}
+
+void mv::MWindow::cleanupDepthStencil(void)
+{
+    if (depthStencil.image)
+    {
+        vkDestroyImage(m_Device, depthStencil.image, nullptr);
+        depthStencil.image = nullptr;
+    }
+    if (depthStencil.view)
+    {
+        vkDestroyImageView(m_Device, depthStencil.view, nullptr);
+        depthStencil.view = nullptr;
+    }
+    if (depthStencil.mem)
+    {
+        vkFreeMemory(m_Device, depthStencil.mem, nullptr);
+        depthStencil.mem = nullptr;
     }
     return;
 }
@@ -580,6 +581,13 @@ void mv::MWindow::destroyCommandBuffers(void)
     if (!cmdBuffers.empty())
     {
         vkFreeCommandBuffers(m_Device, m_CommandPool, static_cast<uint32_t>(cmdBuffers.size()), cmdBuffers.data());
+        for (auto &buf : cmdBuffers)
+        {
+            if (buf)
+            {
+                buf = nullptr;
+            }
+        }
     }
     return;
 }
@@ -768,49 +776,49 @@ VkShaderModule mv::MWindow::createShaderModule(const std::vector<char> &code)
 
 XEvent mv::MWindow::createEvent(const char *eventType)
 {
-	XEvent cev;
+    XEvent cev;
 
-	cev.xclient.type = ClientMessage;
-	cev.xclient.window = window;
-	cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
-	cev.xclient.format = 32;
-	cev.xclient.data.l[0] = XInternAtom(display, eventType, false);
-	cev.xclient.data.l[1] = CurrentTime;
+    cev.xclient.type = ClientMessage;
+    cev.xclient.window = window;
+    cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
+    cev.xclient.format = 32;
+    cev.xclient.data.l[0] = XInternAtom(display, eventType, false);
+    cev.xclient.data.l[1] = CurrentTime;
 
-	return cev;
+    return cev;
 }
 
 void mv::MWindow::handleXEvent(void)
 {
-	// count time for processing events
-	XNextEvent(display, &event);
-	KeySym key;
-	switch (event.type)
-	{
-	case KeyPress:
-		key = XLookupKeysym(&event.xkey, 0);
-		if (key == XK_Escape)
-		{
-			XEvent q = createEvent("WM_DELETE_WINDOW");
-			XSendEvent(display, window, false, ExposureMask, &q);
-		}
-		kbd.onKeyPress(static_cast<unsigned char>(key));
-		break;
-	case KeyRelease:
-		key = XLookupKeysym(&event.xkey, 0);
-		kbd.onKeyRelease(static_cast<unsigned char>(key));
-		break;
-	case MotionNotify:
-		mouse.onMouseMove(event.xmotion.x, event.xmotion.y);
-	case Expose:
-		break;
-		// configured to only capture WM_DELETE_WINDOW so we exit here
-	case ClientMessage:
-		std::cout << "[+] Exit requested" << std::endl;
-		running = false;
-		break;
-	default: // Unhandled events do nothing
-		break;
-	} // End of switch
-	return;
+    // count time for processing events
+    XNextEvent(display, &event);
+    KeySym key;
+    switch (event.type)
+    {
+    case KeyPress:
+        key = XLookupKeysym(&event.xkey, 0);
+        if (key == XK_Escape)
+        {
+            XEvent q = createEvent("WM_DELETE_WINDOW");
+            XSendEvent(display, window, false, ExposureMask, &q);
+        }
+        kbd.onKeyPress(static_cast<unsigned char>(key));
+        break;
+    case KeyRelease:
+        key = XLookupKeysym(&event.xkey, 0);
+        kbd.onKeyRelease(static_cast<unsigned char>(key));
+        break;
+    case MotionNotify:
+        mouse.onMouseMove(event.xmotion.x, event.xmotion.y);
+    case Expose:
+        break;
+        // configured to only capture WM_DELETE_WINDOW so we exit here
+    case ClientMessage:
+        std::cout << "[+] Exit requested" << std::endl;
+        running = false;
+        break;
+    default: // Unhandled events do nothing
+        break;
+    } // End of switch
+    return;
 }
