@@ -141,7 +141,7 @@ void mv::Engine::prepareUniforms(void)
     Object::Matrices tm;
     tm.model = glm::mat4(1.0);
     tm.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    tm.projection = glm::perspective(glm::radians(45.0f), swapChain.swapExtent.width / (float)swapChain.swapExtent.height, 0.1f, 100.0f);
+    tm.projection = glm::perspective(glm::radians(50.0f), swapChain.swapExtent.width / (float)swapChain.swapExtent.height, 0.1f, 100.0f);
     tm.projection[1][1] *= -1;
 
     for (auto &obj : objects)
