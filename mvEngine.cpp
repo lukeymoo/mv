@@ -135,6 +135,7 @@ void mv::Engine::go(void)
         Keyboard::Event kbdEvent = kbd.readKey();
         Mouse::Event mouseEvent = mouse.read();
 
+        // Handle input events
         if (mouseEvent.getType() == Mouse::Event::Type::Move)
         {
         }
