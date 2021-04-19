@@ -131,6 +131,7 @@ void mv::Engine::go(void)
             handleXEvent();
         }
 
+
         // Get input events
         Keyboard::Event kbdEvent = kbd.readKey();
         Mouse::Event mouseEvent = mouse.read();
@@ -152,8 +153,9 @@ void mv::Engine::go(void)
         if (kbd.isKeyPressed('d'))
         {
         }
-
+        
         draw(currentFrame, imageIndex);
+
     }
     return;
 }
