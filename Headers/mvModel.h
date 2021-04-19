@@ -149,13 +149,11 @@ namespace mv
 
                     // TODO
                     // Perform removal of duplicate vertices before adding
+                    // Add texture UV data to loader
 
                     t_vertices.push_back(vertex);
                     vertices.count++;
 
-                    // TODO
-                    // Remove duplicate vertices to properly allow
-                    // indexed drawing
                     t_indices.push_back(t_indices.size());
                     indices.count++;
                 }
