@@ -201,11 +201,19 @@ VkResult mv::Device::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropert
     allocInfo.allocationSize = memreqs.size;
     allocInfo.memoryTypeIndex = getMemoryType(memreqs.memoryTypeBits, memoryPropertyFlags);
 
+    // Allocate memory
     if (vkAllocateMemory(device, &allocInfo, nullptr, memory) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to allocate buffer memory");
     }
 
+    // Bind newly allocated memory to buffer
+    if (vkBindBufferMemory(device, *buffer, *memory, 0) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to bind buffer memory");
+    }
+
+    // If data was passed to creation, load it
     if (data != nullptr)
     {
         void *mapped;
@@ -220,11 +228,6 @@ VkResult mv::Device::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropert
         // }
         memcpy(mapped, data, size);
         vkUnmapMemory(device, *memory);
-    }
-
-    if (vkBindBufferMemory(device, *buffer, *memory, 0) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to bind buffer memory");
     }
 
     return VK_SUCCESS;
