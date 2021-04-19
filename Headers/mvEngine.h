@@ -29,9 +29,10 @@ namespace mv
             VkDescriptorSet descriptorSet;
             mv::Buffer uniformBuffer; // contains the matrices
             glm::vec3 rotation;
+            uint32_t modelIndex;
         };
-        std::array<Object, 1> objects;
-        mv::Model model;
+        std::vector<Object> objects;
+        std::vector<mv::Model> models;
 
         VkPipeline pipeline = nullptr;
         VkPipelineLayout pipelineLayout = nullptr;

@@ -11,11 +11,16 @@ void mv::Engine::go(void)
     std::cout << "[+] Preparing vulkan" << std::endl;
     prepare();
 
+    models.resize(1);
+    objects.resize(1); // models * count
+
     // Prepare uniforms
     prepareUniforms();
 
-    // Load model data, hardcoded file "models/viking_room.obj" for now
-    model.load(device, swapChain.imageCount);
+    // Load models
+
+    objects[0].modelIndex = 0;
+    models[0].load(device, "models/viking_room.obj");
     createDescriptorSets();
 
     preparePipeline();
@@ -101,7 +106,7 @@ void mv::Engine::prepareUniforms(void)
     Object::Matrices tm;
     tm.model = glm::mat4(1.0);
     tm.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    tm.projection = glm::perspective(glm::radians(45.0f), swapChain.swapExtent.width / (float)swapChain.swapExtent.height, 0.1f, 10.0f);
+    tm.projection = glm::perspective(glm::radians(45.0f), swapChain.swapExtent.width / (float)swapChain.swapExtent.height, 0.1f, 100.0f);
     tm.projection[1][1] *= -1;
 
     for (auto &obj : objects)
@@ -159,7 +164,7 @@ void mv::Engine::createDescriptorSets(void)
     poolInfo.flags = 0;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.maxSets = static_cast<uint32_t>(poolSizes.size()) * objects.size();
 
     if (vkCreateDescriptorPool(device->device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
     {
@@ -219,7 +224,7 @@ void mv::Engine::preparePipeline(void)
     viState.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
     viState.pVertexAttributeDescriptions = attributeDescription.data();
     VkPipelineInputAssemblyStateCreateInfo iaState = mv::initializer::inputAssemblyStateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rsState = mv::initializer::rasterizationStateInfo(VK_POLYGON_MODE_LINE, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+    VkPipelineRasterizationStateCreateInfo rsState = mv::initializer::rasterizationStateInfo(VK_POLYGON_MODE_LINE, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
     VkPipelineColorBlendAttachmentState cbaState = mv::initializer::colorBlendAttachmentState(0xf, VK_FALSE);
     VkPipelineColorBlendStateCreateInfo cbState = mv::initializer::colorBlendStateInfo(1, &cbaState);
     VkPipelineDepthStencilStateCreateInfo dsState = mv::initializer::depthStencilStateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
@@ -332,18 +337,22 @@ void mv::Engine::recordCommandBuffer(uint32_t imageIndex)
                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                       pipeline);
 
-    model.bindBuffers(cmdBuffers[imageIndex]);
-    vkCmdBindDescriptorSets(cmdBuffers[imageIndex],
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipelineLayout,
-                            0,
-                            1,
-                            &objects[0].descriptorSet,
-                            0,
-                            nullptr);
-
-    //vkCmdDraw(cmdBuffers[imageIndex], static_cast<uint32_t>(model.vertices.count), 1, 0, 0);
-    vkCmdDrawIndexed(cmdBuffers[imageIndex], static_cast<uint32_t>(model.indices.count), 1, 0, 0, 0);
+    for (const auto &obj : objects)
+    {
+        models[obj.modelIndex].bindBuffers(cmdBuffers[imageIndex]);
+        vkCmdBindDescriptorSets(cmdBuffers[imageIndex],
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pipelineLayout,
+                                0,
+                                1,
+                                &objects[0].descriptorSet,
+                                0,
+                                nullptr);
+        // Call model draw
+        // Reformat later for instanced drawing of each model type we bind
+        vkCmdDraw(cmdBuffers[imageIndex], static_cast<uint32_t>(models[obj.modelIndex].vertices.count), 1, 0, 0);
+        //vkCmdDrawIndexed(cmdBuffers[imageIndex], static_cast<uint32_t>(models[obj.modelIndex].indices.count), 1, 0, 0, 0);
+    }
 
     vkCmdEndRenderPass(cmdBuffers[imageIndex]);
 

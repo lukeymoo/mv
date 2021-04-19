@@ -103,7 +103,7 @@ namespace mv
             return;
         }
 
-        void load(mv::Device *dvc, uint32_t swapchain_image_count)
+        void load(mv::Device *dvc, const char* filename)
         {
             assert(dvc);
 
@@ -128,7 +128,7 @@ namespace mv
             //     4, 5, 6, 6, 7, 4};
             std::string warn, err;
 
-            if (!tinyobj::LoadObj(&attribute, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()))
+            if (!tinyobj::LoadObj(&attribute, &shapes, &materials, &warn, &err, filename))
             {
                 throw std::runtime_error(warn + err);
             }
@@ -150,6 +150,9 @@ namespace mv
                     t_vertices.push_back(vertex);
                     vertices.count++;
 
+                    // TODO
+                    // Remove duplicate vertices to properly allow
+                    // indexed drawing
                     t_indices.push_back(t_indices.size());
                     indices.count++;
                 }
