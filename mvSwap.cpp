@@ -1,6 +1,6 @@
 #include "mvSwap.h"
 
-void mv::Swap::cleanup(bool should_detroy_surface)
+void mv::Swap::cleanup(bool should_destroy_surface)
 {
     if (swapchain != nullptr)
     {
@@ -16,7 +16,7 @@ void mv::Swap::cleanup(bool should_detroy_surface)
         swapchain = nullptr;
     }
 
-    if (should_detroy_surface)
+    if (should_destroy_surface)
     {
         if (surface != nullptr)
         {
