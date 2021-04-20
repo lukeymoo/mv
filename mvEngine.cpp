@@ -107,9 +107,9 @@ void mv::Engine::go(void)
 
     // configure camera before modes/uniform buffers
     camera = std::make_unique<Camera>(50.0f,
-                                      (swapchain.swap_extent.width / swapchain.swap_extent.height),
+                                      static_cast<float>((window_width / window_height)),
                                       0.1f, 100.0f,
-                                      glm::vec3(1.0));
+                                      glm::vec3(0.0f, 0.0f, 2.0f));
 
     models.resize(1);
     objects.resize(1); // models * count
@@ -147,15 +147,30 @@ void mv::Engine::go(void)
 
         if (kbd.is_key_pressed('w'))
         {
+            camera->move_forward();
         }
         if (kbd.is_key_pressed('a'))
         {
+            camera->move_left();
         }
         if (kbd.is_key_pressed('s'))
         {
+            camera->move_backward();
         }
         if (kbd.is_key_pressed('d'))
         {
+            camera->move_right();
+        }
+
+        Object::Matrices tm;
+        //tm.view = glm::lookAt(camera->get_position(), camera->get_forward_direction(), camera->get_default_up_direction());
+        tm.view = camera->matrices.view;
+        tm.projection = camera->matrices.perspective;
+
+        for (auto &obj : objects)
+        {
+            tm.model = obj.matrices.model;
+            memcpy(obj.uniform_buffer.mapped, &tm, sizeof(Object::Matrices));
         }
 
         draw(currentFrame, imageIndex);
@@ -166,7 +181,7 @@ void mv::Engine::go(void)
 void mv::Engine::prepare_uniforms(void)
 {
     Object::Matrices tm;
-    tm.model = glm::mat4(1.0);
+    tm.model = glm::translate(glm::mat4(1.0), {0.0f, 0.0f, -10.0f});
     tm.view = camera->matrices.view;
     tm.projection = camera->matrices.perspective;
 
@@ -184,6 +199,7 @@ void mv::Engine::prepare_uniforms(void)
 
     for (auto &obj : objects)
     {
+        obj.matrices = tm;
         memcpy(obj.uniform_buffer.mapped, &tm, sizeof(Object::Matrices));
     }
     return;
@@ -288,7 +304,7 @@ void mv::Engine::prepare_pipeline(void)
     vi_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
     vi_state.pVertexAttributeDescriptions = attribute_description.data();
     VkPipelineInputAssemblyStateCreateInfo ia_state = mv::initializer::input_assembly_state_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_LINE, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_LINE, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
     VkPipelineColorBlendAttachmentState cba_state = mv::initializer::color_blend_attachment_state(0xf, VK_FALSE);
     VkPipelineColorBlendStateCreateInfo cb_state = mv::initializer::color_blend_state_info(1, &cba_state);
     VkPipelineDepthStencilStateCreateInfo ds_state = mv::initializer::depth_stencil_state_info(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
@@ -296,9 +312,9 @@ void mv::Engine::prepare_pipeline(void)
     VkViewport vp = {};
     VkRect2D sc = {};
     vp.x = 0;
-    vp.y = 0;
+    vp.y = window_height;
     vp.width = static_cast<float>(window_width);
-    vp.height = static_cast<float>(window_height);
+    vp.height = -static_cast<float>(window_height);
     vp.minDepth = 0.0f;
     vp.maxDepth = 1.0f;
 
@@ -414,8 +430,8 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
                                 nullptr);
         // Call model draw
         // Reformat later for instanced drawing of each model type we bind
-        vkCmdDraw(command_buffers[image_index], static_cast<uint32_t>(models[obj.model_index].vertices.count), 1, 0, 0);
-        //vkCmdDrawIndexed(command_buffers[imageIndex], static_cast<uint32_t>(models[obj.modelIndex].indices.count), 1, 0, 0, 0);
+        //vkCmdDraw(command_buffers[image_index], static_cast<uint32_t>(models[obj.model_index].vertices.count), 1, 0, 0);
+        vkCmdDrawIndexed(command_buffers[image_index], static_cast<uint32_t>(models[obj.model_index].indices.count), 1, 0, 0, 0);
     }
 
     vkCmdEndRenderPass(command_buffers[image_index]);

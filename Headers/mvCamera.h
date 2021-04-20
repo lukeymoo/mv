@@ -3,6 +3,8 @@
 
 #include <memory>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -13,15 +15,21 @@ namespace mv
     class Camera
     {
     public:
-        Camera(float fov, float aspect, float nearz, float farz, glm::vec3 pos) {
+        Camera(float fov, float aspect, float nearz, float farz, glm::vec3 pos)
+        {
             this->fov = fov;
             this->aspect = aspect;
             this->nearz = nearz;
             this->farz = farz;
             this->position = pos;
-        }
-        ~Camera() {
 
+            matrices.perspective = glm::perspective(glm::radians(fov), aspect, nearz, farz);
+            //matrices.perspective[1][1] *= -1.0f;
+
+            update_view();
+        }
+        ~Camera()
+        {
         }
 
     private:
@@ -54,10 +62,6 @@ namespace mv
             rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
             rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
-            // TODO
-            // if flipping coordinates is desired later, create a temporary vec3 to store position
-
-            // apply stored position as translation
             translation_matrix = glm::translate(glm::mat4(1.0), position);
 
             // freelook
@@ -67,6 +71,49 @@ namespace mv
             // add more camera modes
             // first person
             // rotation_matrix * translation_matrix
+        }
+
+        // calculate current camera front
+        void update(void)
+        {
+            glm::vec3 fr;
+            fr.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
+            fr.y = sin(glm::radians(rotation.x));
+            fr.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
+            fr = glm::normalize(fr);
+
+            camera_front = fr;
+        }
+
+        // movement
+        void move_left(void)
+        {
+            update();
+            position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * 0.2f;
+            update_view();
+        }
+        void move_right(void)
+        {
+            update();
+            position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * 0.2f;
+            update_view();
+        }
+        void move_forward(void)
+        {
+            update();
+            position += camera_front * 0.2f;
+            update_view();
+        }
+        void move_backward(void)
+        {
+            update();
+            position -= camera_front * 0.2f;
+            update_view();
+        }
+
+        glm::vec3 get_position(void)
+        {
+            return position;
         }
 
         void set_position(glm::vec3 new_position)
@@ -85,16 +132,20 @@ namespace mv
             return;
         }
 
-        void translate(glm::vec3 delta)
+        glm::vec3 get_default_up_direction(void)
         {
-            this->position += delta;
-            return;
+            return DEFAULT_UP_VECTOR;
+        }
+        glm::vec3 get_default_down_direction(void)
+        {
+            return DEFAULT_UP_VECTOR;
         }
 
     protected:
-        glm::vec3 rotation = glm::vec3();
-        glm::vec3 position = glm::vec3();
-        glm::vec4 view_position = glm::vec4();
+        glm::vec3 rotation = glm::vec3(1.0);
+        glm::vec3 position = glm::vec3(1.0);
+        glm::vec4 view_position = glm::vec4(1.0);
+        glm::vec3 camera_front = glm::vec3(0.0f, 0.0f, -1.0f);
 
     protected:
     private:
@@ -102,6 +153,13 @@ namespace mv
         float farz = 100.0f;
         float nearz = 0.1f;
         float aspect = 0;
+
+    public:
+        const glm::vec3 DEFAULT_UP_VECTOR = {0.0f, 1.0f, 0.0f};
+        const glm::vec3 DEFAULT_FORWARD_VECTOR = {0.0f, 0.0f, 1.0f};
+        const glm::vec3 DEFAULT_BACKWARD_VECTOR = {0.0f, 0.0f, -1.0f};
+        const glm::vec3 DEFAULT_LEFT_VECTOR = {-1.0f, 0.0f, 0.0f};
+        const glm::vec3 DEFAULT_RIGHT_VECTOR = {1.0f, 0.0f, 0.0f};
     };
 };
 

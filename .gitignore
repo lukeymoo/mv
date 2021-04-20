@@ -1,6 +1,6 @@
 CMakeCache.txt
 cmake_install.cmake
 compile_commands.json
-.vscode/
 CMakeFiles/
+.github/
 build/main
