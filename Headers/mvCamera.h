@@ -64,17 +64,17 @@ namespace mv
 
             translation_matrix = glm::translate(glm::mat4(1.0), position);
 
-            // freelook
-            matrices.view = translation_matrix * rotation_matrix;
-
             // TODO
             // add more camera modes
+
+            // freelook
+            //matrices.view = translation_matrix * rotation_matrix;
             // first person
-            // rotation_matrix * translation_matrix
+            matrices.view = rotation_matrix * translation_matrix;
         }
 
         // calculate current camera front
-        void update(void)
+        void get_front_face(void)
         {
             glm::vec3 fr;
             fr.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
@@ -85,28 +85,36 @@ namespace mv
             camera_front = fr;
         }
 
+        // rotation
+        void rotate(glm::vec3 delta)
+        {
+            delta *= 0.6f;
+            this->rotation += delta;
+            update_view();
+        }
+
         // movement
         void move_left(void)
         {
-            update();
+            get_front_face();
             position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * 0.2f;
             update_view();
         }
         void move_right(void)
         {
-            update();
+            get_front_face();
             position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * 0.2f;
             update_view();
         }
         void move_forward(void)
         {
-            update();
+            get_front_face();
             position += camera_front * 0.2f;
             update_view();
         }
         void move_backward(void)
         {
-            update();
+            get_front_face();
             position -= camera_front * 0.2f;
             update_view();
         }
@@ -142,7 +150,7 @@ namespace mv
         }
 
     protected:
-        glm::vec3 rotation = glm::vec3(1.0);
+        glm::vec3 rotation = glm::vec3(0.1f, 0.1f, 0.1f);
         glm::vec3 position = glm::vec3(1.0);
         glm::vec4 view_position = glm::vec4(1.0);
         glm::vec3 camera_front = glm::vec3(0.0f, 0.0f, -1.0f);

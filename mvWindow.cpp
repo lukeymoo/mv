@@ -337,8 +337,8 @@ void mv::MWindow::create_command_buffers(void)
     command_buffers.resize(swapchain.image_count);
 
     VkCommandBufferAllocateInfo alloc_info = mv::initializer::command_buffer_allocate_info(m_command_pool,
-                                                                                       VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                                                                       static_cast<uint32_t>(command_buffers.size()));
+                                                                                           VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                                                                           static_cast<uint32_t>(command_buffers.size()));
     if (vkAllocateCommandBuffers(m_device, &alloc_info, command_buffers.data()) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to allocate command buffers");
@@ -667,9 +667,9 @@ void mv::MWindow::check_instance_ext(void)
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                                                     VkDebugUtilsMessageTypeFlagsEXT message_type,
-                                                     const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-                                                     void *user_data)
+                                                       VkDebugUtilsMessageTypeFlagsEXT message_type,
+                                                       const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+                                                       void *user_data)
 {
     if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
@@ -807,6 +807,26 @@ void mv::MWindow::handle_x_event(void)
     KeySym key;
     switch (event.type)
     {
+    case ButtonPress:
+        if (event.xbutton.button == Button1)
+        {
+            mouse.on_left_press(event.xmotion.x, event.xmotion.y);
+        }
+        else if (event.xbutton.button == Button2)
+        {
+            mouse.on_right_press(event.xmotion.x, event.xmotion.y);
+        }
+        break;
+    case ButtonRelease:
+        if (event.xbutton.button == Button1)
+        {
+            mouse.on_left_release(event.xmotion.x, event.xmotion.y);
+        }
+        else if (event.xbutton.button == Button2)
+        {
+            mouse.on_right_release(event.xmotion.x, event.xmotion.y);
+        }
+        break;
     case KeyPress:
         key = XLookupKeysym(&event.xkey, 0);
         if (key == XK_Escape)
@@ -821,7 +841,10 @@ void mv::MWindow::handle_x_event(void)
         kbd.on_key_release(static_cast<unsigned char>(key));
         break;
     case MotionNotify:
+        // auto start = std::chrono::high_resolution_clock::now();
         mouse.on_mouse_move(event.xmotion.x, event.xmotion.y);
+        // auto stop = std::chrono::high_resolution_clock::now();
+        // auto duration = std::chrono::duration<
     case Expose:
         break;
         // configured to only capture WM_DELETE_WINDOW so we exit here
