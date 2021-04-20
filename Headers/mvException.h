@@ -12,8 +12,8 @@ namespace mv
         BException(int line, std::string file, std::string message);
         ~BException();
 
-        std::string getType(void);
-        std::string getErrorDescription(void);
+        std::string get_type(void);
+        std::string get_error_description(void);
 
     private:
         int line;
@@ -21,7 +21,7 @@ namespace mv
 
     protected:
         std::string type;             // changes based on exception source
-        std::string errorDescription; // windows translated description of HR
+        std::string error_description; // windows translated description of HR
     };
 };
 

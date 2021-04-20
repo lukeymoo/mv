@@ -23,7 +23,7 @@ VkResult mv::Buffer::bind(VkDeviceSize poffset)
 }
 
 // Configure default descriptor values
-void mv::Buffer::setupDescriptor(VkDeviceSize psize, VkDeviceSize poffset)
+void mv::Buffer::setup_descriptor(VkDeviceSize psize, VkDeviceSize poffset)
 {
     descriptor.buffer = buffer;
     descriptor.range = psize;
@@ -31,7 +31,7 @@ void mv::Buffer::setupDescriptor(VkDeviceSize psize, VkDeviceSize poffset)
 }
 
 // Copy buffer to another mapped buffer pointed to via function param void* data
-void mv::Buffer::copyTo(void *data, VkDeviceSize size)
+void mv::Buffer::copy_to(void *data, VkDeviceSize size)
 {
     assert(mapped);
     memcpy(mapped, data, size);

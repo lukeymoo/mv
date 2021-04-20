@@ -26,15 +26,15 @@ const size_t MAX_IN_FLIGHT = 2;
 #define WINDOW_WIDTH 1024
 #define WINDOW_HEIGHT 768
 
-const std::vector<const char *> requestedValidationLayers = {
+const std::vector<const char *> requested_validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
 
-const std::vector<const char *> requestedInstanceExtensions = {
+const std::vector<const char *> requested_instance_extensions = {
     "VK_EXT_debug_utils",
     "VK_KHR_surface",
     "VK_KHR_xlib_surface"};
 
-const std::vector<const char *> requestedDeviceExtensions = {
+const std::vector<const char *> requested_device_extensions = {
     "VK_KHR_swapchain"};
 
 namespace mv
@@ -58,32 +58,32 @@ namespace mv
         MWindow &operator=(const MWindow &) = delete;
         MWindow(const MWindow &) = delete;
 
-        VkResult createInstance(void);
+        VkResult create_instance(void);
 
         //void go(void);
         void prepare(void);
 
-        XEvent createEvent(const char *eventType);
-        void handleXEvent(void);
+        XEvent create_event(const char *eventType);
+        void handle_x_event(void);
 
     protected:
-        bool initVulkan(void);
-        void checkValidationSupport(void);
-        void checkInstanceExt(void);
-        void createCommandBuffers(void);
-        void createSynchronizationPrimitives(void);
-        void setupDepthStencil(void);
-        void setupRenderPass(void);
-        void createPipelineCache(void);
-        void setupFramebuffer(void);
+        bool init_vulkan(void);
+        void check_validation_support(void);
+        void check_instance_ext(void);
+        void create_command_buffers(void);
+        void create_synchronization_primitives(void);
+        void setup_depth_stencil(void);
+        void setup_render_pass(void);
+        void create_pipeline_cache(void);
+        void setup_framebuffer(void);
 
-        void destroyCommandBuffers(void);
-        void destroyCommandPool(void);
-        void cleanupDepthStencil(void);
+        void destroy_command_buffers(void);
+        void destroy_command_pool(void);
+        void cleanup_depth_stencil(void);
 
     public:
-        VkClearColorValue defaultClearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
-        bool goodInit = true;
+        VkClearColorValue default_clear_color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+        bool good_init = true;
         Keyboard kbd;
         Mouse mouse;
 
@@ -97,36 +97,36 @@ namespace mv
         int screen;
         bool running = true;
 
-        uint32_t windowWidth = 0;
-        uint32_t windowHeight = 0;
+        uint32_t window_width = 0;
+        uint32_t window_height = 0;
 
-        VkInstance m_Instance = nullptr;
-        VkPhysicalDevice m_PhysicalDevice = nullptr;
-        VkDevice m_Device = nullptr;
-        VkQueue m_GraphicsQueue = nullptr;
-        VkCommandPool m_CommandPool = nullptr;
-        VkRenderPass m_RenderPass = nullptr;
-        VkPipelineCache m_PipelineCache = nullptr;
+        VkInstance m_instance = nullptr;
+        VkPhysicalDevice m_physical_device = nullptr;
+        VkDevice m_device = nullptr;
+        VkQueue m_graphics_queue = nullptr;
+        VkCommandPool m_command_pool = nullptr;
+        VkRenderPass m_render_pass = nullptr;
+        VkPipelineCache m_pipeline_cache = nullptr;
 
-        Swap swapChain;
+        Swap swapchain;
 
-        std::vector<VkCommandBuffer> cmdBuffers;
-        std::vector<VkFramebuffer> frameBuffers;
-        std::vector<VkFence> waitFences;
-        std::vector<VkFence> inFlightFences;
+        std::vector<VkCommandBuffer> command_buffers;
+        std::vector<VkFramebuffer> frame_buffers;
+        std::vector<VkFence> wait_fences;
+        std::vector<VkFence> in_flight_fences;
 
-        VkSubmitInfo submitInfo = {};
+        VkSubmitInfo submit_info = {};
 
-        VkFormat depthFormat{};
+        VkFormat depth_format{};
         VkPhysicalDeviceFeatures features = {};
         VkPhysicalDeviceProperties properties = {};
-        VkPhysicalDeviceMemoryProperties memoryProperties = {};
-        VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkPhysicalDeviceMemoryProperties memory_properties = {};
+        VkPipelineStageFlags stage_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
         struct
         {
-            VkSemaphore presentComplete;
-            VkSemaphore renderComplete;
+            VkSemaphore present_complete;
+            VkSemaphore render_complete;
         } semaphores;
 
         struct
@@ -134,25 +134,19 @@ namespace mv
             VkImage image = nullptr;
             VkDeviceMemory mem = nullptr;
             VkImageView view = nullptr;
-        } depthStencil;
+        } depth_stencil;
 
-        std::vector<char> readFile(std::string filename);
-        VkShaderModule createShaderModule(const std::vector<char> &code);
+        std::vector<char> read_file(std::string filename);
+        VkShaderModule create_shader_module(const std::vector<char> &code);
 
     private:
     };
 };
 
-#define VK_CHECK(result)                                                \
-    if (result != VK_SUCCESS)                                           \
-    {                                                                   \
-        throw Exception(__LINE__, __FILE__, "Vulkan operation failed"); \
-    }
-
 VKAPI_ATTR
 VkBool32
     VKAPI_CALL
-    debugMessageProcessor(
+    debug_message_processor(
         VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
         VkDebugUtilsMessageTypeFlagsEXT message_type,
         const VkDebugUtilsMessengerCallbackDataEXT *callback_data,

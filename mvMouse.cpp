@@ -3,22 +3,22 @@
 namespace mv
 {
     /* Getter functions */
-    std::pair<int, int> Mouse::getPos() const noexcept
+    std::pair<int, int> Mouse::get_pos() const noexcept
     {
         return {x, y};
     }
 
-    std::pair<int, int> Mouse::getPosDelta(void) const noexcept
+    std::pair<int, int> Mouse::get_pos_delta(void) const noexcept
     {
         return {mouse_x_delta, mouse_y_delta};
     }
 
-    int Mouse::getPosX(void) const noexcept
+    int Mouse::get_pos_x(void) const noexcept
     {
         return x;
     }
 
-    int Mouse::getPosY(void) const noexcept
+    int Mouse::get_pos_y(void) const noexcept
     {
         return y;
     }
@@ -39,37 +39,37 @@ namespace mv
         }
     }
 
-    bool Mouse::isLeftPressed(void) const noexcept
+    bool Mouse::is_left_pressed(void) const noexcept
     {
-        return leftIsPressed;
+        return left_is_pressed;
     }
 
-    bool Mouse::isMiddlePressed(void) const noexcept
+    bool Mouse::is_middle_pressed(void) const noexcept
     {
-        return middleIsPressed;
+        return middle_is_pressed;
     }
 
-    bool Mouse::isRightPressed(void) const noexcept
+    bool Mouse::is_right_pressed(void) const noexcept
     {
-        return rightIsPressed;
+        return right_is_pressed;
     }
 
-    bool Mouse::isInWindow(void) const noexcept
+    bool Mouse::is_in_window(void) const noexcept
     {
-        return inWindow;
+        return in_window;
     }
 
     /*
     On event handlers
     Internal Functions
 */
-    void Mouse::clearState() noexcept
+    void Mouse::clear_state() noexcept
     {
         buffer = std::queue<Mouse::Event>();
         return;
     }
 
-    void Mouse::onMouseMove(int nx, int ny) noexcept
+    void Mouse::on_mouse_move(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -79,11 +79,11 @@ namespace mv
         mouse_y_delta = y - last_y;
 
         buffer.push(Mouse::Event(Mouse::Event::Type::Move, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onLeftPress(int nx, int ny) noexcept
+    void Mouse::on_left_press(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -92,13 +92,13 @@ namespace mv
         mouse_x_delta = x - last_x;
         mouse_y_delta = y - last_y;
 
-        leftIsPressed = true;
+        left_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::LDown, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onRightPress(int nx, int ny) noexcept
+    void Mouse::on_right_press(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -107,13 +107,13 @@ namespace mv
         mouse_x_delta = x - last_x;
         mouse_y_delta = y - last_y;
 
-        rightIsPressed = true;
+        right_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::RDown, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onLeftRelease(int nx, int ny) noexcept
+    void Mouse::on_left_release(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -122,13 +122,13 @@ namespace mv
         mouse_x_delta = x - last_x;
         mouse_y_delta = y - last_y;
 
-        leftIsPressed = false;
+        left_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::LRelease, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onRightRelease(int nx, int ny) noexcept
+    void Mouse::on_right_release(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -137,13 +137,13 @@ namespace mv
         mouse_x_delta = x - last_x;
         mouse_y_delta = y - last_y;
 
-        rightIsPressed = false;
+        right_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::RRelease, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onMiddlePress(int nx, int ny) noexcept
+    void Mouse::on_middle_press(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -152,13 +152,13 @@ namespace mv
         mouse_x_delta = x - last_x;
         mouse_y_delta = y - last_y;
 
-        middleIsPressed = true;
+        middle_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::MDown, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onMiddleRelease(int nx, int ny) noexcept
+    void Mouse::on_middle_release(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -167,13 +167,13 @@ namespace mv
         mouse_x_delta = x - last_x;
         mouse_y_delta = y - last_y;
 
-        middleIsPressed = false;
+        middle_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::MRelease, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onWheelUp(int nx, int ny) noexcept
+    void Mouse::on_wheel_up(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -184,11 +184,11 @@ namespace mv
 
         deltatest += 1;
         buffer.push(Mouse::Event(Mouse::Event::Type::WheelUp, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onWheelDown(int nx, int ny) noexcept
+    void Mouse::on_wheel_down(int nx, int ny) noexcept
     {
         last_x = x;
         last_y = y;
@@ -199,46 +199,46 @@ namespace mv
 
         deltatest -= 1;
         buffer.push(Mouse::Event(Mouse::Event::Type::WheelDown, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onWheelDelta(int nx, int ny, int wDelta) noexcept
+    void Mouse::on_wheel_delta(int nx, int ny, int wDelta) noexcept
     {
-        wheelDeltaCarry += wDelta;
+        wheel_delta_carry += wDelta;
         // Generates wheel event when delta exceeds WHEEL_DELTA
-        if (wheelDeltaCarry >= WHEEL_DELTA)
+        if (wheel_delta_carry >= WHEEL_DELTA)
         {
-            wheelDeltaCarry -= WHEEL_DELTA; // reset delta to near 0
-            onWheelUp(nx, ny);
+            wheel_delta_carry -= WHEEL_DELTA; // reset delta to near 0
+            on_wheel_up(nx, ny);
         }
-        else if (wheelDeltaCarry <= -WHEEL_DELTA)
+        else if (wheel_delta_carry <= -WHEEL_DELTA)
         {
-            wheelDeltaCarry += WHEEL_DELTA;
-            onWheelDown(nx, ny);
+            wheel_delta_carry += WHEEL_DELTA;
+            on_wheel_down(nx, ny);
         }
         return;
     }
 
-    void Mouse::onMouseEnter(void) noexcept
+    void Mouse::on_mouse_enter(void) noexcept
     {
-        inWindow = true;
+        in_window = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::Enter, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::onMouseLeave(void) noexcept
+    void Mouse::on_mouse_leave(void) noexcept
     {
-        inWindow = false;
+        in_window = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::Leave, *this));
-        trimBuffer();
+        trim_buffer();
         return;
     }
 
-    void Mouse::trimBuffer(void) noexcept
+    void Mouse::trim_buffer(void) noexcept
     {
-        while (buffer.size() > maxBufferSize)
+        while (buffer.size() > max_buffer_size)
         {
             buffer.pop();
         }

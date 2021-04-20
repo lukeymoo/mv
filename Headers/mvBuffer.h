@@ -20,17 +20,17 @@ namespace mv
         
         void* mapped = nullptr;
 
-        VkBufferUsageFlags usageFlags = 0;
-        VkMemoryPropertyFlags memoryPropertyFlags = 0;
+        VkBufferUsageFlags usage_flags = 0;
+        VkMemoryPropertyFlags memory_property_flags = 0;
 
         VkResult map(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
         void unmap(void);
 
         VkResult bind(VkDeviceSize offset = 0);
 
-        void setupDescriptor(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
+        void setup_descriptor(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
 
-        void copyTo(void* data, VkDeviceSize size);
+        void copy_to(void* data, VkDeviceSize size);
 
         // TODO
         // flush buffer

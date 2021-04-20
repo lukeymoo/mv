@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
 
     mv::Engine wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
     //mv::MWindow wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
-    if (wnd.goodInit)
+    if (wnd.good_init)
     {
       // main game loop, define in extended class
       wnd.go();
@@ -28,8 +28,8 @@ int main(int argc, char *argv[])
   catch (mv::BException &e)
   {
     std::cout << std::endl
-              << ":: Moogine Engine Exception :: From -> " << e.getType() << std::endl
-              << e.getErrorDescription() << std::endl
+              << ":: Moogine Engine Exception :: From -> " << e.get_type() << std::endl
+              << e.get_error_description() << std::endl
               << std::endl;
     std::exit(-1);
   }

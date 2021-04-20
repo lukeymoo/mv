@@ -4,7 +4,7 @@ mv::MWindow::Exception::Exception(int l, std::string f, std::string description)
     : BException(l, f, description)
 {
     type = "Window Handler Exception";
-    errorDescription = description;
+    error_description = description;
     return;
 }
 
@@ -15,7 +15,7 @@ mv::MWindow::Exception::~Exception(void)
 
 /* Create window and initialize Vulkan */
 mv::MWindow::MWindow(int w, int h, const char *title)
-    : windowWidth(w), windowHeight(h)
+    : window_width(w), window_height(h)
 {
     // Connect to x server
     display = XOpenDisplay(NULL);
@@ -31,7 +31,7 @@ mv::MWindow::MWindow(int w, int h, const char *title)
     window = XCreateSimpleWindow(display,
                                  RootWindow(display, screen),
                                  10, 10,
-                                 windowWidth, windowHeight,
+                                 window_width, window_height,
                                  1,
                                  WhitePixel(display, screen),
                                  BlackPixel(display, screen));
@@ -75,52 +75,52 @@ mv::MWindow::MWindow(int w, int h, const char *title)
 
 mv::MWindow::~MWindow(void)
 {
-    vkDeviceWaitIdle(m_Device);
-    swapChain.cleanup();
-    destroyCommandBuffers();
+    vkDeviceWaitIdle(m_device);
+    swapchain.cleanup();
+    destroy_command_buffers();
 
-    for (auto &fence : inFlightFences)
+    for (auto &fence : in_flight_fences)
     {
         if (fence != nullptr)
         {
-            vkDestroyFence(m_Device, fence, nullptr);
+            vkDestroyFence(m_device, fence, nullptr);
         }
     }
 
-    if (m_RenderPass)
+    if (m_render_pass)
     {
-        vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+        vkDestroyRenderPass(m_device, m_render_pass, nullptr);
     }
-    if (!frameBuffers.empty())
+    if (!frame_buffers.empty())
     {
-        for (size_t i = 0; i < frameBuffers.size(); i++)
+        for (size_t i = 0; i < frame_buffers.size(); i++)
         {
-            if (frameBuffers[i])
+            if (frame_buffers[i])
             {
-                vkDestroyFramebuffer(m_Device, frameBuffers[i], nullptr);
+                vkDestroyFramebuffer(m_device, frame_buffers[i], nullptr);
             }
         }
     }
 
-    cleanupDepthStencil();
+    cleanup_depth_stencil();
 
-    if (m_PipelineCache)
+    if (m_pipeline_cache)
     {
-        vkDestroyPipelineCache(m_Device, m_PipelineCache, nullptr);
+        vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
     }
 
-    destroyCommandPool();
-    vkDestroySemaphore(m_Device, semaphores.renderComplete, nullptr);
-    vkDestroySemaphore(m_Device, semaphores.presentComplete, nullptr);
+    destroy_command_pool();
+    vkDestroySemaphore(m_device, semaphores.render_complete, nullptr);
+    vkDestroySemaphore(m_device, semaphores.present_complete, nullptr);
 
     if (device)
     {
         delete device;
     }
 
-    if (m_Instance)
+    if (m_instance)
     {
-        vkDestroyInstance(m_Instance, nullptr);
+        vkDestroyInstance(m_instance, nullptr);
     }
 
     if (display && window)
@@ -131,22 +131,22 @@ mv::MWindow::~MWindow(void)
     return;
 }
 
-void mv::MWindow::cleanupDepthStencil(void)
+void mv::MWindow::cleanup_depth_stencil(void)
 {
-    if (depthStencil.image)
+    if (depth_stencil.image)
     {
-        vkDestroyImage(m_Device, depthStencil.image, nullptr);
-        depthStencil.image = nullptr;
+        vkDestroyImage(m_device, depth_stencil.image, nullptr);
+        depth_stencil.image = nullptr;
     }
-    if (depthStencil.view)
+    if (depth_stencil.view)
     {
-        vkDestroyImageView(m_Device, depthStencil.view, nullptr);
-        depthStencil.view = nullptr;
+        vkDestroyImageView(m_device, depth_stencil.view, nullptr);
+        depth_stencil.view = nullptr;
     }
-    if (depthStencil.mem)
+    if (depth_stencil.mem)
     {
-        vkFreeMemory(m_Device, depthStencil.mem, nullptr);
-        depthStencil.mem = nullptr;
+        vkFreeMemory(m_device, depth_stencil.mem, nullptr);
+        depth_stencil.mem = nullptr;
     }
     return;
 }
@@ -154,20 +154,20 @@ void mv::MWindow::cleanupDepthStencil(void)
 void mv::MWindow::prepare(void)
 {
     // initialize vulkan
-    if (!initVulkan())
+    if (!init_vulkan())
     {
         throw std::runtime_error("Failed to initialize Vulkan");
     }
 
-    swapChain.initSurface(display, window);
-    m_CommandPool = device->createCommandPool(swapChain.queueIndex);
-    swapChain.create(&windowWidth, &windowHeight);
-    createCommandBuffers();
-    createSynchronizationPrimitives();
-    setupDepthStencil();
-    setupRenderPass();
-    createPipelineCache();
-    setupFramebuffer();
+    swapchain.init_surface(display, window);
+    m_command_pool = device->create_command_pool(swapchain.queue_index);
+    swapchain.create(&window_width, &window_height);
+    create_command_buffers();
+    create_synchronization_primitives();
+    setup_depth_stencil();
+    setup_render_pass();
+    create_pipeline_cache();
+    setup_framebuffer();
     return;
 }
 
@@ -202,147 +202,159 @@ void mv::MWindow::prepare(void)
 //     return;
 // }
 
-bool mv::MWindow::initVulkan(void)
+bool mv::MWindow::init_vulkan(void)
 {
     // Create instance
-    if (createInstance() != VK_SUCCESS)
+    if (create_instance() != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create vulkan instance");
     }
 
-    uint32_t deviceCount = 0;
-    VK_CHECK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr));
-    if (deviceCount == 0)
+    uint32_t device_count = 0;
+    if (vkEnumeratePhysicalDevices(m_instance, &device_count, nullptr) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to enumerate physical devices count");
+    }
+    if (device_count == 0)
     {
         throw std::runtime_error("No adapters found on system");
     }
-    std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
-    VK_CHECK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, physicalDevices.data()));
+    std::vector<VkPhysicalDevice> physical_devices(device_count);
+    if (vkEnumeratePhysicalDevices(m_instance, &device_count, physical_devices.data()) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to enumerate physical device list");
+    }
 
     // Select device
-    m_PhysicalDevice = physicalDevices[0];
+    m_physical_device = physical_devices[0];
 
     // Get device info
-    vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
-    vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &features);
-    vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memoryProperties);
+    vkGetPhysicalDeviceProperties(m_physical_device, &properties);
+    vkGetPhysicalDeviceFeatures(m_physical_device, &features);
+    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
 
-    device = new mv::Device(m_PhysicalDevice);
-    if (device->createLogicalDevice(features, requestedDeviceExtensions) != VK_SUCCESS)
+    device = new mv::Device(m_physical_device);
+    if (device->create_logical_device(features, requested_device_extensions) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create logical device");
     }
 
-    m_Device = device->device;
+    m_device = device->device;
 
     // get format
-    depthFormat = device->getSupportedDepthFormat(m_PhysicalDevice);
+    depth_format = device->get_supported_depth_format(m_physical_device);
 
     // get graphics queue
-    vkGetDeviceQueue(m_Device, device->queueFamilyIndices.graphics, 0, &m_GraphicsQueue);
+    vkGetDeviceQueue(m_device, device->queue_family_indices.graphics, 0, &m_graphics_queue);
 
-    swapChain.connect(m_Instance, m_PhysicalDevice, m_Device);
+    swapchain.connect(m_instance, m_physical_device, m_device);
 
     // Create synchronization objects
-    VkSemaphoreCreateInfo semaphoreInfo = mv::initializer::semaphoreCreateInfo();
-    VK_CHECK(vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &semaphores.presentComplete));
-    VK_CHECK(vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &semaphores.renderComplete));
+    VkSemaphoreCreateInfo semaphore_info = mv::initializer::semaphore_create_info();
+    if (vkCreateSemaphore(m_device, &semaphore_info, nullptr, &semaphores.present_complete) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create present semaphore");
+    }
+    if (vkCreateSemaphore(m_device, &semaphore_info, nullptr, &semaphores.render_complete) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create render semaphore");
+    }
 
     // submit info obj
-    submitInfo = mv::initializer::submitInfo();
-    submitInfo.pWaitDstStageMask = &stageFlags;
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = &semaphores.presentComplete;
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &semaphores.renderComplete;
+    submit_info = mv::initializer::submit_info();
+    submit_info.pWaitDstStageMask = &stage_flags;
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = &semaphores.present_complete;
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &semaphores.render_complete;
 
     return true;
 }
 
-VkResult mv::MWindow::createInstance(void)
+VkResult mv::MWindow::create_instance(void)
 {
     // Ensure we have validation layers
 #ifndef NDEBUG
-    checkValidationSupport();
+    check_validation_support();
 #endif
 
     // Ensure we have all requested instance extensions
-    checkInstanceExt();
+    check_instance_ext();
 
-    VkApplicationInfo appInfo = {};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pNext = nullptr;
-    appInfo.pApplicationName = "Bloody Day";
-    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "Moogin";
-    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion = VK_MAKE_VERSION(1, 2, 0);
+    VkApplicationInfo app_info = {};
+    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app_info.pNext = nullptr;
+    app_info.pApplicationName = "Bloody Day";
+    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    app_info.pEngineName = "Moogin";
+    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    app_info.apiVersion = VK_MAKE_VERSION(1, 2, 0);
 
 /* If debugging enabled */
 #ifndef NDEBUG
-    VkDebugUtilsMessengerCreateInfoEXT debuggerSettings{};
-    debuggerSettings.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    debuggerSettings.pNext = nullptr;
-    debuggerSettings.flags = 0;
-    debuggerSettings.messageSeverity =
+    VkDebugUtilsMessengerCreateInfoEXT debugger_settings{};
+    debugger_settings.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    debugger_settings.pNext = nullptr;
+    debugger_settings.flags = 0;
+    debugger_settings.messageSeverity =
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    debuggerSettings.messageType =
+    debugger_settings.messageType =
         VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    debuggerSettings.pfnUserCallback = debugMessageProcessor;
-    debuggerSettings.pUserData = nullptr;
+    debugger_settings.pfnUserCallback = debug_message_processor;
+    debugger_settings.pUserData = nullptr;
 
-    VkInstanceCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pNext = &debuggerSettings;
-    createInfo.flags = 0;
-    createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledLayerCount = static_cast<uint32_t>(requestedValidationLayers.size());
-    createInfo.ppEnabledLayerNames = requestedValidationLayers.data();
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(requestedInstanceExtensions.size());
-    createInfo.ppEnabledExtensionNames = requestedInstanceExtensions.data();
+    VkInstanceCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    create_info.pNext = &debugger_settings;
+    create_info.flags = 0;
+    create_info.pApplicationInfo = &app_info;
+    create_info.enabledLayerCount = static_cast<uint32_t>(requested_validation_layers.size());
+    create_info.ppEnabledLayerNames = requested_validation_layers.data();
+    create_info.enabledExtensionCount = static_cast<uint32_t>(requested_instance_extensions.size());
+    create_info.ppEnabledExtensionNames = requested_instance_extensions.data();
 #endif
 #ifdef NDEBUG /* Debugging disabled */
-    VkInstanceCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pNext = nullptr;
-    createInfo.flags = 0;
-    createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledLayerCount = static_cast<uint32_t>(requestedValidationLayers.size());
-    createInfo.ppEnabledLayerNames = requestedValidationLayers.data();
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(requestedInstanceExtensions.size());
-    createInfo.ppEnabledExtensionNames = requestedInstanceExtensions.data();
+    VkInstanceCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    create_info.pNext = nullptr;
+    create_info.flags = 0;
+    create_info.pApplicationInfo = &app_info;
+    create_info.enabledLayerCount = static_cast<uint32_t>(requested_validation_layers.size());
+    create_info.ppEnabledLayerNames = requested_validation_layers.data();
+    create_info.enabledExtensionCount = static_cast<uint32_t>(requested_instance_extensions.size());
+    create_info.ppEnabledExtensionNames = requested_instance_extensions.data();
 #endif
 
-    return vkCreateInstance(&createInfo, nullptr, &m_Instance);
+    return vkCreateInstance(&create_info, nullptr, &m_instance);
 }
 
-void mv::MWindow::createCommandBuffers(void)
+void mv::MWindow::create_command_buffers(void)
 {
-    cmdBuffers.resize(swapChain.imageCount);
+    command_buffers.resize(swapchain.image_count);
 
-    VkCommandBufferAllocateInfo allocInfo = mv::initializer::commandBufferAllocateInfo(m_CommandPool,
+    VkCommandBufferAllocateInfo alloc_info = mv::initializer::command_buffer_allocate_info(m_command_pool,
                                                                                        VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                                                                       static_cast<uint32_t>(cmdBuffers.size()));
-    if (vkAllocateCommandBuffers(m_Device, &allocInfo, cmdBuffers.data()) != VK_SUCCESS)
+                                                                                       static_cast<uint32_t>(command_buffers.size()));
+    if (vkAllocateCommandBuffers(m_device, &alloc_info, command_buffers.data()) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to allocate command buffers");
     }
     return;
 }
 
-void mv::MWindow::createSynchronizationPrimitives(void)
+void mv::MWindow::create_synchronization_primitives(void)
 {
-    VkFenceCreateInfo fenceInfo = mv::initializer::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    waitFences.resize(cmdBuffers.size(), VK_NULL_HANDLE);
+    VkFenceCreateInfo fence_info = mv::initializer::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+    wait_fences.resize(command_buffers.size(), VK_NULL_HANDLE);
 
-    inFlightFences.resize(MAX_IN_FLIGHT);
-    for (auto &fence : inFlightFences)
+    in_flight_fences.resize(MAX_IN_FLIGHT);
+    for (auto &fence : in_flight_fences)
     {
-        if (vkCreateFence(m_Device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
+        if (vkCreateFence(m_device, &fence_info, nullptr, &fence) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to create in flight fence");
         }
@@ -350,72 +362,72 @@ void mv::MWindow::createSynchronizationPrimitives(void)
     return;
 }
 
-void mv::MWindow::setupDepthStencil(void)
+void mv::MWindow::setup_depth_stencil(void)
 {
     // Create depth test image
-    VkImageCreateInfo imageCI{};
-    imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageCI.imageType = VK_IMAGE_TYPE_2D;
-    imageCI.format = depthFormat;
-    imageCI.extent = {windowWidth, windowHeight, 1};
-    imageCI.mipLevels = 1;
-    imageCI.arrayLayers = 1;
-    imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageCI.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    VkImageCreateInfo image_ci{};
+    image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_ci.imageType = VK_IMAGE_TYPE_2D;
+    image_ci.format = depth_format;
+    image_ci.extent = {window_width, window_height, 1};
+    image_ci.mipLevels = 1;
+    image_ci.arrayLayers = 1;
+    image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_ci.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-    if (vkCreateImage(m_Device, &imageCI, nullptr, &depthStencil.image) != VK_SUCCESS)
+    if (vkCreateImage(m_device, &image_ci, nullptr, &depth_stencil.image) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create depth stencil image");
     }
 
     // Allocate memory for image
-    VkMemoryRequirements memReq = {};
-    vkGetImageMemoryRequirements(m_Device, depthStencil.image, &memReq);
+    VkMemoryRequirements mem_req = {};
+    vkGetImageMemoryRequirements(m_device, depth_stencil.image, &mem_req);
 
-    VkMemoryAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = device->getMemoryType(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_req.size;
+    alloc_info.memoryTypeIndex = device->get_memory_type(mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &depthStencil.mem) != VK_SUCCESS)
+    if (vkAllocateMemory(m_device, &alloc_info, nullptr, &depth_stencil.mem) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to allocate memory for depth stencil image");
     }
-    if (vkBindImageMemory(m_Device, depthStencil.image, depthStencil.mem, 0) != VK_SUCCESS)
+    if (vkBindImageMemory(m_device, depth_stencil.image, depth_stencil.mem, 0) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to bind depth stencil image and memory");
     }
 
     // Create view
-    VkImageViewCreateInfo ivInfo = {};
-    ivInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    ivInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    ivInfo.image = depthStencil.image;
-    ivInfo.format = depthFormat;
-    ivInfo.subresourceRange.baseMipLevel = 0;
-    ivInfo.subresourceRange.levelCount = 1;
-    ivInfo.subresourceRange.baseArrayLayer = 0;
-    ivInfo.subresourceRange.layerCount = 1;
-    ivInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    VkImageViewCreateInfo iv_info = {};
+    iv_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    iv_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    iv_info.image = depth_stencil.image;
+    iv_info.format = depth_format;
+    iv_info.subresourceRange.baseMipLevel = 0;
+    iv_info.subresourceRange.levelCount = 1;
+    iv_info.subresourceRange.baseArrayLayer = 0;
+    iv_info.subresourceRange.layerCount = 1;
+    iv_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     // for stencil + depth formats
-    if (depthFormat >= VK_FORMAT_D16_UNORM_S8_UINT)
+    if (depth_format >= VK_FORMAT_D16_UNORM_S8_UINT)
     {
-        ivInfo.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        iv_info.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
     }
 
-    if (vkCreateImageView(m_Device, &ivInfo, nullptr, &depthStencil.view) != VK_SUCCESS)
+    if (vkCreateImageView(m_device, &iv_info, nullptr, &depth_stencil.view) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create depth stencil image view");
     }
     return;
 }
 
-void mv::MWindow::setupRenderPass(void)
+void mv::MWindow::setup_render_pass(void)
 {
     std::array<VkAttachmentDescription, 2> attachments = {};
     // Color attachment
-    attachments[0].format = swapChain.colorFormat;
+    attachments[0].format = swapchain.color_format;
     attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -425,7 +437,7 @@ void mv::MWindow::setupRenderPass(void)
     attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     // Depth attachment
-    attachments[1].format = depthFormat;
+    attachments[1].format = depth_format;
     attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -434,24 +446,24 @@ void mv::MWindow::setupRenderPass(void)
     attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference colorRef = {};
-    colorRef.attachment = 0;
-    colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference color_ref = {};
+    color_ref.attachment = 0;
+    color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference depthRef = {};
-    depthRef.attachment = 1;
-    depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference depth_ref = {};
+    depth_ref.attachment = 1;
+    depth_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VkSubpassDescription subpassDesc = {};
-    subpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpassDesc.colorAttachmentCount = 1;
-    subpassDesc.pColorAttachments = &colorRef;
-    subpassDesc.pDepthStencilAttachment = &depthRef;
-    subpassDesc.inputAttachmentCount = 0;
-    subpassDesc.pInputAttachments = nullptr;
-    subpassDesc.preserveAttachmentCount = 0;
-    subpassDesc.pPreserveAttachments = nullptr;
-    subpassDesc.pResolveAttachments = nullptr;
+    VkSubpassDescription subpass_desc = {};
+    subpass_desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass_desc.colorAttachmentCount = 1;
+    subpass_desc.pColorAttachments = &color_ref;
+    subpass_desc.pDepthStencilAttachment = &depth_ref;
+    subpass_desc.inputAttachmentCount = 0;
+    subpass_desc.pInputAttachments = nullptr;
+    subpass_desc.preserveAttachmentCount = 0;
+    subpass_desc.pPreserveAttachments = nullptr;
+    subpass_desc.pResolveAttachments = nullptr;
 
     std::array<VkSubpassDependency, 2> dependencies = {};
     dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -470,54 +482,54 @@ void mv::MWindow::setupRenderPass(void)
     dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-    VkRenderPassCreateInfo renderPassInfo = {};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-    renderPassInfo.pAttachments = attachments.data();
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpassDesc;
-    renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
-    renderPassInfo.pDependencies = dependencies.data();
+    VkRenderPassCreateInfo render_pass_info = {};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());
+    render_pass_info.pAttachments = attachments.data();
+    render_pass_info.subpassCount = 1;
+    render_pass_info.pSubpasses = &subpass_desc;
+    render_pass_info.dependencyCount = static_cast<uint32_t>(dependencies.size());
+    render_pass_info.pDependencies = dependencies.data();
 
-    if (vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
+    if (vkCreateRenderPass(m_device, &render_pass_info, nullptr, &m_render_pass) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create render pass");
     }
     return;
 }
 
-void mv::MWindow::createPipelineCache(void)
+void mv::MWindow::create_pipeline_cache(void)
 {
     VkPipelineCacheCreateInfo pcinfo = {};
     pcinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-    if (vkCreatePipelineCache(m_Device, &pcinfo, nullptr, &m_PipelineCache) != VK_SUCCESS)
+    if (vkCreatePipelineCache(m_device, &pcinfo, nullptr, &m_pipeline_cache) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create pipeline cache");
     }
     return;
 }
 
-void mv::MWindow::setupFramebuffer(void)
+void mv::MWindow::setup_framebuffer(void)
 {
     VkImageView attachments[2];
 
-    attachments[1] = depthStencil.view;
+    attachments[1] = depth_stencil.view;
 
-    VkFramebufferCreateInfo framebufferInfo = {};
-    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebufferInfo.renderPass = m_RenderPass;
-    framebufferInfo.attachmentCount = 2;
-    framebufferInfo.pAttachments = attachments;
-    framebufferInfo.width = swapChain.swapExtent.width;
-    framebufferInfo.height = swapChain.swapExtent.height;
-    framebufferInfo.layers = 1;
+    VkFramebufferCreateInfo framebuffer_info = {};
+    framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebuffer_info.renderPass = m_render_pass;
+    framebuffer_info.attachmentCount = 2;
+    framebuffer_info.pAttachments = attachments;
+    framebuffer_info.width = swapchain.swap_extent.width;
+    framebuffer_info.height = swapchain.swap_extent.height;
+    framebuffer_info.layers = 1;
 
     // Framebuffer per swap image
-    frameBuffers.resize(swapChain.imageCount);
-    for (size_t i = 0; i < frameBuffers.size(); i++)
+    frame_buffers.resize(swapchain.image_count);
+    for (size_t i = 0; i < frame_buffers.size(); i++)
     {
-        attachments[0] = swapChain.buffers[i].view;
-        if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &frameBuffers[i]) != VK_SUCCESS)
+        attachments[0] = swapchain.buffers[i].view;
+        if (vkCreateFramebuffer(m_device, &framebuffer_info, nullptr, &frame_buffers[i]) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to create frame buffer");
         }
@@ -525,34 +537,34 @@ void mv::MWindow::setupFramebuffer(void)
     return;
 }
 
-void mv::MWindow::checkValidationSupport(void)
+void mv::MWindow::check_validation_support(void)
 {
-    uint32_t layerCount = 0;
-    if (vkEnumerateInstanceLayerProperties(&layerCount, nullptr) != VK_SUCCESS)
+    uint32_t layer_count = 0;
+    if (vkEnumerateInstanceLayerProperties(&layer_count, nullptr) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to query supported instance layer count");
     }
 
-    if (layerCount == 0 && !requestedValidationLayers.empty())
+    if (layer_count == 0 && !requested_validation_layers.empty())
     {
         throw std::runtime_error("No supported validation layers found");
     }
 
-    std::vector<VkLayerProperties> availableLayers(layerCount);
-    if (vkEnumerateInstanceLayerProperties(&layerCount,
-                                           availableLayers.data()) != VK_SUCCESS)
+    std::vector<VkLayerProperties> available_layers(layer_count);
+    if (vkEnumerateInstanceLayerProperties(&layer_count,
+                                           available_layers.data()) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to query supported instance layer list");
     }
 
     std::string prelude = "The following instance layers were not found...\n";
     std::string failed;
-    for (const auto &requestedLayer : requestedValidationLayers)
+    for (const auto &requested_layer : requested_validation_layers)
     {
         bool match = false;
-        for (const auto &availableLayer : availableLayers)
+        for (const auto &available_layer : available_layers)
         {
-            if (strcmp(requestedLayer, availableLayer.layerName) == 0)
+            if (strcmp(requested_layer, available_layer.layerName) == 0)
             {
                 match = true;
                 break;
@@ -560,7 +572,7 @@ void mv::MWindow::checkValidationSupport(void)
         }
         if (!match)
         {
-            failed += requestedLayer;
+            failed += requested_layer;
             failed += "\n";
         }
     }
@@ -576,12 +588,12 @@ void mv::MWindow::checkValidationSupport(void)
     return;
 }
 
-void mv::MWindow::destroyCommandBuffers(void)
+void mv::MWindow::destroy_command_buffers(void)
 {
-    if (!cmdBuffers.empty())
+    if (!command_buffers.empty())
     {
-        vkFreeCommandBuffers(m_Device, m_CommandPool, static_cast<uint32_t>(cmdBuffers.size()), cmdBuffers.data());
-        for (auto &buf : cmdBuffers)
+        vkFreeCommandBuffers(m_device, m_command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
+        for (auto &buf : command_buffers)
         {
             if (buf)
             {
@@ -592,47 +604,47 @@ void mv::MWindow::destroyCommandBuffers(void)
     return;
 }
 
-void mv::MWindow::destroyCommandPool(void)
+void mv::MWindow::destroy_command_pool(void)
 {
-    if (m_CommandPool != nullptr)
+    if (m_command_pool != nullptr)
     {
-        vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
+        vkDestroyCommandPool(m_device, m_command_pool, nullptr);
     }
     return;
 }
 
-void mv::MWindow::checkInstanceExt(void)
+void mv::MWindow::check_instance_ext(void)
 {
-    uint32_t instanceExtensionCount = 0;
+    uint32_t instance_extension_count = 0;
     if (vkEnumerateInstanceExtensionProperties(nullptr,
-                                               &instanceExtensionCount,
+                                               &instance_extension_count,
                                                nullptr) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to query instance supported extension count");
     }
 
-    if (instanceExtensionCount == 0 && !requestedInstanceExtensions.empty())
+    if (instance_extension_count == 0 && !requested_instance_extensions.empty())
     {
         throw std::runtime_error("No instance level extensions supported by device");
     }
 
-    std::vector<VkExtensionProperties> availableInstanceExtensions(instanceExtensionCount);
+    std::vector<VkExtensionProperties> available_instance_extensions(instance_extension_count);
     if (vkEnumerateInstanceExtensionProperties(nullptr,
-                                               &instanceExtensionCount,
-                                               availableInstanceExtensions.data()) != VK_SUCCESS)
+                                               &instance_extension_count,
+                                               available_instance_extensions.data()) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to query instance supported extensions list");
     }
 
     std::string prelude = "The following instance extensions were not found...\n";
     std::string failed;
-    for (const auto &requestedExtension : requestedInstanceExtensions)
+    for (const auto &requested_extension : requested_instance_extensions)
     {
         bool match = false;
-        for (const auto &availableExtension : availableInstanceExtensions)
+        for (const auto &available_extension : available_instance_extensions)
         {
             // check if match
-            if (strcmp(requestedExtension, availableExtension.extensionName) == 0)
+            if (strcmp(requested_extension, available_extension.extensionName) == 0)
             {
                 match = true;
                 break;
@@ -641,7 +653,7 @@ void mv::MWindow::checkInstanceExt(void)
 
         if (!match)
         {
-            failed += requestedExtension;
+            failed += requested_extension;
             failed += "\n";
         }
     }
@@ -654,7 +666,7 @@ void mv::MWindow::checkInstanceExt(void)
     return;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageProcessor(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
                                                      VkDebugUtilsMessageTypeFlagsEXT message_type,
                                                      const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
                                                      void *user_data)
@@ -702,9 +714,9 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageProcessor(VkDebugUtilsMessageSeverity
     return VK_FALSE;
 }
 
-std::vector<char> mv::MWindow::readFile(std::string filename)
+std::vector<char> mv::MWindow::read_file(std::string filename)
 {
-    size_t fileSize;
+    size_t file_size;
     std::ifstream file;
     std::vector<char> buffer;
 
@@ -722,12 +734,12 @@ std::vector<char> mv::MWindow::readFile(std::string filename)
         }
 
         // prepare buffer to hold shader bytecode
-        fileSize = (size_t)file.tellg();
-        buffer.resize(fileSize);
+        file_size = (size_t)file.tellg();
+        buffer.resize(file_size);
 
         // go back to beginning of file and read in
         file.seekg(0);
-        file.read(buffer.data(), fileSize);
+        file.read(buffer.data(), file_size);
         file.close();
     }
     catch (std::filesystem::filesystem_error &e)
@@ -755,18 +767,18 @@ std::vector<char> mv::MWindow::readFile(std::string filename)
     return buffer;
 }
 
-VkShaderModule mv::MWindow::createShaderModule(const std::vector<char> &code)
+VkShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code)
 {
     VkShaderModule module;
 
-    VkShaderModuleCreateInfo moduleInfo{};
-    moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    moduleInfo.pNext = nullptr;
-    moduleInfo.flags = 0;
-    moduleInfo.codeSize = code.size();
-    moduleInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
+    VkShaderModuleCreateInfo module_info{};
+    module_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    module_info.pNext = nullptr;
+    module_info.flags = 0;
+    module_info.codeSize = code.size();
+    module_info.pCode = reinterpret_cast<const uint32_t *>(code.data());
 
-    if (vkCreateShaderModule(m_Device, &moduleInfo, nullptr, &module) != VK_SUCCESS)
+    if (vkCreateShaderModule(m_device, &module_info, nullptr, &module) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create shader module!");
     }
@@ -774,7 +786,7 @@ VkShaderModule mv::MWindow::createShaderModule(const std::vector<char> &code)
     return module;
 }
 
-XEvent mv::MWindow::createEvent(const char *eventType)
+XEvent mv::MWindow::create_event(const char *event_type)
 {
     XEvent cev;
 
@@ -782,13 +794,13 @@ XEvent mv::MWindow::createEvent(const char *eventType)
     cev.xclient.window = window;
     cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
     cev.xclient.format = 32;
-    cev.xclient.data.l[0] = XInternAtom(display, eventType, false);
+    cev.xclient.data.l[0] = XInternAtom(display, event_type, false);
     cev.xclient.data.l[1] = CurrentTime;
 
     return cev;
 }
 
-void mv::MWindow::handleXEvent(void)
+void mv::MWindow::handle_x_event(void)
 {
     // count time for processing events
     XNextEvent(display, &event);
@@ -799,17 +811,17 @@ void mv::MWindow::handleXEvent(void)
         key = XLookupKeysym(&event.xkey, 0);
         if (key == XK_Escape)
         {
-            XEvent q = createEvent("WM_DELETE_WINDOW");
+            XEvent q = create_event("WM_DELETE_WINDOW");
             XSendEvent(display, window, false, ExposureMask, &q);
         }
-        kbd.onKeyPress(static_cast<unsigned char>(key));
+        kbd.on_key_press(static_cast<unsigned char>(key));
         break;
     case KeyRelease:
         key = XLookupKeysym(&event.xkey, 0);
-        kbd.onKeyRelease(static_cast<unsigned char>(key));
+        kbd.on_key_release(static_cast<unsigned char>(key));
         break;
     case MotionNotify:
-        mouse.onMouseMove(event.xmotion.x, event.xmotion.y);
+        mouse.on_mouse_move(event.xmotion.x, event.xmotion.y);
     case Expose:
         break;
         // configured to only capture WM_DELETE_WINDOW so we exit here

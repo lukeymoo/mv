@@ -6,98 +6,98 @@ mv::Engine::Engine(int w, int h, const char *title)
     return;
 }
 
-void mv::Engine::cleanupSwapchain(void)
+void mv::Engine::cleanup_swapchain(void)
 {
     // destroy command buffers
-    destroyCommandBuffers();
+    destroy_command_buffers();
     // destroy framebuffers
-    if (!frameBuffers.empty())
+    if (!frame_buffers.empty())
     {
-        for (size_t i = 0; i < frameBuffers.size(); i++)
+        for (size_t i = 0; i < frame_buffers.size(); i++)
         {
-            if (frameBuffers[i])
+            if (frame_buffers[i])
             {
-                vkDestroyFramebuffer(m_Device, frameBuffers[i], nullptr);
-                frameBuffers[i] = nullptr;
+                vkDestroyFramebuffer(m_device, frame_buffers[i], nullptr);
+                frame_buffers[i] = nullptr;
             }
         }
     }
 
-    cleanupDepthStencil();
+    cleanup_depth_stencil();
 
     // destroy pipeline
     if (pipeline)
     {
-        vkDestroyPipeline(m_Device, pipeline, nullptr);
+        vkDestroyPipeline(m_device, pipeline, nullptr);
         pipeline = nullptr;
     }
-    if (m_PipelineCache)
+    if (m_pipeline_cache)
     {
-        vkDestroyPipelineCache(m_Device, m_PipelineCache, nullptr);
-        m_PipelineCache = nullptr;
+        vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
+        m_pipeline_cache = nullptr;
     }
     // destroy pipeline layout
-    if (pipelineLayout)
+    if (pipeline_layout)
     {
-        vkDestroyPipelineLayout(m_Device, pipelineLayout, nullptr);
-        pipelineLayout = nullptr;
+        vkDestroyPipelineLayout(m_device, pipeline_layout, nullptr);
+        pipeline_layout = nullptr;
     }
     // destroy render pass
-    if (m_RenderPass)
+    if (m_render_pass)
     {
-        vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
-        m_RenderPass = nullptr;
+        vkDestroyRenderPass(m_device, m_render_pass, nullptr);
+        m_render_pass = nullptr;
     }
     // descriptors pool
-    if (descriptorPool)
+    if (descriptor_pool)
     {
-        vkDestroyDescriptorPool(m_Device, descriptorPool, nullptr);
-        descriptorPool = nullptr;
+        vkDestroyDescriptorPool(m_device, descriptor_pool, nullptr);
+        descriptor_pool = nullptr;
     }
     // cleanup command pool
-    if (m_CommandPool)
+    if (m_command_pool)
     {
-        vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
-        m_CommandPool = nullptr;
+        vkDestroyCommandPool(m_device, m_command_pool, nullptr);
+        m_command_pool = nullptr;
     }
 
     // cleanup swapchain
-    swapChain.cleanup(false);
+    swapchain.cleanup(false);
     return;
 }
 
 // Allows swapchain to keep up with window resize
-void mv::Engine::recreateSwapchain(void)
+void mv::Engine::recreate_swapchain(void)
 {
     std::cout << "[+] recreating swapchain" << std::endl;
-    vkDeviceWaitIdle(m_Device);
+    vkDeviceWaitIdle(m_device);
 
     // Cleanup
-    cleanupSwapchain();
+    cleanup_swapchain();
 
-    m_CommandPool = device->createCommandPool(swapChain.queueIndex);
+    m_command_pool = device->create_command_pool(swapchain.queue_index);
 
     // create swapchain
-    swapChain.create(&windowWidth, &windowHeight);
+    swapchain.create(&window_width, &window_height);
 
     // create descriptor pool, dont recreate layout
-    createDescriptorSets(false);
+    create_descriptor_sets(false);
 
     // create render pass
-    setupRenderPass();
+    setup_render_pass();
 
     // create pipeline cache
-    createPipelineCache();
+    create_pipeline_cache();
 
-    setupDepthStencil();
+    setup_depth_stencil();
 
     // create pipeline layout
     // create pipeline
-    preparePipeline();
+    prepare_pipeline();
     // create framebuffers
-    setupFramebuffer();
+    setup_framebuffer();
     // create command buffers
-    createCommandBuffers();
+    create_command_buffers();
 }
 
 void mv::Engine::go(void)
@@ -109,15 +109,15 @@ void mv::Engine::go(void)
     objects.resize(1); // models * count
 
     // Prepare uniforms
-    prepareUniforms();
+    prepare_uniforms();
 
     // Load models
 
-    objects[0].modelIndex = 0;
+    objects[0].model_index = 0;
     models[0].load(device, "models/viking_room.obj");
-    createDescriptorSets();
+    create_descriptor_sets();
 
-    preparePipeline();
+    prepare_pipeline();
 
     // Record commands to already created command buffers(per swap)
     // Create pipeline and tie all resources together
@@ -128,29 +128,29 @@ void mv::Engine::go(void)
     {
         while (XPending(display))
         {
-            handleXEvent();
+            handle_x_event();
         }
 
 
         // Get input events
-        Keyboard::Event kbdEvent = kbd.readKey();
+        Keyboard::Event kbdEvent = kbd.read_key();
         Mouse::Event mouseEvent = mouse.read();
 
         // Handle input events
-        if (mouseEvent.getType() == Mouse::Event::Type::Move)
+        if (mouseEvent.get_type() == Mouse::Event::Type::Move)
         {
         }
 
-        if (kbd.isKeyPressed('w'))
+        if (kbd.is_key_pressed('w'))
         {
         }
-        if (kbd.isKeyPressed('a'))
+        if (kbd.is_key_pressed('a'))
         {
         }
-        if (kbd.isKeyPressed('s'))
+        if (kbd.is_key_pressed('s'))
         {
         }
-        if (kbd.isKeyPressed('d'))
+        if (kbd.is_key_pressed('d'))
         {
         }
         
@@ -160,21 +160,21 @@ void mv::Engine::go(void)
     return;
 }
 
-void mv::Engine::prepareUniforms(void)
+void mv::Engine::prepare_uniforms(void)
 {
     Object::Matrices tm;
     tm.model = glm::mat4(1.0);
     tm.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    tm.projection = glm::perspective(glm::radians(50.0f), swapChain.swapExtent.width / (float)swapChain.swapExtent.height, 0.1f, 100.0f);
+    tm.projection = glm::perspective(glm::radians(50.0f), swapchain.swap_extent.width / (float)swapchain.swap_extent.height, 0.1f, 100.0f);
     tm.projection[1][1] *= -1;
 
     for (auto &obj : objects)
     {
-        device->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             &obj.uniformBuffer,
+                             &obj.uniform_buffer,
                              sizeof(Object::Matrices));
-        if (obj.uniformBuffer.map() != VK_SUCCESS)
+        if (obj.uniform_buffer.map() != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to map object uniform buffer");
         }
@@ -182,12 +182,12 @@ void mv::Engine::prepareUniforms(void)
 
     for (auto &obj : objects)
     {
-        memcpy(obj.uniformBuffer.mapped, &tm, sizeof(Object::Matrices));
+        memcpy(obj.uniform_buffer.mapped, &tm, sizeof(Object::Matrices));
     }
     return;
 }
 
-void mv::Engine::createDescriptorSets(bool should_create_layout)
+void mv::Engine::create_descriptor_sets(bool should_create_layout)
 {
     if (should_create_layout)
     {
@@ -200,12 +200,12 @@ void mv::Engine::createDescriptorSets(bool should_create_layout)
 
         std::vector<VkDescriptorSetLayoutBinding> bindings = {model};
 
-        VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo = {};
-        descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorLayoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-        descriptorLayoutInfo.pBindings = bindings.data();
+        VkDescriptorSetLayoutCreateInfo descriptor_layout_info = {};
+        descriptor_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptor_layout_info.bindingCount = static_cast<uint32_t>(bindings.size());
+        descriptor_layout_info.pBindings = bindings.data();
 
-        if (vkCreateDescriptorSetLayout(device->device, &descriptorLayoutInfo, nullptr, &descriptorLayout) != VK_SUCCESS)
+        if (vkCreateDescriptorSetLayout(device->device, &descriptor_layout_info, nullptr, &descriptor_layout) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to create descriptor set layout");
         }
@@ -218,17 +218,17 @@ void mv::Engine::createDescriptorSets(bool should_create_layout)
     objmvp.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     objmvp.descriptorCount = 1 + static_cast<uint32_t>(objects.size());
 
-    std::vector<VkDescriptorPoolSize> poolSizes = {objmvp};
+    std::vector<VkDescriptorPoolSize> pool_sizes = {objmvp};
 
-    VkDescriptorPoolCreateInfo poolInfo = {};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.pNext = nullptr;
-    poolInfo.flags = 0;
-    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-    poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(poolSizes.size()) * objects.size();
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.pNext = nullptr;
+    pool_info.flags = 0;
+    pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+    pool_info.pPoolSizes = pool_sizes.data();
+    pool_info.maxSets = static_cast<uint32_t>(pool_sizes.size()) * objects.size();
 
-    if (vkCreateDescriptorPool(device->device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
+    if (vkCreateDescriptorPool(device->device, &pool_info, nullptr, &descriptor_pool) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create descriptor pool for model");
     }
@@ -236,12 +236,12 @@ void mv::Engine::createDescriptorSets(bool should_create_layout)
     // Allocate descriptor sets for objs
     for (auto &obj : objects)
     {
-        VkDescriptorSetAllocateInfo allocInfo = {};
-        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool = descriptorPool;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &descriptorLayout;
-        if (vkAllocateDescriptorSets(device->device, &allocInfo, &obj.descriptorSet) != VK_SUCCESS)
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.descriptorPool = descriptor_pool;
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &descriptor_layout;
+        if (vkAllocateDescriptorSets(device->device, &alloc_info, &obj.descriptor_set) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to allocate descriptor set for object");
         }
@@ -249,10 +249,10 @@ void mv::Engine::createDescriptorSets(bool should_create_layout)
         VkWriteDescriptorSet wrm = {};
         wrm.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         wrm.dstBinding = 0;
-        wrm.dstSet = obj.descriptorSet;
+        wrm.dstSet = obj.descriptor_set;
         wrm.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         wrm.descriptorCount = 1;
-        wrm.pBufferInfo = &obj.uniformBuffer.descriptor;
+        wrm.pBufferInfo = &obj.uniform_buffer.descriptor;
 
         std::vector<VkWriteDescriptorSet> writes = {wrm};
 
@@ -261,164 +261,164 @@ void mv::Engine::createDescriptorSets(bool should_create_layout)
     return;
 }
 
-void mv::Engine::preparePipeline(void)
+void mv::Engine::prepare_pipeline(void)
 {
-    VkPipelineLayoutCreateInfo plineInfo = {};
-    plineInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    plineInfo.pNext = nullptr;
-    plineInfo.flags = 0;
-    plineInfo.setLayoutCount = 1;
-    plineInfo.pSetLayouts = &descriptorLayout;
+    VkPipelineLayoutCreateInfo pline_info = {};
+    pline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pline_info.pNext = nullptr;
+    pline_info.flags = 0;
+    pline_info.setLayoutCount = 1;
+    pline_info.pSetLayouts = &descriptor_layout;
     // TODO
     // push constants
-    if (vkCreatePipelineLayout(device->device, &plineInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
+    if (vkCreatePipelineLayout(device->device, &pline_info, nullptr, &pipeline_layout) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create pipeline layout");
     }
 
-    auto bindingDescription = Vertex::getBindingDescription();
-    auto attributeDescription = Vertex::getAttributeDescriptions();
+    auto binding_description = Vertex::get_binding_description();
+    auto attribute_description = Vertex::get_attribute_descriptions();
 
-    VkPipelineVertexInputStateCreateInfo viState = {};
-    viState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    viState.vertexBindingDescriptionCount = 1;
-    viState.pVertexBindingDescriptions = &bindingDescription;
-    viState.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
-    viState.pVertexAttributeDescriptions = attributeDescription.data();
-    VkPipelineInputAssemblyStateCreateInfo iaState = mv::initializer::inputAssemblyStateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rsState = mv::initializer::rasterizationStateInfo(VK_POLYGON_MODE_LINE, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
-    VkPipelineColorBlendAttachmentState cbaState = mv::initializer::colorBlendAttachmentState(0xf, VK_FALSE);
-    VkPipelineColorBlendStateCreateInfo cbState = mv::initializer::colorBlendStateInfo(1, &cbaState);
-    VkPipelineDepthStencilStateCreateInfo dsState = mv::initializer::depthStencilStateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
+    VkPipelineVertexInputStateCreateInfo vi_state = {};
+    vi_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vi_state.vertexBindingDescriptionCount = 1;
+    vi_state.pVertexBindingDescriptions = &binding_description;
+    vi_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
+    vi_state.pVertexAttributeDescriptions = attribute_description.data();
+    VkPipelineInputAssemblyStateCreateInfo ia_state = mv::initializer::input_assembly_state_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
+    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_LINE, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+    VkPipelineColorBlendAttachmentState cba_state = mv::initializer::color_blend_attachment_state(0xf, VK_FALSE);
+    VkPipelineColorBlendStateCreateInfo cb_state = mv::initializer::color_blend_state_info(1, &cba_state);
+    VkPipelineDepthStencilStateCreateInfo ds_state = mv::initializer::depth_stencil_state_info(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
 
     VkViewport vp = {};
     VkRect2D sc = {};
     vp.x = 0;
     vp.y = 0;
-    vp.width = static_cast<float>(windowWidth);
-    vp.height = static_cast<float>(windowHeight);
+    vp.width = static_cast<float>(window_width);
+    vp.height = static_cast<float>(window_height);
     vp.minDepth = 0.0f;
     vp.maxDepth = 1.0f;
 
     sc.offset = {0, 0};
-    sc.extent = swapChain.swapExtent;
+    sc.extent = swapchain.swap_extent;
 
-    VkPipelineViewportStateCreateInfo vpState = mv::initializer::viewportStateInfo(1, 1, 0);
-    vpState.pViewports = &vp;
-    vpState.pScissors = &sc;
-    VkPipelineMultisampleStateCreateInfo msState = mv::initializer::multisampleStateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
+    VkPipelineViewportStateCreateInfo vp_state = mv::initializer::viewport_state_info(1, 1, 0);
+    vp_state.pViewports = &vp;
+    vp_state.pScissors = &sc;
+    VkPipelineMultisampleStateCreateInfo ms_state = mv::initializer::multisample_state_info(VK_SAMPLE_COUNT_1_BIT, 0);
 
     // Load shaders
-    auto vertexShader = readFile("shaders/vertex.spv");
-    auto fragmentShader = readFile("shaders/fragment.spv");
+    auto vertex_shader = read_file("shaders/vertex.spv");
+    auto fragment_shader = read_file("shaders/fragment.spv");
 
     // Ensure we have files
-    if (vertexShader.empty() || fragmentShader.empty())
+    if (vertex_shader.empty() || fragment_shader.empty())
     {
         throw std::runtime_error("Failed to load fragment or vertex shader spv files");
     }
 
-    VkShaderModule vertexShaderModule = createShaderModule(vertexShader);
-    VkShaderModule fragmentShaderModule = createShaderModule(fragmentShader);
+    VkShaderModule vertex_shader_module = create_shader_module(vertex_shader);
+    VkShaderModule fragment_shader_module = create_shader_module(fragment_shader);
 
     // describe vertex shader stage
-    VkPipelineShaderStageCreateInfo vertexShaderStageInfo{};
-    vertexShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertexShaderStageInfo.pNext = nullptr;
-    vertexShaderStageInfo.flags = 0;
-    vertexShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertexShaderStageInfo.module = vertexShaderModule;
-    vertexShaderStageInfo.pName = "main";
-    vertexShaderStageInfo.pSpecializationInfo = nullptr;
+    VkPipelineShaderStageCreateInfo vertex_shader_stage_info{};
+    vertex_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertex_shader_stage_info.pNext = nullptr;
+    vertex_shader_stage_info.flags = 0;
+    vertex_shader_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertex_shader_stage_info.module = vertex_shader_module;
+    vertex_shader_stage_info.pName = "main";
+    vertex_shader_stage_info.pSpecializationInfo = nullptr;
 
     // describe fragment shader stage
-    VkPipelineShaderStageCreateInfo fragmentShaderStageInfo{};
-    fragmentShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragmentShaderStageInfo.pNext = nullptr;
-    fragmentShaderStageInfo.flags = 0;
-    fragmentShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragmentShaderStageInfo.module = fragmentShaderModule;
-    fragmentShaderStageInfo.pName = "main";
-    fragmentShaderStageInfo.pSpecializationInfo = nullptr;
+    VkPipelineShaderStageCreateInfo fragment_shader_stage_info{};
+    fragment_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragment_shader_stage_info.pNext = nullptr;
+    fragment_shader_stage_info.flags = 0;
+    fragment_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragment_shader_stage_info.module = fragment_shader_module;
+    fragment_shader_stage_info.pName = "main";
+    fragment_shader_stage_info.pSpecializationInfo = nullptr;
 
-    std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {vertexShaderStageInfo, fragmentShaderStageInfo};
+    std::vector<VkPipelineShaderStageCreateInfo> shader_stages = {vertex_shader_stage_info, fragment_shader_stage_info};
 
-    VkGraphicsPipelineCreateInfo pipelineObjInfo = mv::initializer::pipelineCreateInfo(pipelineLayout, m_RenderPass);
-    pipelineObjInfo.pInputAssemblyState = &iaState;
-    pipelineObjInfo.pRasterizationState = &rsState;
-    pipelineObjInfo.pColorBlendState = &cbState;
-    pipelineObjInfo.pDepthStencilState = &dsState;
-    pipelineObjInfo.pViewportState = &vpState;
-    pipelineObjInfo.pMultisampleState = &msState;
-    pipelineObjInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-    pipelineObjInfo.pStages = shaderStages.data();
-    pipelineObjInfo.pVertexInputState = &viState;
-    pipelineObjInfo.pDynamicState = nullptr;
+    VkGraphicsPipelineCreateInfo pipeline_obj_info = mv::initializer::pipeline_create_info(pipeline_layout, m_render_pass);
+    pipeline_obj_info.pInputAssemblyState = &ia_state;
+    pipeline_obj_info.pRasterizationState = &rs_state;
+    pipeline_obj_info.pColorBlendState = &cb_state;
+    pipeline_obj_info.pDepthStencilState = &ds_state;
+    pipeline_obj_info.pViewportState = &vp_state;
+    pipeline_obj_info.pMultisampleState = &ms_state;
+    pipeline_obj_info.stageCount = static_cast<uint32_t>(shader_stages.size());
+    pipeline_obj_info.pStages = shader_stages.data();
+    pipeline_obj_info.pVertexInputState = &vi_state;
+    pipeline_obj_info.pDynamicState = nullptr;
 
-    if (vkCreateGraphicsPipelines(device->device, m_PipelineCache, 1, &pipelineObjInfo, nullptr, &pipeline) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(device->device, m_pipeline_cache, 1, &pipeline_obj_info, nullptr, &pipeline) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create graphics pipeline");
     }
 
-    vkDestroyShaderModule(device->device, vertexShaderModule, nullptr);
-    vkDestroyShaderModule(device->device, fragmentShaderModule, nullptr);
+    vkDestroyShaderModule(device->device, vertex_shader_module, nullptr);
+    vkDestroyShaderModule(device->device, fragment_shader_module, nullptr);
     return;
 }
 
-void mv::Engine::recordCommandBuffer(uint32_t imageIndex)
+void mv::Engine::record_command_buffer(uint32_t image_index)
 {
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.pNext = nullptr;
-    beginInfo.flags = 0;
-    beginInfo.pInheritanceInfo = nullptr;
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.pNext = nullptr;
+    begin_info.flags = 0;
+    begin_info.pInheritanceInfo = nullptr;
 
-    if (vkBeginCommandBuffer(cmdBuffers[imageIndex], &beginInfo) != VK_SUCCESS)
+    if (vkBeginCommandBuffer(command_buffers[image_index], &begin_info) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to begin recording to command buffer");
     }
 
     std::array<VkClearValue, 2> cls;
-    cls[0].color = defaultClearColor;
+    cls[0].color = default_clear_color;
     cls[1].depthStencil = {1.0f, 0};
 
-    VkRenderPassBeginInfo passInfo = {};
-    passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    passInfo.pNext = nullptr;
-    passInfo.renderPass = m_RenderPass;
-    passInfo.framebuffer = frameBuffers[imageIndex];
-    passInfo.renderArea.offset.x = 0;
-    passInfo.renderArea.offset.y = 0;
-    passInfo.renderArea.extent.width = swapChain.swapExtent.width;
-    passInfo.renderArea.extent.height = swapChain.swapExtent.height;
-    passInfo.clearValueCount = static_cast<uint32_t>(cls.size());
-    passInfo.pClearValues = cls.data();
+    VkRenderPassBeginInfo pass_info = {};
+    pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    pass_info.pNext = nullptr;
+    pass_info.renderPass = m_render_pass;
+    pass_info.framebuffer = frame_buffers[image_index];
+    pass_info.renderArea.offset.x = 0;
+    pass_info.renderArea.offset.y = 0;
+    pass_info.renderArea.extent.width = swapchain.swap_extent.width;
+    pass_info.renderArea.extent.height = swapchain.swap_extent.height;
+    pass_info.clearValueCount = static_cast<uint32_t>(cls.size());
+    pass_info.pClearValues = cls.data();
 
-    vkCmdBeginRenderPass(cmdBuffers[imageIndex], &passInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cmdBuffers[imageIndex],
+    vkCmdBeginRenderPass(command_buffers[image_index], &pass_info, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(command_buffers[image_index],
                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                       pipeline);
 
     for (const auto &obj : objects)
     {
-        models[obj.modelIndex].bindBuffers(cmdBuffers[imageIndex]);
-        vkCmdBindDescriptorSets(cmdBuffers[imageIndex],
+        models[obj.model_index].bindBuffers(command_buffers[image_index]);
+        vkCmdBindDescriptorSets(command_buffers[image_index],
                                 VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                pipelineLayout,
+                                pipeline_layout,
                                 0,
                                 1,
-                                &objects[0].descriptorSet,
+                                &objects[0].descriptor_set,
                                 0,
                                 nullptr);
         // Call model draw
         // Reformat later for instanced drawing of each model type we bind
-        vkCmdDraw(cmdBuffers[imageIndex], static_cast<uint32_t>(models[obj.modelIndex].vertices.count), 1, 0, 0);
-        //vkCmdDrawIndexed(cmdBuffers[imageIndex], static_cast<uint32_t>(models[obj.modelIndex].indices.count), 1, 0, 0, 0);
+        vkCmdDraw(command_buffers[image_index], static_cast<uint32_t>(models[obj.model_index].vertices.count), 1, 0, 0);
+        //vkCmdDrawIndexed(command_buffers[imageIndex], static_cast<uint32_t>(models[obj.modelIndex].indices.count), 1, 0, 0, 0);
     }
 
-    vkCmdEndRenderPass(cmdBuffers[imageIndex]);
+    vkCmdEndRenderPass(command_buffers[image_index]);
 
-    if (vkEndCommandBuffer(cmdBuffers[imageIndex]) != VK_SUCCESS)
+    if (vkEndCommandBuffer(command_buffers[image_index]) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to end command buffer recording");
     }
@@ -428,16 +428,16 @@ void mv::Engine::recordCommandBuffer(uint32_t imageIndex)
 
 void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
 {
-    vkWaitForFences(device->device, 1, &inFlightFences[cur_frame], VK_TRUE, UINT64_MAX);
+    vkWaitForFences(device->device, 1, &in_flight_fences[cur_frame], VK_TRUE, UINT64_MAX);
 
     cur_frame = (cur_frame + 1) & MAX_IN_FLIGHT;
 
     VkResult result;
-    result = vkAcquireNextImageKHR(device->device, swapChain.swapchain, UINT64_MAX, semaphores.presentComplete, VK_NULL_HANDLE, &cur_index);
+    result = vkAcquireNextImageKHR(device->device, swapchain.swapchain, UINT64_MAX, semaphores.present_complete, VK_NULL_HANDLE, &cur_index);
     switch (result)
     {
     case VK_ERROR_OUT_OF_DATE_KHR:
-        recreateSwapchain();
+        recreate_swapchain();
         return;
         break;
     case VK_SUBOPTIMAL_KHR:
@@ -453,36 +453,36 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
     // TODO
     // case checking
 
-    if (waitFences[cur_index] != VK_NULL_HANDLE)
+    if (wait_fences[cur_index] != VK_NULL_HANDLE)
     {
-        vkWaitForFences(device->device, 1, &waitFences[cur_index], VK_TRUE, UINT64_MAX);
+        vkWaitForFences(device->device, 1, &wait_fences[cur_index], VK_TRUE, UINT64_MAX);
     }
 
-    recordCommandBuffer(cur_index);
+    record_command_buffer(cur_index);
 
     // mark in use
-    waitFences[cur_index] = inFlightFences[cur_frame];
+    wait_fences[cur_index] = in_flight_fences[cur_frame];
 
-    VkSubmitInfo submitInfo = {};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    VkSemaphore waitSemaphores[] = {semaphores.presentComplete};
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &cmdBuffers[cur_index];
-    VkSemaphore renderSemaphores[] = {semaphores.renderComplete};
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = renderSemaphores;
+    VkSubmitInfo submit_info = {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkSemaphore waitSemaphores[] = {semaphores.present_complete};
+    VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = waitSemaphores;
+    submit_info.pWaitDstStageMask = wait_stages;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffers[cur_index];
+    VkSemaphore render_semaphores[] = {semaphores.render_complete};
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = render_semaphores;
 
-    vkResetFences(device->device, 1, &inFlightFences[cur_frame]);
+    vkResetFences(device->device, 1, &in_flight_fences[cur_frame]);
 
-    result = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, inFlightFences[cur_frame]);
+    result = vkQueueSubmit(m_graphics_queue, 1, &submit_info, in_flight_fences[cur_frame]);
     switch (result)
     {
     case VK_ERROR_OUT_OF_DATE_KHR:
-        recreateSwapchain();
+        recreate_swapchain();
         return;
         break;
     case VK_SUBOPTIMAL_KHR:
@@ -495,22 +495,22 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
         break;
     }
 
-    VkPresentInfoKHR presentInfo = {};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.pNext = nullptr;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = renderSemaphores;
-    VkSwapchainKHR swapchains[] = {swapChain.swapchain};
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapchains;
-    presentInfo.pImageIndices = &cur_index;
-    presentInfo.pResults = nullptr;
+    VkPresentInfoKHR present_info = {};
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.pNext = nullptr;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores = render_semaphores;
+    VkSwapchainKHR swapchains[] = {swapchain.swapchain};
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = swapchains;
+    present_info.pImageIndices = &cur_index;
+    present_info.pResults = nullptr;
 
-    result = vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
+    result = vkQueuePresentKHR(m_graphics_queue, &present_info);
     switch (result)
     {
     case VK_ERROR_OUT_OF_DATE_KHR:
-        recreateSwapchain();
+        recreate_swapchain();
         return;
         break;
     case VK_SUBOPTIMAL_KHR:
