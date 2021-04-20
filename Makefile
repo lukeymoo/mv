@@ -177,6 +177,33 @@ mvBuffer.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvBuffer.cpp.s
 .PHONY : mvBuffer.cpp.s
 
+mvCamera.o: mvCamera.cpp.o
+
+.PHONY : mvCamera.o
+
+# target to build an object file
+mvCamera.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvCamera.cpp.o
+.PHONY : mvCamera.cpp.o
+
+mvCamera.i: mvCamera.cpp.i
+
+.PHONY : mvCamera.i
+
+# target to preprocess a source file
+mvCamera.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvCamera.cpp.i
+.PHONY : mvCamera.cpp.i
+
+mvCamera.s: mvCamera.cpp.s
+
+.PHONY : mvCamera.s
+
+# target to generate assembly for a file
+mvCamera.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvCamera.cpp.s
+.PHONY : mvCamera.cpp.s
+
 mvDevice.o: mvDevice.cpp.o
 
 .PHONY : mvDevice.o
@@ -408,6 +435,9 @@ help:
 	@echo "... mvBuffer.o"
 	@echo "... mvBuffer.i"
 	@echo "... mvBuffer.s"
+	@echo "... mvCamera.o"
+	@echo "... mvCamera.i"
+	@echo "... mvCamera.s"
 	@echo "... mvDevice.o"
 	@echo "... mvDevice.i"
 	@echo "... mvDevice.s"

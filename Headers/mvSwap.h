@@ -13,47 +13,47 @@
 
 namespace mv
 {
-    typedef struct _SwapChainBuffers
+    typedef struct _swap_chain_buffers
     {
         VkImage image;
         VkImageView view;
-    } SwapChainBuffer;
+    } swap_chain_buffer;
 
     class Swap
     {
     private:
         VkInstance instance;
-        VkPhysicalDevice physicalDevice;
+        VkPhysicalDevice physical_device;
         VkDevice device;
         VkSurfaceKHR surface;
 
         /* Function pointers must be loaded */
-        PFN_vkGetPhysicalDeviceSurfaceSupportKHR fpGetPhysicalDeviceSurfaceSupportKHR;
-        PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR fpGetPhysicalDeviceSurfaceCapabilitiesKHR;
-        PFN_vkGetPhysicalDeviceSurfaceFormatsKHR fpGetPhysicalDeviceSurfaceFormatsKHR;
-        PFN_vkGetPhysicalDeviceSurfacePresentModesKHR fpGetPhysicalDeviceSurfacePresentModesKHR;
-        PFN_vkCreateSwapchainKHR fpCreateSwapchainKHR;
-        PFN_vkDestroySwapchainKHR fpDestroySwapchainKHR;
-        PFN_vkGetSwapchainImagesKHR fpGetSwapchainImagesKHR;
-        PFN_vkAcquireNextImageKHR fpAcquireNextImageKHR;
-        PFN_vkQueuePresentKHR fpQueuePresentKHR;
+        PFN_vkGetPhysicalDeviceSurfaceSupportKHR fp_get_physical_device_surface_support_khr;
+        PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR fp_get_physical_device_surface_capabilities_khr;
+        PFN_vkGetPhysicalDeviceSurfaceFormatsKHR fp_get_physical_device_surface_formats_khr;
+        PFN_vkGetPhysicalDeviceSurfacePresentModesKHR fp_get_physical_device_surface_present_modes_khr;
+        PFN_vkCreateSwapchainKHR fp_create_swapchain_khr;
+        PFN_vkDestroySwapchainKHR fp_destroy_swapchain_khr;
+        PFN_vkGetSwapchainImagesKHR fp_get_swapchain_images_khr;
+        PFN_vkAcquireNextImageKHR fp_acquire_next_image_khr;
+        PFN_vkQueuePresentKHR fp_queue_present_khr;
 
     public:
-        VkFormat colorFormat = {};
-        VkExtent2D swapExtent = {};
-        VkColorSpaceKHR colorSpace = {};
+        VkFormat color_format = {};
+        VkExtent2D swap_extent = {};
+        VkColorSpaceKHR color_space = {};
         VkSwapchainKHR swapchain = nullptr;
-        uint32_t imageCount = 0; // swap chain image count
+        uint32_t image_count = 0; // swap chain image count
         Display* display;
         Window window;
 
         std::vector<VkImage> images; // swapchain image handles
-        std::vector<SwapChainBuffer> buffers;
-        uint32_t queueIndex = UINT32_MAX; // graphics queue index
+        std::vector<swap_chain_buffer> buffers;
+        uint32_t queue_index = UINT32_MAX; // graphics queue index
 
-        void initSurface(Display *disp, Window &window);
+        void init_surface(Display *disp, Window &window);
         void create(uint32_t *width, uint32_t *height);
-        void connect(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
+        void connect(VkInstance instance, VkPhysicalDevice physical_device, VkDevice device);
         void cleanup(bool should_destroy_surface = true);
     };
 };

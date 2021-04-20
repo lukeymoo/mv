@@ -16,34 +16,34 @@ namespace mv
         glm::vec4 position;
         glm::vec4 color;
 
-        static VkVertexInputBindingDescription getBindingDescription()
+        static VkVertexInputBindingDescription get_binding_description()
         {
-            VkVertexInputBindingDescription bindingDescription{};
-            bindingDescription.binding = 0;
-            bindingDescription.stride = sizeof(Vertex);
-            bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+            VkVertexInputBindingDescription binding_description{};
+            binding_description.binding = 0;
+            binding_description.stride = sizeof(Vertex);
+            binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-            return bindingDescription;
+            return binding_description;
         }
 
-        static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+        static std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions()
         {
             // Temp container to be returned
-            std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+            std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions{};
 
             // Position
-            attributeDescriptions[0].binding = 0;
-            attributeDescriptions[0].location = 0;
-            attributeDescriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-            attributeDescriptions[0].offset = offsetof(Vertex, position);
+            attribute_descriptions[0].binding = 0;
+            attribute_descriptions[0].location = 0;
+            attribute_descriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            attribute_descriptions[0].offset = offsetof(Vertex, position);
 
             // Color
-            attributeDescriptions[1].binding = 0;
-            attributeDescriptions[1].location = 1;
-            attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-            attributeDescriptions[1].offset = offsetof(Vertex, color);
+            attribute_descriptions[1].binding = 0;
+            attribute_descriptions[1].location = 1;
+            attribute_descriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            attribute_descriptions[1].offset = offsetof(Vertex, color);
 
-            return attributeDescriptions;
+            return attribute_descriptions;
         }
     };
 
@@ -65,15 +65,15 @@ namespace mv
                     vkDestroyBuffer(device->device, indices.buffer, nullptr);
                     vkFreeMemory(device->device, indices.memory, nullptr);
                 }
-                if (descriptorPool)
+                if (descriptor_pool)
                 {
-                    vkDestroyDescriptorPool(device->device, descriptorPool, nullptr);
+                    vkDestroyDescriptorPool(device->device, descriptor_pool, nullptr);
                 }
             }
         }
 
         mv::Device *device;
-        VkDescriptorPool descriptorPool = nullptr;
+        VkDescriptorPool descriptor_pool = nullptr;
 
         struct Vertices
         {
@@ -93,7 +93,7 @@ namespace mv
         std::vector<tinyobj::material_t> materials;
         std::vector<tinyobj::shape_t> shapes;
 
-        uint32_t imageCount = 0;
+        uint32_t image_count = 0;
 
         void bindBuffers(VkCommandBuffer cmdbuffer)
         {
@@ -163,7 +163,7 @@ namespace mv
             indices.count = static_cast<uint32_t>(t_indices.size());
 
             // create vertex buffer, load vertices data into it
-            device->createBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                                  vertices.count * sizeof(Vertex),
                                  &vertices.buffer,
@@ -171,7 +171,7 @@ namespace mv
                                  t_vertices.data());
 
             // create index buffer, load indices data into it
-            device->createBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                                  indices.count * sizeof(uint32_t),
                                  &indices.buffer,

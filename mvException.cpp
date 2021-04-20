@@ -6,26 +6,26 @@ namespace mv
     {
         line = l;
         file = f;
-        errorDescription = description;
+        error_description = description;
     }
 
     BException::~BException(void)
     {
     }
 
-    std::string BException::getType(void)
+    std::string BException::get_type(void)
     {
         return type;
     }
 
-    std::string BException::getErrorDescription(void)
+    std::string BException::get_error_description(void)
     {
         std::ostringstream oss;
         oss << std::endl
-            << errorDescription << std::endl
+            << error_description << std::endl
             << "Line: " << line << std::endl
             << "File : " << file << std::endl;
-        errorDescription = oss.str();
-        return errorDescription;
+        error_description = oss.str();
+        return error_description;
     }
 }

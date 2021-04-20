@@ -4,11 +4,8 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/string_cast.hpp>
 
+#include "mvCamera.h"
 #include "mvWindow.h"
 #include "mvModel.h"
 
@@ -26,19 +23,19 @@ namespace mv
                 alignas(16) glm::mat4 projection;
             } matrices;
 
-            VkDescriptorSet descriptorSet;
-            mv::Buffer uniformBuffer; // contains the matrices
+            VkDescriptorSet descriptor_set;
+            mv::Buffer uniform_buffer; // contains the matrices
             glm::vec3 rotation;
-            uint32_t modelIndex;
+            uint32_t model_index;
         };
         std::vector<Object> objects;
         std::vector<mv::Model> models;
 
         VkPipeline pipeline = nullptr;
-        VkPipelineLayout pipelineLayout = nullptr;
+        VkPipelineLayout pipeline_layout = nullptr;
 
-        VkDescriptorPool descriptorPool = nullptr;
-        VkDescriptorSetLayout descriptorLayout = nullptr;
+        VkDescriptorPool descriptor_pool = nullptr;
+        VkDescriptorSetLayout descriptor_layout = nullptr;
 
         Engine &operator=(const Engine &) = delete;
         Engine(const Engine &) = delete;
@@ -51,42 +48,42 @@ namespace mv
             {
                 vkDestroyPipeline(device->device, pipeline, nullptr);
             }
-            if (pipelineLayout)
+            if (pipeline_layout)
             {
-                vkDestroyPipelineLayout(device->device, pipelineLayout, nullptr);
+                vkDestroyPipelineLayout(device->device, pipeline_layout, nullptr);
             }
 
             // cleanup descriptor sets
             // free pool
-            if (descriptorPool)
+            if (descriptor_pool)
             {
-                vkDestroyDescriptorPool(device->device, descriptorPool, nullptr);
+                vkDestroyDescriptorPool(device->device, descriptor_pool, nullptr);
             }
 
             // cleanup layout
-            if (descriptorLayout)
+            if (descriptor_layout)
             {
-                vkDestroyDescriptorSetLayout(device->device, descriptorLayout, nullptr);
+                vkDestroyDescriptorSetLayout(device->device, descriptor_layout, nullptr);
             }
 
             // objects
             for (auto &obj : objects)
             {
-                obj.uniformBuffer.destroy();
+                obj.uniform_buffer.destroy();
             }
         }
 
-        void recreateSwapchain(void);
+        void recreate_swapchain(void);
 
         void go(void);
-        void recordCommandBuffer(uint32_t imageIndex);
+        void record_command_buffer(uint32_t imageIndex);
         void draw(size_t &current_frame, uint32_t &current_image_index);
 
     protected:
-        void prepareUniforms(void);
-        void createDescriptorSets(bool should_create_layout = true);
-        void preparePipeline(void);
-        void cleanupSwapchain(void);
+        void prepare_uniforms(void);
+        void create_descriptor_sets(bool should_create_layout = true);
+        void prepare_pipeline(void);
+        void cleanup_swapchain(void);
     };
 };
 

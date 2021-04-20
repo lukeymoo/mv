@@ -34,58 +34,58 @@ namespace mv
         public:
             Event() noexcept
                 : type(Event::Type::Invalid),
-                  leftIsPressed(false),
-                  rightIsPressed(false),
-                  middleIsPressed(false),
+                  left_is_pressed(false),
+                  right_is_pressed(false),
+                  middle_is_pressed(false),
                   x(0), y(0)
             {
             }
             Event(Mouse::Event::Type ty, const Mouse &parent) noexcept
                 : type(ty),
-                  leftIsPressed(parent.leftIsPressed),
-                  rightIsPressed(parent.rightIsPressed),
-                  middleIsPressed(parent.middleIsPressed),
+                  left_is_pressed(parent.left_is_pressed),
+                  right_is_pressed(parent.right_is_pressed),
+                  middle_is_pressed(parent.middle_is_pressed),
                   x(parent.x), y(parent.y)
             {
             }
-            bool isValid(void) const noexcept
+            bool is_valid(void) const noexcept
             {
                 return type != Event::Type::Invalid;
             }
-            Mouse::Event::Type getType(void) const noexcept
+            Mouse::Event::Type get_type(void) const noexcept
             {
                 return type;
             }
-            std::pair<int, int> getPos(void) const noexcept
+            std::pair<int, int> get_pos(void) const noexcept
             {
                 return {x, y};
             }
-            int getPosX(void) const noexcept
+            int get_pos_x(void) const noexcept
             {
                 return x;
             }
-            int getPosY(void) const noexcept
+            int get_pos_y(void) const noexcept
             {
                 return y;
             }
-            bool isLeftPressed(void) const noexcept
+            bool is_left_pressed(void) const noexcept
             {
-                return leftIsPressed;
+                return left_is_pressed;
             }
-            bool isMiddlePressed(void) const noexcept
+            bool is_middle_pressed(void) const noexcept
             {
-                return middleIsPressed;
+                return middle_is_pressed;
             }
-            bool isRightPressed(void) const noexcept
+            bool is_right_pressed(void) const noexcept
             {
-                return rightIsPressed;
+                return right_is_pressed;
             }
 
         private:
             Type type;
-            bool leftIsPressed;
-            bool rightIsPressed;
-            bool middleIsPressed;
+            bool left_is_pressed;
+            bool right_is_pressed;
+            bool middle_is_pressed;
             int x;
             int y;
         };
@@ -94,39 +94,39 @@ namespace mv
         Mouse() = default;
         Mouse(const Mouse &) = delete;
         Mouse &operator=(const Mouse &) = delete;
-        std::pair<int, int> getPos() const noexcept;
-        std::pair<int, int> getPosDelta(void) const noexcept;
-        int getPosX(void) const noexcept;
-        int getPosY(void) const noexcept;
+        std::pair<int, int> get_pos() const noexcept;
+        std::pair<int, int> get_pos_delta(void) const noexcept;
+        int get_pos_x(void) const noexcept;
+        int get_pos_y(void) const noexcept;
         Mouse::Event read(void) noexcept;
-        bool isLeftPressed(void) const noexcept;
-        bool isMiddlePressed(void) const noexcept;
-        bool isRightPressed(void) const noexcept;
-        bool isInWindow(void) const noexcept;
+        bool is_left_pressed(void) const noexcept;
+        bool is_middle_pressed(void) const noexcept;
+        bool is_right_pressed(void) const noexcept;
+        bool is_in_window(void) const noexcept;
         int deltatest = 0;
-        bool isEmpty(void) const noexcept
+        bool is_empty(void) const noexcept
         {
             return buffer.empty();
         }
-        void clearState() noexcept;
+        void clear_state() noexcept;
 
     private:
-        void onMouseMove(int nx, int ny) noexcept;
-        void onLeftPress(int nx, int ny) noexcept;
-        void onRightPress(int nx, int ny) noexcept;
-        void onLeftRelease(int nx, int ny) noexcept;
-        void onRightRelease(int nx, int ny) noexcept;
-        void onMiddlePress(int nx, int ny) noexcept;
-        void onMiddleRelease(int nx, int ny) noexcept;
-        void onWheelUp(int nx, int ny) noexcept;                // used internally -- use onDelta
-        void onWheelDown(int nx, int ny) noexcept;              // used internally -- use onDelta
-        void onWheelDelta(int nx, int ny, int wDelta) noexcept; // use this one for mouse wheel
-        void onMouseEnter(void) noexcept;
-        void onMouseLeave(void) noexcept;
-        void trimBuffer(void) noexcept;
+        void on_mouse_move(int nx, int ny) noexcept;
+        void on_left_press(int nx, int ny) noexcept;
+        void on_right_press(int nx, int ny) noexcept;
+        void on_left_release(int nx, int ny) noexcept;
+        void on_right_release(int nx, int ny) noexcept;
+        void on_middle_press(int nx, int ny) noexcept;
+        void on_middle_release(int nx, int ny) noexcept;
+        void on_wheel_up(int nx, int ny) noexcept;                // used internally -- use onDelta
+        void on_wheel_down(int nx, int ny) noexcept;              // used internally -- use onDelta
+        void on_wheel_delta(int nx, int ny, int wDelta) noexcept; // use this one for mouse wheel
+        void on_mouse_enter(void) noexcept;
+        void on_mouse_leave(void) noexcept;
+        void trim_buffer(void) noexcept;
 
     private:
-        static constexpr unsigned int maxBufferSize = 16u;
+        static constexpr unsigned int max_buffer_size = 16u;
 
         int x = 0;
         int y = 0;
@@ -134,12 +134,12 @@ namespace mv
         int last_y = 0;
         int mouse_x_delta = 0;
         int mouse_y_delta = 0;
-        int wheelDeltaCarry = 0;
+        int wheel_delta_carry = 0;
 
-        bool leftIsPressed = false;
-        bool middleIsPressed = false;
-        bool rightIsPressed = false;
-        bool inWindow = false;
+        bool left_is_pressed = false;
+        bool middle_is_pressed = false;
+        bool right_is_pressed = false;
+        bool in_window = false;
 
         std::queue<Mouse::Event> buffer;
     };
