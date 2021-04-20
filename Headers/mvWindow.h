@@ -23,8 +23,8 @@
 #include "mvInit.h"
 
 const size_t MAX_IN_FLIGHT = 2;
-#define WINDOW_WIDTH 1024
-#define WINDOW_HEIGHT 768
+#define WINDOW_WIDTH 1920
+#define WINDOW_HEIGHT 1080
 
 const std::vector<const char *> requested_validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -35,7 +35,8 @@ const std::vector<const char *> requested_instance_extensions = {
     "VK_KHR_xlib_surface"};
 
 const std::vector<const char *> requested_device_extensions = {
-    "VK_KHR_swapchain"};
+    "VK_KHR_swapchain",
+    "VK_KHR_maintenance1"};
 
 namespace mv
 {

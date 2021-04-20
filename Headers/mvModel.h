@@ -109,8 +109,8 @@ namespace mv
 
             device = dvc;
 
-            std::vector<Vertex> t_vertices;
-            std::vector<uint32_t> t_indices;
+            // std::vector<Vertex> t_vertices;
+            // std::vector<uint32_t> t_indices;
 
             // std::vector<Vertex> t_vertices = {
             //     {{-0.5f, -0.5f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
@@ -126,6 +126,17 @@ namespace mv
             // std::vector<uint32_t> t_indices = {
             //     0, 1, 2, 2, 3, 0,
             //     4, 5, 6, 6, 7, 4};
+
+
+            // should be a square if aspect ratio is 1.0
+            std::vector<Vertex> t_vertices = {
+                {{ 0.25f,  0.25f, 0.0f, 1.0f }, {1.0f, 0.0f, 0.0f, 1.0f}},
+                {{ 0.75f,  0.25f, 0.0f, 1.0f }, {0.0f, 1.0f, 0.0f, 1.0f}},
+                {{ 0.75f, -0.25f, 0.0f, 1.0f }, {0.0f, 0.0f, 1.0f, 1.0f}},
+                {{ 0.25f, -0.25f, 0.0f, 1.0f }, {1.0f, 1.0f, 1.0f, 1.0f}}
+            };
+            std::vector<uint32_t> t_indices = {0, 1, 2, 3, 0, 2};
+
             std::string warn, err;
 
             if (!tinyobj::LoadObj(&attribute, &shapes, &materials, &warn, &err, filename))
@@ -133,31 +144,31 @@ namespace mv
                 throw std::runtime_error(warn + err);
             }
 
-            for (const auto &shape : shapes)
-            {
-                for (const auto &index : shape.mesh.indices)
-                {
-                    Vertex vertex = {};
+            // for (const auto &shape : shapes)
+            // {
+            //     for (const auto &index : shape.mesh.indices)
+            //     {
+            //         Vertex vertex = {};
 
-                    vertex.position = {
-                        attribute.vertices[3 * index.vertex_index + 0],
-                        attribute.vertices[3 * index.vertex_index + 1],
-                        attribute.vertices[3 * index.vertex_index + 2],
-                        1.0f};
+            //         vertex.position = {
+            //             attribute.vertices[3 * index.vertex_index + 0],
+            //             attribute.vertices[3 * index.vertex_index + 1],
+            //             attribute.vertices[3 * index.vertex_index + 2],
+            //             1.0f};
 
-                    vertex.color = {1.0f, 0.0f, 0.0f, 1.0f};
+            //         vertex.color = {1.0f, 0.0f, 0.0f, 1.0f};
 
-                    // TODO
-                    // Perform removal of duplicate vertices before adding
-                    // Add texture UV data to loader
+            //         // TODO
+            //         // Perform removal of duplicate vertices before adding
+            //         // Add texture UV data to loader
 
-                    t_vertices.push_back(vertex);
-                    vertices.count++;
+            //         t_vertices.push_back(vertex);
+            //         vertices.count++;
 
-                    t_indices.push_back(t_indices.size());
-                    indices.count++;
-                }
-            }
+            //         t_indices.push_back(t_indices.size());
+            //         indices.count++;
+            //     }
+            // }
 
             vertices.count = static_cast<uint32_t>(t_vertices.size());
             indices.count = static_cast<uint32_t>(t_indices.size());

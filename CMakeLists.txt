@@ -35,7 +35,7 @@ set(SOURCES
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -std=c++17 -m64 -O2 -g)
+add_compile_options(-Wall -std=c++17 -m64 -O0 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 
