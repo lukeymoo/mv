@@ -10,6 +10,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+const float MOVESPEED = 0.005f;
+
 namespace mv
 {
     class Camera
@@ -86,36 +88,36 @@ namespace mv
         }
 
         // rotation
-        void rotate(glm::vec3 delta)
+        void rotate(glm::vec3 delta, float frame_delta)
         {
-            delta *= 0.6f;
-            this->rotation += delta;
+            delta *= 0.02f;
+            this->rotation += (delta * frame_delta);
             update_view();
         }
 
         // movement
-        void move_left(void)
+        void move_left(float frame_delta)
         {
             get_front_face();
-            position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * 0.2f;
+            position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
             update_view();
         }
-        void move_right(void)
+        void move_right(float frame_delta)
         {
             get_front_face();
-            position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * 0.2f;
+            position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
             update_view();
         }
-        void move_forward(void)
+        void move_forward(float frame_delta)
         {
             get_front_face();
-            position += camera_front * 0.2f;
+            position += camera_front * MOVESPEED * frame_delta;
             update_view();
         }
-        void move_backward(void)
+        void move_backward(float frame_delta)
         {
             get_front_face();
-            position -= camera_front * 0.2f;
+            position -= camera_front * MOVESPEED * frame_delta;
             update_view();
         }
 

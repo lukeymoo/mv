@@ -106,7 +106,7 @@ void mv::Engine::go(void)
     prepare();
 
     // configure camera before modes/uniform buffers
-    camera = std::make_unique<Camera>(35.0f,
+    camera = std::make_unique<Camera>(45.0f,
                                       static_cast<float>((swapchain.swap_extent.width / swapchain.swap_extent.height)),
                                       0.1f, 100.0f,
                                       glm::vec3(0.0f, 0.0f, 2.0f));
@@ -131,6 +131,9 @@ void mv::Engine::go(void)
 
     while (running)
     {
+        double fpsdt = timer.getElaspedMS();
+        timer.restart();
+
         while (XPending(display))
         {
             handle_x_event();
@@ -146,24 +149,24 @@ void mv::Engine::go(void)
             // get delta
             std::pair<int, int> mouse_delta = mouse.get_pos_delta();
             glm::vec3 rotation_delta = glm::vec3(mouse_delta.second, mouse_delta.first, 0.0f);
-            camera->rotate(rotation_delta);
+            camera->rotate(rotation_delta, fpsdt);
         }
 
         if (kbd.is_key_pressed('w'))
         {
-            camera->move_forward();
+            camera->move_forward(fpsdt);
         }
         if (kbd.is_key_pressed('a'))
         {
-            camera->move_left();
+            camera->move_left(fpsdt);
         }
         if (kbd.is_key_pressed('s'))
         {
-            camera->move_backward();
+            camera->move_backward(fpsdt);
         }
         if (kbd.is_key_pressed('d'))
         {
-            camera->move_right();
+            camera->move_right(fpsdt);
         }
 
         Object::Matrices tm;
