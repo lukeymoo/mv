@@ -105,6 +105,12 @@ void mv::Engine::go(void)
     std::cout << "[+] Preparing vulkan" << std::endl;
     prepare();
 
+    // configure camera before modes/uniform buffers
+    camera = std::make_unique<Camera>(50.0f,
+                                      (swapchain.swap_extent.width / swapchain.swap_extent.height),
+                                      0.1f, 100.0f,
+                                      glm::vec3(1.0));
+
     models.resize(1);
     objects.resize(1); // models * count
 
@@ -112,7 +118,6 @@ void mv::Engine::go(void)
     prepare_uniforms();
 
     // Load models
-
     objects[0].model_index = 0;
     models[0].load(device, "models/viking_room.obj");
     create_descriptor_sets();
@@ -130,7 +135,6 @@ void mv::Engine::go(void)
         {
             handle_x_event();
         }
-
 
         // Get input events
         Keyboard::Event kbdEvent = kbd.read_key();
@@ -153,9 +157,8 @@ void mv::Engine::go(void)
         if (kbd.is_key_pressed('d'))
         {
         }
-        
-        draw(currentFrame, imageIndex);
 
+        draw(currentFrame, imageIndex);
     }
     return;
 }
@@ -164,16 +167,15 @@ void mv::Engine::prepare_uniforms(void)
 {
     Object::Matrices tm;
     tm.model = glm::mat4(1.0);
-    tm.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    tm.projection = glm::perspective(glm::radians(50.0f), swapchain.swap_extent.width / (float)swapchain.swap_extent.height, 0.1f, 100.0f);
-    tm.projection[1][1] *= -1;
+    tm.view = camera->matrices.view;
+    tm.projection = camera->matrices.perspective;
 
     for (auto &obj : objects)
     {
         device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             &obj.uniform_buffer,
-                             sizeof(Object::Matrices));
+                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                              &obj.uniform_buffer,
+                              sizeof(Object::Matrices));
         if (obj.uniform_buffer.map() != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to map object uniform buffer");

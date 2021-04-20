@@ -73,6 +73,8 @@ namespace mv
             }
         }
 
+        std::unique_ptr<Camera> camera;
+
         void recreate_swapchain(void);
 
         void go(void);
