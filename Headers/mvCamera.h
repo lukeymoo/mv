@@ -95,7 +95,23 @@ namespace mv
             update_view();
         }
 
-        // movement
+        // vertical movement
+        void move_up(float frame_delta)
+        {
+            get_front_face();
+            position += glm::normalize(glm::cross(camera_front, glm::vec3(1.0f, 0.0f, 0.0f))) * MOVESPEED * frame_delta;
+            update_view();
+            return;
+        }
+        void move_down(float frame_delta)
+        {
+            get_front_face();
+            position -= glm::normalize(glm::cross(camera_front, glm::vec3(1.0f, 0.0f, 0.0f))) * MOVESPEED * frame_delta;
+            update_view();
+            return;
+        }
+
+        // lateral movement
         void move_left(float frame_delta)
         {
             get_front_face();

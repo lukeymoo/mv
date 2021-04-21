@@ -106,7 +106,7 @@ void mv::Engine::go(void)
     prepare();
 
     // configure camera before modes/uniform buffers
-    camera = std::make_unique<Camera>(45.0f,
+    camera = std::make_unique<Camera>(60.0f,
                                       static_cast<float>((swapchain.swap_extent.height / swapchain.swap_extent.height)),
                                       0.1f, 100.0f,
                                       glm::vec3(0.0f, 0.0f, 2.0f));
@@ -152,6 +152,15 @@ void mv::Engine::go(void)
             camera->rotate(rotation_delta, fpsdt);
         }
 
+        // verticle movements
+        if (kbd.is_key_pressed(' '))
+        {
+            camera->move_down(fpsdt);
+        }
+        // TODO
+        // add ctrl key, move down
+
+        // lateral movements
         if (kbd.is_key_pressed('w'))
         {
             camera->move_forward(fpsdt);
