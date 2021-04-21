@@ -24,8 +24,8 @@
 #include "mvTimer.h"
 
 const size_t MAX_IN_FLIGHT = 2;
-#define WINDOW_WIDTH 2560
-#define WINDOW_HEIGHT 1440
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
 
 const std::vector<const char *> requested_validation_layers = {
     "VK_LAYER_KHRONOS_validation"};

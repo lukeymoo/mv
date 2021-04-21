@@ -13,8 +13,8 @@ namespace mv
     }
 
     /*
-    Key events
-*/
+        Key events
+    */
     bool Keyboard::is_key_pressed(unsigned char keycode)
     {
         return keystates[keycode];

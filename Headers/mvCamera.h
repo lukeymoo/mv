@@ -24,6 +24,10 @@ namespace mv
             this->nearz = nearz;
             this->farz = farz;
             this->position = pos;
+            rotation = glm::vec3(0.1f, 0.1f, 0.1f);
+            position = glm::vec3(1.0);
+            view_position = glm::vec4(1.0);
+            camera_front = glm::vec3(0.0f, 0.0f, -1.0f);
 
             matrices.perspective = glm::perspective(glm::radians(fov), aspect, nearz, farz);
             //matrices.perspective[1][1] *= -1.0f;
@@ -73,6 +77,8 @@ namespace mv
             //matrices.view = translation_matrix * rotation_matrix;
             // first person
             matrices.view = rotation_matrix * translation_matrix;
+
+            printf("Rotation angles => (%f, %f, %f)\n", rotation.x, rotation.y, rotation.z);
         }
 
         // calculate current camera front
@@ -99,14 +105,14 @@ namespace mv
         void move_up(float frame_delta)
         {
             get_front_face();
-            position += glm::normalize(glm::cross(camera_front, glm::vec3(1.0f, 0.0f, 0.0f))) * MOVESPEED * frame_delta;
+            position.y += MOVESPEED * frame_delta;
             update_view();
             return;
         }
         void move_down(float frame_delta)
         {
             get_front_face();
-            position -= glm::normalize(glm::cross(camera_front, glm::vec3(1.0f, 0.0f, 0.0f))) * MOVESPEED * frame_delta;
+            position.y -= MOVESPEED * frame_delta;
             update_view();
             return;
         }

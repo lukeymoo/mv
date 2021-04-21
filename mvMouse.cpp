@@ -76,7 +76,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         buffer.push(Mouse::Event(Mouse::Event::Type::Move, *this));
         trim_buffer();
@@ -90,7 +90,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         left_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::LDown, *this));
@@ -105,7 +105,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         right_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::RDown, *this));
@@ -120,7 +120,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         left_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::LRelease, *this));
@@ -135,7 +135,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         right_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::RRelease, *this));
@@ -150,7 +150,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         middle_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::MDown, *this));
@@ -165,7 +165,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         middle_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::MRelease, *this));
@@ -180,7 +180,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         deltatest += 1;
         buffer.push(Mouse::Event(Mouse::Event::Type::WheelUp, *this));
@@ -195,7 +195,7 @@ namespace mv
         x = nx;
         y = ny;
         mouse_x_delta = x - last_x;
-        mouse_y_delta = y - last_y;
+        mouse_y_delta = last_y - y;
 
         deltatest -= 1;
         buffer.push(Mouse::Event(Mouse::Event::Type::WheelDown, *this));
