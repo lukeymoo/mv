@@ -393,6 +393,33 @@ mvSwap.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvSwap.cpp.s
 .PHONY : mvSwap.cpp.s
 
+mvTimer.o: mvTimer.cpp.o
+
+.PHONY : mvTimer.o
+
+# target to build an object file
+mvTimer.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvTimer.cpp.o
+.PHONY : mvTimer.cpp.o
+
+mvTimer.i: mvTimer.cpp.i
+
+.PHONY : mvTimer.i
+
+# target to preprocess a source file
+mvTimer.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvTimer.cpp.i
+.PHONY : mvTimer.cpp.i
+
+mvTimer.s: mvTimer.cpp.s
+
+.PHONY : mvTimer.s
+
+# target to generate assembly for a file
+mvTimer.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvTimer.cpp.s
+.PHONY : mvTimer.cpp.s
+
 mvWindow.o: mvWindow.cpp.o
 
 .PHONY : mvWindow.o
@@ -459,6 +486,9 @@ help:
 	@echo "... mvSwap.o"
 	@echo "... mvSwap.i"
 	@echo "... mvSwap.s"
+	@echo "... mvTimer.o"
+	@echo "... mvTimer.i"
+	@echo "... mvTimer.s"
 	@echo "... mvWindow.o"
 	@echo "... mvWindow.i"
 	@echo "... mvWindow.s"

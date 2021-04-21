@@ -106,8 +106,8 @@ void mv::Engine::go(void)
     prepare();
 
     // configure camera before modes/uniform buffers
-    camera = std::make_unique<Camera>(50.0f,
-                                      static_cast<float>((window_width / window_height)),
+    camera = std::make_unique<Camera>(45.0f,
+                                      static_cast<float>((swapchain.swap_extent.height / swapchain.swap_extent.height)),
                                       0.1f, 100.0f,
                                       glm::vec3(0.0f, 0.0f, 2.0f));
 
@@ -119,7 +119,7 @@ void mv::Engine::go(void)
 
     // Load models
     objects[0].model_index = 0;
-    models[0].load(device, "models/viking_room.obj");
+    models[0].load(device, "models/car.obj");
     create_descriptor_sets();
 
     prepare_pipeline();
@@ -131,6 +131,9 @@ void mv::Engine::go(void)
 
     while (running)
     {
+        double fpsdt = timer.getElaspedMS();
+        timer.restart();
+
         while (XPending(display))
         {
             handle_x_event();
@@ -141,25 +144,29 @@ void mv::Engine::go(void)
         Mouse::Event mouseEvent = mouse.read();
 
         // Handle input events
-        if (mouseEvent.get_type() == Mouse::Event::Type::Move)
+        if (mouseEvent.is_left_pressed())
         {
+            // get delta
+            std::pair<int, int> mouse_delta = mouse.get_pos_delta();
+            glm::vec3 rotation_delta = glm::vec3(mouse_delta.second, mouse_delta.first, 0.0f);
+            camera->rotate(rotation_delta, fpsdt);
         }
 
         if (kbd.is_key_pressed('w'))
         {
-            camera->move_forward();
+            camera->move_forward(fpsdt);
         }
         if (kbd.is_key_pressed('a'))
         {
-            camera->move_left();
+            camera->move_left(fpsdt);
         }
         if (kbd.is_key_pressed('s'))
         {
-            camera->move_backward();
+            camera->move_backward(fpsdt);
         }
         if (kbd.is_key_pressed('d'))
         {
-            camera->move_right();
+            camera->move_right(fpsdt);
         }
 
         Object::Matrices tm;
@@ -180,8 +187,17 @@ void mv::Engine::go(void)
 
 void mv::Engine::prepare_uniforms(void)
 {
+    glm::vec3 rotation = glm::vec3(90.0f, 0.0f, 0.0f);
+    glm::mat4 rotation_matrix = glm::mat4(1.0);
+
+    rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+    rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+    rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    glm::mat4 translation_matrix = glm::translate(glm::mat4(1.0), {0.0f, -0.8f, -10.0f});
+
     Object::Matrices tm;
-    tm.model = glm::translate(glm::mat4(1.0), {0.0f, 0.0f, -10.0f});
+    tm.model = translation_matrix * rotation_matrix;
     tm.view = camera->matrices.view;
     tm.projection = camera->matrices.perspective;
 
@@ -304,7 +320,7 @@ void mv::Engine::prepare_pipeline(void)
     vi_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
     vi_state.pVertexAttributeDescriptions = attribute_description.data();
     VkPipelineInputAssemblyStateCreateInfo ia_state = mv::initializer::input_assembly_state_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_LINE, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
     VkPipelineColorBlendAttachmentState cba_state = mv::initializer::color_blend_attachment_state(0xf, VK_FALSE);
     VkPipelineColorBlendStateCreateInfo cb_state = mv::initializer::color_blend_state_info(1, &cba_state);
     VkPipelineDepthStencilStateCreateInfo ds_state = mv::initializer::depth_stencil_state_info(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);

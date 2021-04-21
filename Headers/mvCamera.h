@@ -10,6 +10,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+const float MOVESPEED = 0.005f;
+
 namespace mv
 {
     class Camera
@@ -64,17 +66,17 @@ namespace mv
 
             translation_matrix = glm::translate(glm::mat4(1.0), position);
 
-            // freelook
-            matrices.view = translation_matrix * rotation_matrix;
-
             // TODO
             // add more camera modes
+
+            // freelook
+            //matrices.view = translation_matrix * rotation_matrix;
             // first person
-            // rotation_matrix * translation_matrix
+            matrices.view = rotation_matrix * translation_matrix;
         }
 
         // calculate current camera front
-        void update(void)
+        void get_front_face(void)
         {
             glm::vec3 fr;
             fr.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
@@ -85,29 +87,37 @@ namespace mv
             camera_front = fr;
         }
 
+        // rotation
+        void rotate(glm::vec3 delta, float frame_delta)
+        {
+            delta *= 0.02f;
+            this->rotation += (delta * frame_delta);
+            update_view();
+        }
+
         // movement
-        void move_left(void)
+        void move_left(float frame_delta)
         {
-            update();
-            position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * 0.2f;
+            get_front_face();
+            position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
             update_view();
         }
-        void move_right(void)
+        void move_right(float frame_delta)
         {
-            update();
-            position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * 0.2f;
+            get_front_face();
+            position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
             update_view();
         }
-        void move_forward(void)
+        void move_forward(float frame_delta)
         {
-            update();
-            position += camera_front * 0.2f;
+            get_front_face();
+            position += camera_front * MOVESPEED * frame_delta;
             update_view();
         }
-        void move_backward(void)
+        void move_backward(float frame_delta)
         {
-            update();
-            position -= camera_front * 0.2f;
+            get_front_face();
+            position -= camera_front * MOVESPEED * frame_delta;
             update_view();
         }
 
@@ -142,7 +152,7 @@ namespace mv
         }
 
     protected:
-        glm::vec3 rotation = glm::vec3(1.0);
+        glm::vec3 rotation = glm::vec3(0.1f, 0.1f, 0.1f);
         glm::vec3 position = glm::vec3(1.0);
         glm::vec4 view_position = glm::vec4(1.0);
         glm::vec3 camera_front = glm::vec3(0.0f, 0.0f, -1.0f);

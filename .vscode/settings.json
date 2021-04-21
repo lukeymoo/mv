@@ -1,12 +1,4 @@
 {
-    // Controls if quick suggestions should show up while typing
-    "editor.quickSuggestions": true,
-    // Controls the delay in ms after which quick suggestions will show up.
-    "editor.quickSuggestionsDelay": 10,
-    // Enable word based suggestions
-    "editor.wordBasedSuggestions": true,
-    // Enable parameter hints
-    "editor.parameterHints": true,
     "files.associations": {
         "array": "cpp",
         "atomic": "cpp",

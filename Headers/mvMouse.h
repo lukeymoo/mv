@@ -126,7 +126,7 @@ namespace mv
         void trim_buffer(void) noexcept;
 
     private:
-        static constexpr unsigned int max_buffer_size = 16u;
+        static constexpr unsigned int max_buffer_size = 5u;
 
         int x = 0;
         int y = 0;

@@ -21,10 +21,11 @@
 #include "mvDevice.h"
 #include "mvSwap.h"
 #include "mvInit.h"
+#include "mvTimer.h"
 
 const size_t MAX_IN_FLIGHT = 2;
-#define WINDOW_WIDTH 1920
-#define WINDOW_HEIGHT 1080
+#define WINDOW_WIDTH 2560
+#define WINDOW_HEIGHT 1440
 
 const std::vector<const char *> requested_validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -83,6 +84,7 @@ namespace mv
         void cleanup_depth_stencil(void);
 
     public:
+        Timer timer;
         VkClearColorValue default_clear_color = {{0.0f, 0.0f, 0.0f, 1.0f}};
         bool good_init = true;
         Keyboard kbd;
