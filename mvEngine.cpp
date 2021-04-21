@@ -107,7 +107,7 @@ void mv::Engine::go(void)
 
     // configure camera before modes/uniform buffers
     camera = std::make_unique<Camera>(45.0f,
-                                      static_cast<float>((swapchain.swap_extent.width / swapchain.swap_extent.height)),
+                                      static_cast<float>((swapchain.swap_extent.height / swapchain.swap_extent.height)),
                                       0.1f, 100.0f,
                                       glm::vec3(0.0f, 0.0f, 2.0f));
 
@@ -119,7 +119,7 @@ void mv::Engine::go(void)
 
     // Load models
     objects[0].model_index = 0;
-    models[0].load(device, "models/viking_room.obj");
+    models[0].load(device, "models/car.obj");
     create_descriptor_sets();
 
     prepare_pipeline();
@@ -187,7 +187,7 @@ void mv::Engine::go(void)
 
 void mv::Engine::prepare_uniforms(void)
 {
-    glm::vec3 rotation = glm::vec3(-90.0f, 0.0f, 90.0f);
+    glm::vec3 rotation = glm::vec3(90.0f, 0.0f, 0.0f);
     glm::mat4 rotation_matrix = glm::mat4(1.0);
 
     rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));

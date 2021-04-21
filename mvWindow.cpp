@@ -36,8 +36,31 @@ mv::MWindow::MWindow(int w, int h, const char *title)
                                  WhitePixel(display, screen),
                                  BlackPixel(display, screen));
 
+    typedef struct
+    {
+        unsigned long flags = 0;
+        unsigned long functions = 0;
+        unsigned long decorations = 0;
+        long input_mode = 0;
+        unsigned long status = 0;
+    } Hints;
+
+    Hints hints;
+    hints.flags = 2;
+    hints.decorations = 0;
+
+    Atom borders_atom = XInternAtom(display, "_MOTIF_WM_HINTS", 1);
+    // ensure we got the atom
+    if (!borders_atom)
+    {
+        throw std::runtime_error("Failed to fetch motif window manager hints atom");
+    }
+
     Atom del_window = XInternAtom(display, "WM_DELETE_WINDOW", 0);
     XSetWMProtocols(display, window, &del_window, 1);
+
+    // remove decorations
+    XChangeProperty(display, window, borders_atom, borders_atom, 32, PropModeReplace, (unsigned char *)&hints, 5);
 
     // Configure event masks
     XSelectInput(display,
