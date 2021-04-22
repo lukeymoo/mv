@@ -65,7 +65,9 @@ mv::MWindow::MWindow(int w, int h, const char *title)
     // Configure event masks
     XSelectInput(display,
                  window,
-                 FocusChangeMask |
+                 EnterWindowMask |
+                     LeaveWindowMask |
+                     FocusChangeMask |
                      ButtonPressMask |
                      ButtonReleaseMask |
                      ExposureMask |
@@ -830,6 +832,16 @@ void mv::MWindow::handle_x_event(void)
     KeySym key;
     switch (event.type)
     {
+    case LeaveNotify:
+    case FocusOut:
+        XUngrabPointer(display, CurrentTime);
+        break;
+    case MapNotify:
+    case EnterNotify:
+        // confine cursor to interior of window
+        // mouse is released on alt + tab
+        XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
+        break;
     case ButtonPress:
         if (event.xbutton.button == Button1)
         {
@@ -858,16 +870,15 @@ void mv::MWindow::handle_x_event(void)
             XSendEvent(display, window, false, ExposureMask, &q);
         }
         kbd.on_key_press(static_cast<unsigned char>(key));
+        printf("Key pressed => %c :: %d\n", key);
         break;
     case KeyRelease:
         key = XLookupKeysym(&event.xkey, 0);
         kbd.on_key_release(static_cast<unsigned char>(key));
         break;
     case MotionNotify:
-        // auto start = std::chrono::high_resolution_clock::now();
+        printf("Mouse movement (%d, %d)\n", event.xmotion.x, event.xmotion.y);
         mouse.on_mouse_move(event.xmotion.x, event.xmotion.y);
-        // auto stop = std::chrono::high_resolution_clock::now();
-        // auto duration = std::chrono::duration<
     case Expose:
         break;
         // configured to only capture WM_DELETE_WINDOW so we exit here

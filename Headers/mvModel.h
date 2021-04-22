@@ -156,9 +156,16 @@ namespace mv
                         attribute.vertices[3 * index.vertex_index + 2],
                         1.0f};
 
-                    float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-                    float g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-                    float b = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                    float random_r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                    float random_g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                    float random_b = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                    float max = 1.0f;
+                    float min = 0.8f;
+                    float range = max - min;
+
+                    float r = (random_r * range) + min;
+                    float g = (random_g * range) + min;
+                    float b = (random_b * range) + min;
 
                     vertex.color = {r, g, b, 1.0f};
 

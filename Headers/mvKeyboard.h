@@ -90,7 +90,7 @@ namespace mv
 
         std::bitset<n_keys> keystates;
         std::queue<Keyboard::Event> keybuffer;
-        std::queue<char> charbuffer;
+        std::queue<uint64_t> charbuffer;
     };
 };
 

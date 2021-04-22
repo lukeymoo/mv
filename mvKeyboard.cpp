@@ -70,7 +70,7 @@ namespace mv
 
     void Keyboard::clear_char(void)
     {
-        charbuffer = std::queue<char>();
+        charbuffer = std::queue<uint64_t>();
         return;
     }
 

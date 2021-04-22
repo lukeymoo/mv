@@ -24,15 +24,15 @@ namespace mv
             this->nearz = nearz;
             this->farz = farz;
             this->position = pos;
+
             rotation = glm::vec3(0.1f, 0.1f, 0.1f);
-            position = glm::vec3(1.0);
             view_position = glm::vec4(1.0);
             camera_front = glm::vec3(0.0f, 0.0f, -1.0f);
 
-            matrices.perspective = glm::perspective(glm::radians(fov), aspect, nearz, farz);
-            //matrices.perspective[1][1] *= -1.0f;
-
             update_view();
+
+            matrices.perspective = glm::perspective(glm::radians(fov), aspect, nearz, farz);
+            matrices.perspective[1][1] *= -1.0f;
         }
         ~Camera()
         {
@@ -73,11 +73,11 @@ namespace mv
             // TODO
             // add more camera modes
 
-            // freelook
             //matrices.view = translation_matrix * rotation_matrix;
-            // first person
+
             matrices.view = rotation_matrix * translation_matrix;
 
+            // debug rotation angles
             printf("Rotation angles => (%f, %f, %f)\n", rotation.x, rotation.y, rotation.z);
         }
 
@@ -96,8 +96,35 @@ namespace mv
         // rotation
         void rotate(glm::vec3 delta, float frame_delta)
         {
-            delta *= 0.02f;
-            this->rotation += (delta * frame_delta);
+            float speed_limit = 0.06f;
+            float to_apply_x = (delta.x * frame_delta * speed_limit);
+            float to_apply_y = (delta.y * frame_delta * speed_limit);
+
+            float upcoming_z = 0.0f;
+
+            float upcoming_x = rotation.x + to_apply_x;
+            float upcoming_y = rotation.y + to_apply_y;
+
+            if (abs(upcoming_x) >= 89.99f)
+            {
+                bool is_looking_up = (rotation.x > 0) ? true : false;
+                if (is_looking_up)
+                {
+                    to_apply_x = (89.99f - rotation.x);
+                    upcoming_x = rotation.x + to_apply_x;
+                    printf("looking up, delta difference => %f\n", to_apply_x);
+                }
+                else
+                {
+                    to_apply_x = -(rotation.x + 89.99f);
+                    upcoming_x = rotation.x + to_apply_x;
+                    printf("looking down, delta difference => %f\n", to_apply_x);
+                }
+            }
+
+            rotation.x = upcoming_x;
+            rotation.y = upcoming_y;
+            rotation.z = upcoming_z;
             update_view();
         }
 
