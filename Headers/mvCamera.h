@@ -10,28 +10,13 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+#include "mvModel.h"
 #include "mvBuffer.h"
 
 const float MOVESPEED = 0.005f;
 
 namespace mv
 {
-    struct Object
-    {
-        struct Matrices
-        {
-            alignas(16) glm::mat4 model;
-            alignas(16) glm::mat4 view;
-            alignas(16) glm::mat4 projection;
-        } matrices;
-
-        VkDescriptorSet descriptor_set;
-        mv::Buffer uniform_buffer; // contains the matrices
-        glm::vec3 rotation;
-        glm::vec3 position;
-        uint32_t model_index;
-    };
-
     typedef struct camera_init_struct
     {
         float fov = -1;

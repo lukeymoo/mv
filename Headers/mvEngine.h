@@ -4,7 +4,6 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
-
 #include "mvCamera.h"
 #include "mvWindow.h"
 #include "mvModel.h"
@@ -14,7 +13,6 @@ namespace mv
     class Engine : public mv::MWindow
     {
     public:
-        std::vector<Object> objects;
         std::vector<mv::Model> models;
 
         VkPipeline pipeline = nullptr;
@@ -53,9 +51,12 @@ namespace mv
             }
 
             // objects
-            for (auto &obj : objects)
+            for (auto &model : models)
             {
-                obj.uniform_buffer.destroy();
+                for (auto &obj : model.objects)
+                {
+                    obj.uniform_buffer.destroy();
+                }
             }
         }
 

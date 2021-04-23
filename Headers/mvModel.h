@@ -11,6 +11,22 @@ const std::string MODEL_PATH = "models/viking_room.obj";
 
 namespace mv
 {
+    struct Object
+    {
+        struct Matrices
+        {
+            alignas(16) glm::mat4 model;
+            alignas(16) glm::mat4 view;
+            alignas(16) glm::mat4 projection;
+        } matrices;
+
+        VkDescriptorSet descriptor_set;
+        mv::Buffer uniform_buffer; // contains the matrices
+        glm::vec3 rotation;
+        glm::vec3 position;
+        uint32_t model_index;
+    };
+
     struct Vertex
     {
         glm::vec4 position;
@@ -49,6 +65,16 @@ namespace mv
 
     class Model
     {
+    public:
+        // objects of this model type
+        std::vector<Object> objects;
+
+        void resize_object_container(uint32_t count)
+        {
+            objects.resize(count);
+            return;
+        }
+
     public:
         Model(){};
         ~Model()
@@ -103,7 +129,7 @@ namespace mv
             return;
         }
 
-        void load(mv::Device *dvc, const char* filename)
+        void load(mv::Device *dvc, const char *filename)
         {
             assert(dvc);
 
@@ -126,7 +152,6 @@ namespace mv
             // std::vector<uint32_t> t_indices = {
             //     0, 1, 2, 2, 3, 0,
             //     4, 5, 6, 6, 7, 4};
-
 
             // should be a square if aspect ratio is 1.0
             // std::vector<Vertex> t_vertices = {
@@ -156,9 +181,9 @@ namespace mv
                         attribute.vertices[3 * index.vertex_index + 2],
                         1.0f};
 
-                    float random_r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-                    float random_g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-                    float random_b = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                    float random_r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+                    float random_g = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+                    float random_b = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
                     float max = 1.0f;
                     float min = 0.8f;
                     float range = max - min;
@@ -186,19 +211,19 @@ namespace mv
 
             // create vertex buffer, load vertices data into it
             device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                 vertices.count * sizeof(Vertex),
-                                 &vertices.buffer,
-                                 &vertices.memory,
-                                 t_vertices.data());
+                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                  vertices.count * sizeof(Vertex),
+                                  &vertices.buffer,
+                                  &vertices.memory,
+                                  t_vertices.data());
 
             // create index buffer, load indices data into it
             device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                 indices.count * sizeof(uint32_t),
-                                 &indices.buffer,
-                                 &indices.memory,
-                                 t_indices.data());
+                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                  indices.count * sizeof(uint32_t),
+                                  &indices.buffer,
+                                  &indices.memory,
+                                  t_indices.data());
 
             // configure descriptor pool, layout, sets
             // std::vector<VkDescriptorPoolSize> poolSizes = {
