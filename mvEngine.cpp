@@ -105,17 +105,6 @@ void mv::Engine::go(void)
     std::cout << "[+] Preparing vulkan" << std::endl;
     prepare();
 
-    // configure camera before modes/uniform buffers
-    camera_init_struct camera_params;
-    camera_params.fov = 50.0f * (float)swapchain.swap_extent.width / swapchain.swap_extent.height;
-    camera_params.aspect = static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
-    camera_params.nearz = 0.01f;
-    camera_params.farz = 100.0f;
-    camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
-    camera_params.camera_type = Camera::Type::first_person;
-
-    camera = std::make_unique<Camera>(camera_params);
-
     // Initialze model types
     uint32_t model_type_count = 1;
 
@@ -135,6 +124,19 @@ void mv::Engine::go(void)
     models[0].resize_object_container(1);
     models[0].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f);
 
+    // configure camera before uniform buffer creation
+    camera_init_struct camera_params;
+    camera_params.fov = 50.0f * (float)swapchain.swap_extent.width / swapchain.swap_extent.height;
+    camera_params.aspect = static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
+    camera_params.nearz = 0.01f;
+    camera_params.farz = 100.0f;
+    camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
+
+    camera_params.camera_type = Camera::Type::third_person;
+    camera_params.target = &models[0].objects[0];
+
+    camera = std::make_unique<Camera>(camera_params);
+
     // Prepare uniforms
     prepare_uniforms();
 
@@ -142,8 +144,6 @@ void mv::Engine::go(void)
     // set each object model index to it's Model class container
     models[0].load(device, "models/player.obj");
 
-    // objects[1].model_index = 1; // horizontal grid
-    // models[1].load(device, "models/horizontal_grid.obj");
     create_descriptor_sets();
 
     prepare_pipeline();
@@ -207,8 +207,17 @@ void mv::Engine::go(void)
             camera->move_right(fpsdt);
         }
 
+        /*
+            Do object/uniform updates
+        */
+        camera->update();
+
+        // This will be reworked after uniform buffers are split
+        // There is no need to update the view & projection matrix for every single model
+        // Every object will share a projection matrix for the duration of a swap chains life
+        // The view matrix will be updated per frame
+        // the model matrix will be updated per object with push constants
         Object::Matrices tm;
-        //tm.view = camera->matrices.view;
         tm.view = camera->matrices.view;
         tm.projection = camera->matrices.perspective;
 
@@ -221,6 +230,7 @@ void mv::Engine::go(void)
             }
         }
 
+        // Render
         draw(currentFrame, imageIndex);
     }
     return;

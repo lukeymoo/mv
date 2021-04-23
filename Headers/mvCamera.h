@@ -25,6 +25,9 @@ namespace mv
         float farz = -1;
 
         int camera_type = 0;
+        // if camera type is third person
+        // the camera initalizer must be given an object as a target
+        Object *target = nullptr;
 
         glm::vec3 position = glm::vec3(1.0);
     } camera_init_struct;
@@ -41,6 +44,7 @@ namespace mv
         float farz = 100.0f;
         float nearz = 0.1f;
         float aspect = 0;
+        Object *target = nullptr;
 
     public:
         const glm::vec3 DEFAULT_UP_VECTOR = {0.0f, 1.0f, 0.0f};
@@ -63,12 +67,25 @@ namespace mv
             nearz = init_params.nearz;
             farz = init_params.farz;
             position = init_params.position;
+
             camera_type = (Type)init_params.camera_type;
+
+            // ensure target is given if type is third person
+            if (camera_type == Type::third_person)
+            {
+                if (init_params.target == nullptr)
+                {
+                    throw std::runtime_error("Camera type is specified as third person yet no target specified in initialization structure");
+                }
+
+                // set target
+                target = init_params.target;
+            }
 
             rotation = glm::vec3(0.1f, 0.1f, 0.1f);
             camera_front = glm::vec3(0.0f, 0.0f, -1.0f);
 
-            update_view();
+            update();
 
             matrices.perspective = glm::perspective(glm::radians(fov), aspect, nearz, farz);
             matrices.perspective[1][1] *= -1.0f;
@@ -108,8 +125,16 @@ namespace mv
             return camera_type;
         }
 
-        void update_view(void)
+        // Updates view matrix
+        void update(void)
         {
+            // Third person update view matrix origin to specified object target
+            if (camera_type == Camera::Type::third_person)
+            {
+                matrices.view = glm::lookAt(position, target->position, DEFAULT_UP_VECTOR);
+                return;
+            }
+
             glm::mat4 rotation_matrix = glm::mat4(1.0f);
             glm::mat4 translation_matrix = glm::mat4(1.0f);
 
@@ -120,15 +145,7 @@ namespace mv
 
             translation_matrix = glm::translate(glm::mat4(1.0), position);
 
-            // TODO
-            // add more camera modes
-
-            //matrices.view = translation_matrix * rotation_matrix;
-
             matrices.view = rotation_matrix * translation_matrix;
-
-            // debug rotation angles
-            // printf("Rotation angles => (%f, %f, %f)\n", rotation.x, rotation.y, rotation.z);
         }
 
         // calculate current camera front
@@ -173,7 +190,7 @@ namespace mv
             rotation.x = upcoming_x;
             rotation.y = upcoming_y;
             rotation.z = upcoming_z;
-            update_view();
+            update();
         }
 
         // vertical movement
@@ -181,14 +198,12 @@ namespace mv
         {
             get_front_face();
             position.y += MOVESPEED * frame_delta;
-            update_view();
             return;
         }
         void move_down(float frame_delta)
         {
             get_front_face();
             position.y -= MOVESPEED * frame_delta;
-            update_view();
             return;
         }
 
@@ -197,25 +212,21 @@ namespace mv
         {
             get_front_face();
             position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
-            update_view();
         }
         void move_right(float frame_delta)
         {
             get_front_face();
             position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
-            update_view();
         }
         void move_forward(float frame_delta)
         {
             get_front_face();
             position += camera_front * MOVESPEED * frame_delta;
-            update_view();
         }
         void move_backward(float frame_delta)
         {
             get_front_face();
             position -= camera_front * MOVESPEED * frame_delta;
-            update_view();
         }
 
         glm::vec3 get_position(void)

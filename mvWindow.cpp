@@ -872,7 +872,7 @@ void mv::MWindow::handle_x_event(void)
             XSendEvent(display, window, false, ExposureMask, &q);
         }
         kbd.on_key_press(static_cast<uint16_t>(key));
-        printf("Key pressed => %c :: %d\n", key, key);
+        //printf("Key pressed => %c :: %d\n", key, key);
         break;
     case KeyRelease:
         key = XLookupKeysym(&event.xkey, 0);
