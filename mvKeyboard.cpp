@@ -15,7 +15,7 @@ namespace mv
     /*
         Key events
     */
-    bool Keyboard::is_key_pressed(unsigned char keycode)
+    bool Keyboard::is_key_pressed(uint16_t keycode)
     {
         return keystates[keycode];
     }
@@ -86,7 +86,7 @@ namespace mv
     Generates events for our handler
     Manages buffer
 */
-    void Keyboard::on_key_press(unsigned char keycode)
+    void Keyboard::on_key_press(uint16_t keycode)
     {
         keystates[keycode] = true;
         keybuffer.push(Keyboard::Event(Keyboard::Event::Type::Press, keycode));
@@ -94,7 +94,7 @@ namespace mv
         return;
     }
 
-    void Keyboard::on_key_release(unsigned char keycode)
+    void Keyboard::on_key_release(uint16_t keycode)
     {
         keystates[keycode] = false;
         keybuffer.push(Keyboard::Event(Keyboard::Event::Type::Release, keycode));
@@ -102,7 +102,7 @@ namespace mv
         return;
     }
 
-    void Keyboard::on_char(unsigned char key)
+    void Keyboard::on_char(uint16_t key)
     {
         charbuffer.push(key);
         return;

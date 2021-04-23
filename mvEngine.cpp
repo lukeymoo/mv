@@ -106,20 +106,26 @@ void mv::Engine::go(void)
     prepare();
 
     // configure camera before modes/uniform buffers
-    camera = std::make_unique<Camera>(50.0f * (float)swapchain.swap_extent.width / swapchain.swap_extent.height,
-                                      static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height)),
-                                      0.1f, 100.0f,
-                                      glm::vec3(0.0f, 0.0f, 2.0f));
+    camera_init_struct camera_params;
+    camera_params.fov = 50.0f * (float)swapchain.swap_extent.width / swapchain.swap_extent.height;
+    camera_params.aspect =static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
+    camera_params.nearz = 0.01f;
+    camera_params.farz = 100.0f;
+    camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
+    camera_params.camera_type = Camera::Type::third_person;
+
+    camera = std::make_unique<Camera>(camera_params);
 
     models.resize(1);
     objects.resize(1); // models * count
 
     // Prepare uniforms
+    objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f);
     prepare_uniforms();
 
     // Load models
     objects[0].model_index = 0;
-    models[0].load(device, "models/car.obj");
+    models[0].load(device, "models/player.obj");
 
     // objects[1].model_index = 1; // horizontal grid
     // models[1].load(device, "models/horizontal_grid.obj");
@@ -147,12 +153,15 @@ void mv::Engine::go(void)
         Mouse::Event mouseEvent = mouse.read();
 
         // Handle input events
-        if (mouseEvent.get_type() == Mouse::Event::Type::Move)
+        if (camera->get_type() == Camera::Type::first_person)
         {
-            // get delta
-            std::pair<int, int> mouse_delta = mouse.get_pos_delta();
-            glm::vec3 rotation_delta = glm::vec3(mouse_delta.second, mouse_delta.first, 0.0f);
-            camera->rotate(rotation_delta, fpsdt);
+            if (mouseEvent.get_type() == Mouse::Event::Type::Move && mouse.is_in_window())
+            {
+                // get delta
+                std::pair<int, int> mouse_delta = mouse.get_pos_delta();
+                glm::vec3 rotation_delta = glm::vec3(mouse_delta.second, mouse_delta.first, 0.0f);
+                camera->rotate(rotation_delta, fpsdt);
+            }
         }
 
         // verticle movements
@@ -160,7 +169,7 @@ void mv::Engine::go(void)
         {
             camera->move_up(fpsdt);
         }
-        if (kbd.is_key_pressed(0xffe3)) // ctrl key
+        if (kbd.is_key_pressed(65507)) // ctrl key
         {
             camera->move_down(fpsdt);
         }
@@ -184,6 +193,7 @@ void mv::Engine::go(void)
         }
 
         Object::Matrices tm;
+        //tm.view = camera->matrices.view;
         tm.view = camera->matrices.view;
         tm.projection = camera->matrices.perspective;
 
@@ -200,22 +210,32 @@ void mv::Engine::go(void)
 
 void mv::Engine::prepare_uniforms(void)
 {
-    glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::mat4 rotation_matrix = glm::mat4(1.0);
-
-    rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-    rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-    rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-    glm::mat4 translation_matrix = glm::translate(glm::mat4(1.0), {0.0f, 0.0f, 0.0f});
-
+    // Prepare uniform buffer
     Object::Matrices tm;
-    tm.model = rotation_matrix * translation_matrix;
-    tm.view = camera->matrices.view;
+    // Configure projection, static at program launch for foreseeable future
     tm.projection = camera->matrices.perspective;
+
+    // configure view projection, per scene
+    tm.view = glm::lookAt(camera->get_position(), objects[0].position, camera->get_default_up_direction());
 
     for (auto &obj : objects)
     {
+        // set each model uniform
+        obj.matrices.view = tm.view;
+        obj.matrices.projection = tm.projection;
+
+        // configure model's world position
+        glm::mat4 translation_matrix = glm::translate(glm::mat4(1.0), obj.position); // use objects position
+        // configure model rotation
+        glm::mat4 rotation_matrix = glm::mat4(1.0);
+        rotation_matrix = glm::rotate(rotation_matrix, glm::radians(obj.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        rotation_matrix = glm::rotate(rotation_matrix, glm::radians(obj.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        rotation_matrix = glm::rotate(rotation_matrix, glm::radians(obj.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+        // model world matrix
+        tm.model = rotation_matrix * translation_matrix;
+        obj.matrices.model = tm.model;
+
         device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                               &obj.uniform_buffer,
@@ -224,11 +244,7 @@ void mv::Engine::prepare_uniforms(void)
         {
             throw std::runtime_error("Failed to map object uniform buffer");
         }
-    }
 
-    for (auto &obj : objects)
-    {
-        obj.matrices = tm;
         memcpy(obj.uniform_buffer.mapped, &tm, sizeof(Object::Matrices));
     }
     return;

@@ -10,23 +10,77 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+#include "mvBuffer.h"
+
 const float MOVESPEED = 0.005f;
 
 namespace mv
 {
+    struct Object
+    {
+        struct Matrices
+        {
+            alignas(16) glm::mat4 model;
+            alignas(16) glm::mat4 view;
+            alignas(16) glm::mat4 projection;
+        } matrices;
+
+        VkDescriptorSet descriptor_set;
+        mv::Buffer uniform_buffer; // contains the matrices
+        glm::vec3 rotation;
+        glm::vec3 position;
+        uint32_t model_index;
+    };
+
+    typedef struct camera_init_struct
+    {
+        float fov = -1;
+        float aspect = -1;
+        float nearz = -1;
+        float farz = -1;
+
+        int camera_type = 0;
+
+        glm::vec3 position = glm::vec3(1.0);
+    } camera_init_struct;
+
     class Camera
     {
+    protected:
+        glm::vec3 rotation = glm::vec3(0.1f, 0.1f, 0.1f);
+        glm::vec3 position = glm::vec3(1.0);
+        glm::vec3 camera_front = glm::vec3(0.0f, 0.0f, -1.0f);
+
+    private:
+        float fov = 50.0f;
+        float farz = 100.0f;
+        float nearz = 0.1f;
+        float aspect = 0;
+
     public:
-        Camera(float fov, float aspect, float nearz, float farz, glm::vec3 pos)
+        const glm::vec3 DEFAULT_UP_VECTOR = {0.0f, 1.0f, 0.0f};
+        const glm::vec3 DEFAULT_FORWARD_VECTOR = {0.0f, 0.0f, 1.0f};
+        const glm::vec3 DEFAULT_BACKWARD_VECTOR = {0.0f, 0.0f, -1.0f};
+        const glm::vec3 DEFAULT_LEFT_VECTOR = {-1.0f, 0.0f, 0.0f};
+        const glm::vec3 DEFAULT_RIGHT_VECTOR = {1.0f, 0.0f, 0.0f};
+
+    public:
+        // init object variables and configure the projection matrix & initial view matrix
+        Camera(camera_init_struct &init_params)
         {
-            this->fov = fov;
-            this->aspect = aspect;
-            this->nearz = nearz;
-            this->farz = farz;
-            this->position = pos;
+            assert(fov != -1);
+            assert(aspect != -1);
+            assert(nearz != -1);
+            assert(farz != -1);
+
+            fov = init_params.fov;
+            aspect = init_params.aspect;
+            nearz = init_params.nearz;
+            farz = init_params.farz;
+            position = init_params.position;
+            camera_type = (Type)init_params.camera_type;
 
             rotation = glm::vec3(0.1f, 0.1f, 0.1f);
-            view_position = glm::vec4(1.0);
             camera_front = glm::vec3(0.0f, 0.0f, -1.0f);
 
             update_view();
@@ -46,17 +100,28 @@ namespace mv
         bool has_init = false;
         enum Type
         {
-            free_look,
             first_person,
+            free_look,
             third_person
         };
-        Type camera_type = free_look;
+        Type camera_type = third_person;
 
         struct
         {
             glm::mat4 view = glm::mat4(1.0);
             glm::mat4 perspective = glm::mat4(1.0);
         } matrices;
+
+        glm::mat4 look_at_object(mv::Object object)
+        {
+            glm::mat4 r = glm::lookAt(get_position(), object.position, get_default_up_direction());
+            return r;
+        }
+
+        Type get_type(void)
+        {
+            return camera_type;
+        }
 
         void update_view(void)
         {
@@ -78,7 +143,7 @@ namespace mv
             matrices.view = rotation_matrix * translation_matrix;
 
             // debug rotation angles
-            printf("Rotation angles => (%f, %f, %f)\n", rotation.x, rotation.y, rotation.z);
+            // printf("Rotation angles => (%f, %f, %f)\n", rotation.x, rotation.y, rotation.z);
         }
 
         // calculate current camera front
@@ -105,20 +170,18 @@ namespace mv
             float upcoming_x = rotation.x + to_apply_x;
             float upcoming_y = rotation.y + to_apply_y;
 
-            if (abs(upcoming_x) >= 89.99f)
+            if (fabs(upcoming_x) >= 89.99f)
             {
                 bool is_looking_up = (rotation.x > 0) ? true : false;
                 if (is_looking_up)
                 {
                     to_apply_x = (89.99f - rotation.x);
                     upcoming_x = rotation.x + to_apply_x;
-                    printf("looking up, delta difference => %f\n", to_apply_x);
                 }
                 else
                 {
                     to_apply_x = -(rotation.x + 89.99f);
                     upcoming_x = rotation.x + to_apply_x;
-                    printf("looking down, delta difference => %f\n", to_apply_x);
                 }
             }
 
@@ -199,26 +262,6 @@ namespace mv
         {
             return DEFAULT_UP_VECTOR;
         }
-
-    protected:
-        glm::vec3 rotation = glm::vec3(0.1f, 0.1f, 0.1f);
-        glm::vec3 position = glm::vec3(1.0);
-        glm::vec4 view_position = glm::vec4(1.0);
-        glm::vec3 camera_front = glm::vec3(0.0f, 0.0f, -1.0f);
-
-    protected:
-    private:
-        float fov = 50.0f;
-        float farz = 100.0f;
-        float nearz = 0.1f;
-        float aspect = 0;
-
-    public:
-        const glm::vec3 DEFAULT_UP_VECTOR = {0.0f, 1.0f, 0.0f};
-        const glm::vec3 DEFAULT_FORWARD_VECTOR = {0.0f, 0.0f, 1.0f};
-        const glm::vec3 DEFAULT_BACKWARD_VECTOR = {0.0f, 0.0f, -1.0f};
-        const glm::vec3 DEFAULT_LEFT_VECTOR = {-1.0f, 0.0f, 0.0f};
-        const glm::vec3 DEFAULT_RIGHT_VECTOR = {1.0f, 0.0f, 0.0f};
     };
 };
 

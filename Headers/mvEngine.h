@@ -14,20 +14,6 @@ namespace mv
     class Engine : public mv::MWindow
     {
     public:
-        struct Object
-        {
-            struct Matrices
-            {
-                alignas(16) glm::mat4 model;
-                alignas(16) glm::mat4 view;
-                alignas(16) glm::mat4 projection;
-            } matrices;
-
-            VkDescriptorSet descriptor_set;
-            mv::Buffer uniform_buffer; // contains the matrices
-            glm::vec3 rotation;
-            uint32_t model_index;
-        };
         std::vector<Object> objects;
         std::vector<mv::Model> models;
 

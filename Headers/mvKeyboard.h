@@ -61,7 +61,7 @@ namespace mv
         ~Keyboard();
 
         /* Key event handling */
-        bool is_key_pressed(unsigned char keycode);
+        bool is_key_pressed(uint16_t keycode);
         Keyboard::Event read_key(void);
         bool is_key_empty(void);
         void clear_key(void);
@@ -76,16 +76,16 @@ namespace mv
 
     private:
         /* Handler */
-        void on_key_press(unsigned char keycode);
-        void on_key_release(unsigned char keycode);
-        void on_char(unsigned char key);
+        void on_key_press(uint16_t keycode);
+        void on_key_release(uint16_t keycode);
+        void on_char(uint16_t key);
         void clear_state(void);
 
         template <typename T>
         static void trim_buffer(std::queue<T> &buffer);
 
     private:
-        static constexpr unsigned int n_keys = 256u;
+        static constexpr unsigned int n_keys = 65536u;
         static constexpr unsigned int max_buffer_size = 16u;
 
         std::bitset<n_keys> keystates;

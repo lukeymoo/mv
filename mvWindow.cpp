@@ -36,7 +36,7 @@ mv::MWindow::MWindow(int w, int h, const char *title)
                                  WhitePixel(display, screen),
                                  BlackPixel(display, screen));
 
-    typedef struct
+    typedef struct Hints
     {
         unsigned long flags = 0;
         unsigned long functions = 0;
@@ -834,10 +834,12 @@ void mv::MWindow::handle_x_event(void)
     {
     case LeaveNotify:
     case FocusOut:
+        mouse.on_mouse_leave();
         XUngrabPointer(display, CurrentTime);
         break;
     case MapNotify:
     case EnterNotify:
+        mouse.on_mouse_enter();
         // confine cursor to interior of window
         // mouse is released on alt + tab
         XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
@@ -870,14 +872,14 @@ void mv::MWindow::handle_x_event(void)
             XSendEvent(display, window, false, ExposureMask, &q);
         }
         kbd.on_key_press(static_cast<unsigned char>(key));
-        printf("Key pressed => %c :: %d\n", key);
+        // printf("Key pressed => %c :: %d\n", key);
         break;
     case KeyRelease:
         key = XLookupKeysym(&event.xkey, 0);
         kbd.on_key_release(static_cast<unsigned char>(key));
         break;
     case MotionNotify:
-        printf("Mouse movement (%d, %d)\n", event.xmotion.x, event.xmotion.y);
+        // printf("Mouse movement (%d, %d)\n", event.xmotion.x, event.xmotion.y);
         mouse.on_mouse_move(event.xmotion.x, event.xmotion.y);
     case Expose:
         break;
