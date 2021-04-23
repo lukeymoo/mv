@@ -112,7 +112,7 @@ void mv::Engine::go(void)
     camera_params.nearz = 0.01f;
     camera_params.farz = 100.0f;
     camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
-    camera_params.camera_type = Camera::Type::third_person;
+    camera_params.camera_type = Camera::Type::first_person;
 
     camera = std::make_unique<Camera>(camera_params);
 

@@ -30,7 +30,7 @@ namespace mv
                 : type(Event::Type::Invalid), code(0)
             {
             }
-            Event(Event::Type t, unsigned char c) noexcept
+            Event(Event::Type t, uint16_t c) noexcept
                 : type(t), code(c)
             {
             }

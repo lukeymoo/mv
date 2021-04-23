@@ -871,12 +871,12 @@ void mv::MWindow::handle_x_event(void)
             XEvent q = create_event("WM_DELETE_WINDOW");
             XSendEvent(display, window, false, ExposureMask, &q);
         }
-        kbd.on_key_press(static_cast<unsigned char>(key));
-        // printf("Key pressed => %c :: %d\n", key);
+        kbd.on_key_press(static_cast<uint16_t>(key));
+        printf("Key pressed => %c :: %d\n", key, key);
         break;
     case KeyRelease:
         key = XLookupKeysym(&event.xkey, 0);
-        kbd.on_key_release(static_cast<unsigned char>(key));
+        kbd.on_key_release(static_cast<uint16_t>(key));
         break;
     case MotionNotify:
         // printf("Mouse movement (%d, %d)\n", event.xmotion.x, event.xmotion.y);
