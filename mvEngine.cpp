@@ -106,7 +106,7 @@ void mv::Engine::go(void)
     prepare();
 
     // Initialze model types
-    uint32_t model_type_count = 1;
+    uint32_t model_type_count = 2;
 
     models.resize(model_type_count);
 
@@ -122,7 +122,12 @@ void mv::Engine::go(void)
     // configure every OBJECTs position, rotation BEFORE uniform buffer creation
     // the OBJECTs count will be set by a map editor of some sort later
     models[0].resize_object_container(1);
+    models[1].resize_object_container(1);
+    models[0].objects[0].position = glm::vec3(0.0f, 0.0f, 0.0f);
     models[0].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f);
+
+    models[1].objects[0].position = glm::vec3(0.0f, 0.0f, -5.0f);
+    models[1].objects[0].rotation = glm::vec3(0.0f, 0.0f, 0.0f);
 
     // configure camera before uniform buffer creation
     camera_init_struct camera_params;
@@ -143,6 +148,7 @@ void mv::Engine::go(void)
     // Load models
     // set each object model index to it's Model class container
     models[0].load(device, "models/player.obj");
+    models[1].load(device, "models/car.obj");
 
     create_descriptor_sets();
 
@@ -179,37 +185,58 @@ void mv::Engine::go(void)
             }
         }
 
-        // verticle movements
-        if (kbd.is_key_pressed(' ')) // space
+        // First person
+        if (camera->get_type() == Camera::Type::first_person)
         {
-            camera->move_up(fpsdt);
-        }
-        if (kbd.is_key_pressed(65507)) // ctrl key
-        {
-            camera->move_down(fpsdt);
-        }
+            if (kbd.is_key_pressed(' ')) // space
+            {
+                camera->move_up(fpsdt);
+            }
+            if (kbd.is_key_pressed(65507)) // ctrl key
+            {
+                camera->move_down(fpsdt);
+            }
 
-        // lateral movements
-        if (kbd.is_key_pressed('w'))
-        {
-            camera->move_forward(fpsdt);
+            // lateral movements
+            if (kbd.is_key_pressed('w'))
+            {
+                camera->move_forward(fpsdt);
+            }
+            if (kbd.is_key_pressed('a'))
+            {
+                camera->move_left(fpsdt);
+            }
+            if (kbd.is_key_pressed('s'))
+            {
+                camera->move_backward(fpsdt);
+            }
+            if (kbd.is_key_pressed('d'))
+            {
+                camera->move_right(fpsdt);
+            }
         }
-        if (kbd.is_key_pressed('a'))
+        if (camera->get_type() == Camera::Type::third_person)
         {
-            camera->move_left(fpsdt);
-        }
-        if (kbd.is_key_pressed('s'))
-        {
-            camera->move_backward(fpsdt);
-        }
-        if (kbd.is_key_pressed('d'))
-        {
-            camera->move_right(fpsdt);
+            if (kbd.is_key_pressed('a'))
+            {
+                camera->target->move_left(fpsdt);
+            }
+            if (kbd.is_key_pressed('d'))
+            {
+                camera->target->move_right(fpsdt);
+            }
         }
 
         /*
             Do object/uniform updates
         */
+        for (auto &model : models)
+        {
+            for (auto &obj : model.objects)
+            {
+                obj.update();
+            }
+        }
         camera->update();
 
         // This will be reworked after uniform buffers are split
@@ -218,8 +245,8 @@ void mv::Engine::go(void)
         // The view matrix will be updated per frame
         // the model matrix will be updated per object with push constants
         Object::Matrices tm;
-        tm.view = camera->matrices.view;
-        tm.projection = camera->matrices.perspective;
+        tm.view = camera->get_view();
+        tm.projection = camera->get_projection();
 
         for (auto &model : models)
         {
@@ -238,33 +265,19 @@ void mv::Engine::go(void)
 
 void mv::Engine::prepare_uniforms(void)
 {
-    // Prepare uniform buffer
     Object::Matrices tm;
-    // Configure projection, static at program launch for foreseeable future
-    tm.projection = camera->matrices.perspective;
-
-    // configure view projection, per scene
-    tm.view = glm::lookAt(camera->get_position(), models[0].objects[0].position, camera->get_default_up_direction());
+    tm.model = glm::mat4(1.0f);
+    tm.view = camera->get_view();
+    tm.projection = camera->get_projection();
 
     for (auto &model : models)
     {
         for (auto &obj : model.objects)
         {
             // set each model uniform
+            obj.matrices.model = tm.model;
             obj.matrices.view = tm.view;
             obj.matrices.projection = tm.projection;
-
-            // configure model's world position
-            glm::mat4 translation_matrix = glm::translate(glm::mat4(1.0), obj.position); // use objects position
-            // configure model rotation
-            glm::mat4 rotation_matrix = glm::mat4(1.0);
-            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(obj.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(obj.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(obj.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-            // model world matrix
-            tm.model = rotation_matrix * translation_matrix;
-            obj.matrices.model = tm.model;
 
             device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,

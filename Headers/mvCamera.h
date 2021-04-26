@@ -13,8 +13,6 @@
 #include "mvModel.h"
 #include "mvBuffer.h"
 
-const float MOVESPEED = 0.005f;
-
 namespace mv
 {
     typedef struct camera_init_struct
@@ -44,14 +42,16 @@ namespace mv
         float farz = 100.0f;
         float nearz = 0.1f;
         float aspect = 0;
-        Object *target = nullptr;
 
     public:
         const glm::vec3 DEFAULT_UP_VECTOR = {0.0f, 1.0f, 0.0f};
+        const glm::vec3 DEFAULT_DOWN_VECTOR = {0.0f, -1.0f, 0.0f};
         const glm::vec3 DEFAULT_FORWARD_VECTOR = {0.0f, 0.0f, 1.0f};
         const glm::vec3 DEFAULT_BACKWARD_VECTOR = {0.0f, 0.0f, -1.0f};
         const glm::vec3 DEFAULT_LEFT_VECTOR = {-1.0f, 0.0f, 0.0f};
         const glm::vec3 DEFAULT_RIGHT_VECTOR = {1.0f, 0.0f, 0.0f};
+
+        Object *target = nullptr;
 
     public:
         // init object variables and configure the projection matrix & initial view matrix
@@ -82,7 +82,7 @@ namespace mv
                 target = init_params.target;
             }
 
-            rotation = glm::vec3(0.1f, 0.1f, 0.1f);
+            rotation = glm::vec3(0.01f, 0.01f, 0.01f);
             camera_front = glm::vec3(0.0f, 0.0f, -1.0f);
 
             update();
@@ -131,9 +131,16 @@ namespace mv
             // Third person update view matrix origin to specified object target
             if (camera_type == Camera::Type::third_person)
             {
-                matrices.view = glm::lookAt(position, target->position, DEFAULT_UP_VECTOR);
+                set_position(glm::vec3(target->position.x, target->position.y, target->position.z));
+
+                //matrices.view = glm::lookAt(position, target->position, DEFAULT_UP_VECTOR);
+
+                matrices.view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y - 5.0f, position.z + 6.0f)));
+                matrices.view = glm::rotate(matrices.view, glm::radians(-20.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                 return;
             }
+
+            printf("Camera Position => (%f, %f, %f)\n", position.x, position.y, position.z);
 
             glm::mat4 rotation_matrix = glm::mat4(1.0f);
             glm::mat4 translation_matrix = glm::mat4(1.0f);
@@ -190,19 +197,16 @@ namespace mv
             rotation.x = upcoming_x;
             rotation.y = upcoming_y;
             rotation.z = upcoming_z;
-            update();
         }
 
         // vertical movement
         void move_up(float frame_delta)
         {
-            get_front_face();
             position.y += MOVESPEED * frame_delta;
             return;
         }
         void move_down(float frame_delta)
         {
-            get_front_face();
             position.y -= MOVESPEED * frame_delta;
             return;
         }
@@ -248,6 +252,16 @@ namespace mv
             matrices.perspective = glm::perspective(glm::radians(fov), aspect, nearz, farz);
             matrices.perspective[1][1] *= -1.0f;
             return;
+        }
+
+        glm::mat4 get_view(void)
+        {
+            return matrices.view;
+        }
+
+        glm::mat4 get_projection(void)
+        {
+            return matrices.perspective;
         }
 
         glm::vec3 get_default_up_direction(void)
