@@ -134,15 +134,14 @@ namespace mv
         // Updates view matrix
         void update(void)
         {
-            // Third person update view matrix origin to specified object target
+            /*
+                ---------------------
+                Third person update
+                ---------------------
+            */
             if (camera_type == Camera::Type::third_person)
             {
                 set_position(glm::vec3(target->position.x, target->position.y, target->position.z));
-
-                //matrices.view = glm::lookAt(position, target->position, DEFAULT_UP_VECTOR);
-                // float pitch = 0.0f;
-                // float orbit_angle = 0.0f;
-                // float zoom_level = 0.0f;
 
                 // angle around player
                 glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f), glm::radians(orbit_angle), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -158,8 +157,16 @@ namespace mv
                 matrices.view = glm::inverse(matrices.view);
                 return;
             }
-
-            printf("Camera Position => (%f, %f, %f)\n", position.x, position.y, position.z);
+            /*
+                --------------------------
+                End third person update
+                --------------------------
+            */
+            /*
+                --------------------------
+                First person update
+                --------------------------
+           */
 
             glm::mat4 rotation_matrix = glm::mat4(1.0f);
             glm::mat4 translation_matrix = glm::mat4(1.0f);
@@ -175,7 +182,9 @@ namespace mv
         }
 
         /*
+            -----------------------------
             Third person camera functions
+            -----------------------------
         */
         void increase_pitch(float frame_delta)
         {
@@ -202,8 +211,16 @@ namespace mv
             orbit_angle += 0.1f * frame_delta;
             return;
         }
-
-        // calculate current camera front
+        /*
+            -----------------------
+            End third person camera
+            -----------------------
+        */
+        /*
+            -------------------
+            First person camera
+            -------------------
+        */
         void get_front_face(void)
         {
             glm::vec3 fr;
@@ -214,8 +231,6 @@ namespace mv
 
             camera_front = fr;
         }
-
-        // rotation
         void rotate(glm::vec3 delta, float frame_delta)
         {
             float speed_limit = 0.06f;
@@ -246,8 +261,6 @@ namespace mv
             rotation.y = upcoming_y;
             rotation.z = upcoming_z;
         }
-
-        // vertical movement
         void move_up(float frame_delta)
         {
             position.y += MOVESPEED * frame_delta;
@@ -258,8 +271,6 @@ namespace mv
             position.y -= MOVESPEED * frame_delta;
             return;
         }
-
-        // lateral movement
         void move_left(float frame_delta)
         {
             get_front_face();
@@ -280,6 +291,11 @@ namespace mv
             get_front_face();
             position -= camera_front * MOVESPEED * frame_delta;
         }
+        /*
+            -----------------------
+            End first person camera
+            -----------------------
+        */
 
         glm::vec3 get_position(void)
         {

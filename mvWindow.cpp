@@ -841,8 +841,8 @@ void mv::MWindow::handle_x_event(void)
     case EnterNotify:
         mouse.on_mouse_enter();
         // confine cursor to interior of window
-        // mouse is released on alt + tab
-        //XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
+        // mouse released on focus out or cursor leaving window
+        XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
         break;
     case ButtonPress:
         if (event.xbutton.button == Button1)
