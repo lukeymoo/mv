@@ -841,7 +841,7 @@ void mv::MWindow::handle_x_event(void)
     case EnterNotify:
         mouse.on_mouse_enter();
         // confine cursor to interior of window
-        // mouse is released on alt + tab
+        // mouse released on focus out or cursor leaving window
         XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
         break;
     case ButtonPress:
@@ -872,7 +872,7 @@ void mv::MWindow::handle_x_event(void)
             XSendEvent(display, window, false, ExposureMask, &q);
         }
         kbd.on_key_press(static_cast<uint16_t>(key));
-        printf("Key pressed => %c :: %d\n", key, key);
+        //printf("Key pressed => %c :: %d\n", key, key);
         break;
     case KeyRelease:
         key = XLookupKeysym(&event.xkey, 0);

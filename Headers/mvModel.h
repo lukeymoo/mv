@@ -2,12 +2,20 @@
 #define HEADERS_MVMODEL_H_
 
 #include <vulkan/vulkan.h>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
+
 #include "tiny_loader.h"
 
 #include "mvDevice.h"
 
 const std::string MODEL_PATH = "models/viking_room.obj";
+const float MOVESPEED = 0.005f;
 
 namespace mv
 {
@@ -25,6 +33,54 @@ namespace mv
         glm::vec3 rotation;
         glm::vec3 position;
         uint32_t model_index;
+        glm::vec3 front_face;
+
+        void update(void)
+        {
+            glm::mat4 translation_matrix = glm::translate(glm::mat4(1.0), position);
+
+            glm::mat4 rotation_matrix = glm::mat4(1.0);
+            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+            matrices.model = rotation_matrix * translation_matrix;
+        }
+
+        void get_front_face(void)
+        {
+            glm::vec3 fr;
+            fr.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
+            fr.y = sin(glm::radians(rotation.x));
+            fr.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
+            fr = glm::normalize(fr);
+
+            front_face = fr;
+            return;
+        }
+
+        void move_left(float frame_delta)
+        {
+            get_front_face();
+            position -= glm::normalize(glm::cross(front_face, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
+            return;
+        }
+        void move_right(float frame_delta)
+        {
+            get_front_face();
+            position += glm::normalize(glm::cross(front_face, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
+            return;
+        }
+        void move_forward(float frame_delta)
+        {
+            get_front_face();
+            return;
+        }
+        void move_backward(float frame_delta)
+        {
+            get_front_face();
+            return;
+        }
     };
 
     struct Vertex
