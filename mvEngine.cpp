@@ -306,6 +306,10 @@ void mv::Engine::prepare_uniforms(void)
 
 void mv::Engine::create_descriptor_sets(bool should_create_layout)
 {
+    // Will create three seperate UBOs
+    // Model matrix buffer which will be updated via push constants
+    // View matrix buffer which will be updated push constants
+    // Projection matrix which will be updated via memcpy or via Vulkan API calls
     if (should_create_layout)
     {
         // create layout
