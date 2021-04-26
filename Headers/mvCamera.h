@@ -51,7 +51,13 @@ namespace mv
         const glm::vec3 DEFAULT_LEFT_VECTOR = {-1.0f, 0.0f, 0.0f};
         const glm::vec3 DEFAULT_RIGHT_VECTOR = {1.0f, 0.0f, 0.0f};
 
+        /*
+            Third person camera params
+        */
         Object *target = nullptr;
+        float pitch = 45.0f;
+        float orbit_angle = 0.0f;
+        float zoom_level = 10.0f;
 
     public:
         // init object variables and configure the projection matrix & initial view matrix
@@ -134,9 +140,22 @@ namespace mv
                 set_position(glm::vec3(target->position.x, target->position.y, target->position.z));
 
                 //matrices.view = glm::lookAt(position, target->position, DEFAULT_UP_VECTOR);
+                // float pitch = 0.0f;
+                // float orbit_angle = 0.0f;
+                // float zoom_level = 0.0f;
 
-                matrices.view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y - 5.0f, position.z + 6.0f)));
-                matrices.view = glm::rotate(matrices.view, glm::radians(-20.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                // angle around player
+                glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f), glm::radians(orbit_angle), glm::vec3(0.0f, 1.0f, 0.0f));
+                // camera pitch angle(should point to target)
+                glm::mat4 x_mat = glm::rotate(glm::mat4(1.0f), glm::radians(pitch), glm::vec3(1.0f, 0.0f, 0.0f));
+
+                glm::mat4 rotation_matrix = y_mat * x_mat;
+
+                glm::mat4 target_mat = glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y, position.z));
+                glm::mat4 distance_mat = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, zoom_level));
+
+                matrices.view = rotation_matrix * target_mat * distance_mat;
+                matrices.view = glm::inverse(matrices.view);
                 return;
             }
 
@@ -153,6 +172,35 @@ namespace mv
             translation_matrix = glm::translate(glm::mat4(1.0), position);
 
             matrices.view = rotation_matrix * translation_matrix;
+        }
+
+        /*
+            Third person camera functions
+        */
+        void increase_pitch(float frame_delta)
+        {
+            zoom_level += 0.01f * frame_delta;
+            pitch += 0.01f * frame_delta;
+            return;
+        }
+
+        void decrease_pitch(float frame_delta)
+        {
+            zoom_level -= 0.01f * frame_delta;
+            pitch -= 0.01f * frame_delta;
+            return;
+        }
+
+        void decrease_orbit(float frame_delta)
+        {
+            orbit_angle -= 0.1f * frame_delta;
+            return;
+        }
+
+        void increase_orbit(float frame_delta)
+        {
+            orbit_angle += 0.1f * frame_delta;
+            return;
         }
 
         // calculate current camera front

@@ -131,7 +131,7 @@ void mv::Engine::go(void)
 
     // configure camera before uniform buffer creation
     camera_init_struct camera_params;
-    camera_params.fov = 50.0f * (float)swapchain.swap_extent.width / swapchain.swap_extent.height;
+    camera_params.fov = 50.0f * ((float)swapchain.swap_extent.width / swapchain.swap_extent.height);
     camera_params.aspect = static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
     camera_params.nearz = 0.01f;
     camera_params.farz = 100.0f;
@@ -217,13 +217,23 @@ void mv::Engine::go(void)
         }
         if (camera->get_type() == Camera::Type::third_person)
         {
+            if (kbd.is_key_pressed('w'))
+            {
+                camera->decrease_pitch(fpsdt);
+            }
+            if (kbd.is_key_pressed('s'))
+            {
+                camera->increase_pitch(fpsdt);
+            }
             if (kbd.is_key_pressed('a'))
             {
-                camera->target->move_left(fpsdt);
+                // change camera orbit angle
+                camera->decrease_orbit(fpsdt); // counter clockwise rotation
             }
             if (kbd.is_key_pressed('d'))
             {
-                camera->target->move_right(fpsdt);
+                // change camera orbit angle
+                camera->increase_orbit(fpsdt); // clockwise rotation
             }
         }
 
