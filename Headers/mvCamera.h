@@ -188,27 +188,51 @@ namespace mv
         */
         void increase_pitch(float frame_delta)
         {
-            zoom_level += 0.01f * frame_delta;
-            pitch += 0.01f * frame_delta;
+            float f_zoom = zoom_level - (0.01f * frame_delta);
+            if (f_zoom < 20.0f)
+            {
+                zoom_level += 0.01f * frame_delta;
+                pitch += 0.01f * frame_delta;
+            }
             return;
         }
 
         void decrease_pitch(float frame_delta)
         {
-            zoom_level -= 0.01f * frame_delta;
-            pitch -= 0.01f * frame_delta;
+            float f_zoom = zoom_level - (0.01f * frame_delta);
+            if (f_zoom > 3.4f)
+            {
+                zoom_level -= 0.01f * frame_delta;
+                pitch -= 0.01f * frame_delta;
+            }
             return;
         }
 
         void decrease_orbit(float frame_delta)
         {
-            orbit_angle -= 0.1f * frame_delta;
+            // keep orbit value in range of 0.0f -> 359.9f
+            // larger floats lose accuracy
+            float f_orbit = orbit_angle - (0.1f * frame_delta);
+            if (f_orbit < 0.0f)
+            {
+                f_orbit = 359.9f;
+            }
+            orbit_angle = f_orbit;
+            //orbit_angle -= 0.1f * frame_delta;
             return;
         }
 
         void increase_orbit(float frame_delta)
         {
-            orbit_angle += 0.1f * frame_delta;
+            // keep orbit value in range of 0.0f -> 359.9f
+            // larger floats lose accuracy
+            float f_orbit = orbit_angle + (0.1f * frame_delta);
+            if (f_orbit >= 360.0f)
+            {
+                f_orbit = 0.0f;
+            }
+            orbit_angle = f_orbit;
+            //orbit_angle += 0.1f * frame_delta;
             return;
         }
         /*
