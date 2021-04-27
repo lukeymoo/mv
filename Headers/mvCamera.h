@@ -17,6 +17,9 @@ namespace mv
 {
     typedef struct camera_init_struct
     {
+        // ptr to view & projection matrices
+        GlobalUniforms *matrices = nullptr;
+
         float fov = -1;
         float aspect = -1;
         float nearz = -1;
@@ -42,6 +45,8 @@ namespace mv
         float farz = 100.0f;
         float nearz = 0.1f;
         float aspect = 0;
+
+        GlobalUniforms *matrices = nullptr;
 
     public:
         const glm::vec3 DEFAULT_UP_VECTOR = {0.0f, 1.0f, 0.0f};
@@ -73,8 +78,15 @@ namespace mv
             nearz = init_params.nearz;
             farz = init_params.farz;
             position = init_params.position;
+            matrices = init_params.matrices;
 
             camera_type = (Type)init_params.camera_type;
+
+            // ensure matrices specified
+            if (init_params.matrices == nullptr)
+            {
+                throw std::runtime_error("No view & projection matrices object specified in camera init struct");
+            }
 
             // ensure target is given if type is third person
             if (camera_type == Type::third_person)
@@ -93,8 +105,13 @@ namespace mv
 
             update();
 
-            matrices.perspective = glm::perspective(glm::radians(fov), aspect, nearz, farz);
-            matrices.perspective[1][1] *= -1.0f;
+            matrices->projection = glm::perspective(glm::radians(fov), aspect, nearz, farz);
+            matrices->projection[1][1] *= -1.0f;
+
+            // TODO
+            // add non host visible/coherent update support
+            // update projection matrix buffer
+            memcpy(matrices->ubo_projection.mapped, &matrices->projection, sizeof(matrices->projection));
         }
         ~Camera()
         {
@@ -114,11 +131,15 @@ namespace mv
         };
         Type camera_type = third_person;
 
-        struct
-        {
-            glm::mat4 view = glm::mat4(1.0);
-            glm::mat4 perspective = glm::mat4(1.0);
-        } matrices;
+        // MOVED
+        // these matrices are now stored in GlobalUniforms object passed
+        // to the camera object upon creation
+        // 
+        // struct
+        // {
+        //     glm::mat4 view = glm::mat4(1.0);
+        //     glm::mat4 perspective = glm::mat4(1.0);
+        // } local_matrices;
 
         glm::mat4 look_at_object(mv::Object object)
         {
@@ -144,17 +165,26 @@ namespace mv
                 set_position(glm::vec3(target->position.x, target->position.y, target->position.z));
 
                 // angle around player
-                glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f), glm::radians(orbit_angle), glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f), glm::radians(orbit_angle + target->rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
                 // camera pitch angle(should point to target)
                 glm::mat4 x_mat = glm::rotate(glm::mat4(1.0f), glm::radians(pitch), glm::vec3(1.0f, 0.0f, 0.0f));
 
                 glm::mat4 rotation_matrix = y_mat * x_mat;
 
+                glm::mat4 origin_translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
                 glm::mat4 target_mat = glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y, position.z));
                 glm::mat4 distance_mat = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, zoom_level));
 
-                matrices.view = rotation_matrix * target_mat * distance_mat;
-                matrices.view = glm::inverse(matrices.view);
+                // Move origin to TARGET
+                // THEN rotate about new origin
+                // then translate from new origin zoom_level distance
+                matrices->view = target_mat * rotation_matrix * distance_mat;
+                matrices->view = glm::inverse(matrices->view);
+
+                // TODO
+                // add non host visible/coherent buffer update support
+                // update gpu uniform for view
+                memcpy(matrices->ubo_view.mapped, &matrices->view, sizeof(matrices->view));
                 return;
             }
             /*
@@ -178,7 +208,7 @@ namespace mv
 
             translation_matrix = glm::translate(glm::mat4(1.0), position);
 
-            matrices.view = rotation_matrix * translation_matrix;
+            matrices->view = rotation_matrix * translation_matrix;
         }
 
         /*
@@ -188,27 +218,51 @@ namespace mv
         */
         void increase_pitch(float frame_delta)
         {
-            zoom_level += 0.01f * frame_delta;
-            pitch += 0.01f * frame_delta;
+            float f_zoom = zoom_level - (0.01f * frame_delta);
+            if (f_zoom < 20.0f)
+            {
+                zoom_level += 0.01f * frame_delta;
+                pitch += 0.01f * frame_delta;
+            }
             return;
         }
 
         void decrease_pitch(float frame_delta)
         {
-            zoom_level -= 0.01f * frame_delta;
-            pitch -= 0.01f * frame_delta;
+            float f_zoom = zoom_level - (0.01f * frame_delta);
+            if (f_zoom > 3.4f)
+            {
+                zoom_level -= 0.01f * frame_delta;
+                pitch -= 0.01f * frame_delta;
+            }
             return;
         }
 
         void decrease_orbit(float frame_delta)
         {
-            orbit_angle -= 0.1f * frame_delta;
+            // keep orbit value in range of 0.0f -> 359.9f
+            // larger floats lose accuracy
+            float f_orbit = orbit_angle - (0.1f * frame_delta);
+            if (f_orbit < 0.0f)
+            {
+                f_orbit = 359.9f;
+            }
+            orbit_angle = f_orbit;
+            //orbit_angle -= 0.1f * frame_delta;
             return;
         }
 
         void increase_orbit(float frame_delta)
         {
-            orbit_angle += 0.1f * frame_delta;
+            // keep orbit value in range of 0.0f -> 359.9f
+            // larger floats lose accuracy
+            float f_orbit = orbit_angle + (0.1f * frame_delta);
+            if (f_orbit >= 360.0f)
+            {
+                f_orbit = 0.0f;
+            }
+            orbit_angle = f_orbit;
+            //orbit_angle += 0.1f * frame_delta;
             return;
         }
         /*
@@ -308,24 +362,26 @@ namespace mv
             return;
         }
 
-        void set_perspective(float fv, float aspect, float nz, float fz)
+        void set_projection(float fv, float aspect, float nz, float fz)
         {
             fov = fv;
             nearz = nz;
             farz = fz;
-            matrices.perspective = glm::perspective(glm::radians(fov), aspect, nearz, farz);
-            matrices.perspective[1][1] *= -1.0f;
+            matrices->projection = glm::perspective(glm::radians(fov), aspect, nearz, farz);
+            matrices->projection[1][1] *= -1.0f;
+
+            memcpy(matrices->ubo_projection.mapped, &matrices->projection, sizeof(matrices->projection));
             return;
         }
 
         glm::mat4 get_view(void)
         {
-            return matrices.view;
+            return matrices->view;
         }
 
         glm::mat4 get_projection(void)
         {
-            return matrices.perspective;
+            return matrices->projection;
         }
 
         glm::vec3 get_default_up_direction(void)

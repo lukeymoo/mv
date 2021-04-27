@@ -19,17 +19,28 @@ const float MOVESPEED = 0.005f;
 
 namespace mv
 {
+    struct GlobalUniforms
+    {
+        alignas(16) glm::mat4 view;
+        alignas(16) glm::mat4 projection;
+
+        mv::Buffer ubo_view;
+        mv::Buffer ubo_projection;
+        VkDescriptorSet view_descriptor_set;
+        VkDescriptorSet proj_descriptor_set;
+    };
+
     struct Object
     {
         struct Matrices
         {
             alignas(16) glm::mat4 model;
-            alignas(16) glm::mat4 view;
-            alignas(16) glm::mat4 projection;
+            // TODO
+            // uv, texture, normals
         } matrices;
 
         VkDescriptorSet descriptor_set;
-        mv::Buffer uniform_buffer; // contains the matrices
+        mv::Buffer uniform_buffer;
         glm::vec3 rotation;
         glm::vec3 position;
         uint32_t model_index;

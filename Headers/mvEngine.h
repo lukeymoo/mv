@@ -19,7 +19,9 @@ namespace mv
         VkPipelineLayout pipeline_layout = nullptr;
 
         VkDescriptorPool descriptor_pool = nullptr;
-        VkDescriptorSetLayout descriptor_layout = nullptr;
+        VkDescriptorSetLayout model_layout = nullptr;
+        VkDescriptorSetLayout view_layout = nullptr;
+        VkDescriptorSetLayout projection_layout = nullptr;
 
         Engine &operator=(const Engine &) = delete;
         Engine(const Engine &) = delete;
@@ -45,9 +47,17 @@ namespace mv
             }
 
             // cleanup layout
-            if (descriptor_layout)
+            if (model_layout)
             {
-                vkDestroyDescriptorSetLayout(device->device, descriptor_layout, nullptr);
+                vkDestroyDescriptorSetLayout(device->device, model_layout, nullptr);
+            }
+            if (view_layout)
+            {
+                vkDestroyDescriptorSetLayout(device->device, view_layout, nullptr);
+            }
+            if (projection_layout)
+            {
+                vkDestroyDescriptorSetLayout(device->device, projection_layout, nullptr);
             }
 
             // objects
@@ -60,6 +70,9 @@ namespace mv
             }
         }
 
+        // contains view & projection matrix data
+        // as well as mv buffer objects for both
+        GlobalUniforms global_uniforms;
         std::unique_ptr<Camera> camera;
 
         void recreate_swapchain(void);
@@ -70,7 +83,7 @@ namespace mv
 
     protected:
         void prepare_uniforms(void);
-        void create_descriptor_sets(bool should_create_layout = true);
+        void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);
         void prepare_pipeline(void);
         void cleanup_swapchain(void);
     };
