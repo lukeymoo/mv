@@ -55,10 +55,28 @@ namespace mv
         }
 
         /*
-            Initializes allocator
+            Initializes allocator with 1 of each specified type
         */
-        void init(void)
+        void init(VkDescriptorType *types, uint32_t type_count)
         {
+            for (uint32_t i = 0; i < type_count; i++)
+            {
+                if (types[i] == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+                {
+                    // for testing purposes this number will be very low to test how well it handles allocation reqs
+                    // default 2000 max sets for uniform buffer
+                    cleared_pools.push_back(allocate_pool(types[i], 2000));
+                }
+                if (types[i] == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                {
+                    // will allocate few max sets depending on how textures are structured in app
+                    throw std::runtime_error("Unsupported descriptor type requested from allocator, sorry");
+                }
+                if (types[i] == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT)
+                {
+                    throw std::runtime_error("Unsupported descriptor type requested from allocator, sorry");
+                }
+            }
             return;
         }
 
