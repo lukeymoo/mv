@@ -63,6 +63,7 @@ void mv::Engine::cleanup_swapchain(void)
 
     // cleanup swapchain
     swapchain.cleanup(false);
+
     return;
 }
 
@@ -182,7 +183,7 @@ void mv::Engine::go(void)
     // Create pipeline and tie all resources together
     uint32_t imageIndex = 0;
     size_t currentFrame = 0;
-
+    bool added = false;
     while (running)
     {
         double fpsdt = timer.getElaspedMS();
@@ -241,6 +242,16 @@ void mv::Engine::go(void)
         }
         if (camera->get_type() == Camera::Type::third_person)
         {
+            /*
+                For testing dynamic allocation of descriptor set
+            */
+            if (kbd.is_key_pressed(' ') && added == false)
+            {
+                added = true;
+                add_new_model("models/player.obj");
+            }
+            /* ---------------------*/
+
             if (kbd.is_key_pressed('i'))
             {
                 models[0].objects[0].move_forward(fpsdt);
@@ -324,11 +335,79 @@ void mv::Engine::go(void)
         // Render
         draw(currentFrame, imageIndex);
     }
+    printf("leaving game loop\n");
 
     // cleanup global uniforms
     vkDeviceWaitIdle(m_device);
     global_uniforms.ubo_projection.destroy();
     global_uniforms.ubo_view.destroy();
+    return;
+}
+
+void mv::Engine::add_new_model(const char *filename)
+{
+    // resize models
+    models.push_back(mv::Model());
+    // add object to model
+    models[(models.size() - 1)].resize_object_container(1);
+
+    // iterate models
+    for (size_t i = 0; i < models.size(); i++)
+    {
+        // iterate objects assign model indices
+        for (size_t j = 0; j < models[i].objects.size(); j++)
+        {
+            models[i].objects[j].model_index = i;
+        }
+    }
+
+    // hardcoded for testing purposes
+    srand(time(0));
+    float x = (rand() % (5 - 0 + 1)) + 0;
+    float y = (rand() % (5 - 0 + 1)) + 0;
+    float z = (rand() % (5 - 0 + 1)) + 0;
+    models[(models.size() - 1)].objects[0].position = glm::vec3(x, y, z);
+    models[(models.size() - 1)].objects[0].rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+
+    // prepare descriptor for model
+    device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                          &models[(models.size() - 1)].objects[0].uniform_buffer,
+                          sizeof(Object::Matrices));
+    if (models[(models.size() - 1)].objects[0].uniform_buffer.map() != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate buffer for newly created model");
+    }
+
+    // Load model
+    models[(models.size() - 1)].load(device, filename);
+
+    // descriptor layout already created, use it to allocate from pool
+    // should get error, may not because we have about 1-3 extra pool allocations
+    VkDescriptorSetAllocateInfo model_alloc_info = {};
+    model_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    model_alloc_info.pNext = nullptr;
+    model_alloc_info.descriptorPool = descriptor_pool;
+    model_alloc_info.descriptorSetCount = 1;
+    model_alloc_info.pSetLayouts = &model_layout;
+
+    if (vkAllocateDescriptorSets(device->device, &model_alloc_info, &models[(models.size() - 1)].objects[0].descriptor_set) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate descriptor set for newly created model");
+    }
+
+    // point the descriptor set to a resource
+    VkWriteDescriptorSet model_write_info = {};
+    model_write_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    model_write_info.dstBinding = 0;
+    model_write_info.dstSet = models[(models.size() - 1)].objects[0].descriptor_set;
+    model_write_info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    model_write_info.descriptorCount = 1;
+    model_write_info.pBufferInfo = &models[(models.size() - 1)].objects[0].uniform_buffer.descriptor;
+    std::vector<VkWriteDescriptorSet> writes = {model_write_info};
+
+    vkUpdateDescriptorSets(device->device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+
     return;
 }
 
@@ -656,6 +735,9 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
     for (auto &model : models)
     {
         model.bindBuffers(command_buffers[image_index]);
+        // VkDeviceSize offsets[] = {0};
+        // vkCmdBindVertexBuffers(command_buffers[image_index], 0, 1, &model.vertices.buffer, offsets);
+        // vkCmdBindIndexBuffer(command_buffers[image_index], model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
         // TODO
         // draw each object
         // will eventually instance draw to be more efficient
