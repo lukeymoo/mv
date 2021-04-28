@@ -112,20 +112,8 @@ namespace mv
         void record_command_buffer(uint32_t imageIndex);
         void draw(size_t &current_frame, uint32_t &current_image_index);
 
-        uint32_t descriptor_pool_size = 0;
-        VkDescriptorPool *pools;
-
     protected:
         void prepare_uniforms(void);
-        /*
-            Not every object needs a new descriptor set if the only difference between them
-            is literally a 128 byte model matrix
-
-            However when the difference becomes larger than 256 byte push constant size it makes
-            sense to use allocator
-        */
-        // descriptor pool allocator
-        void create_descriptor_pool(void);
 
         void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);
         void prepare_pipeline(void);
