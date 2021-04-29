@@ -22,6 +22,7 @@ namespace mv
         VkDevice device;
         struct Container;
         std::vector<std::unique_ptr<Container>> containers;
+        uint32_t current_pool = 0;
 
         Allocator(VkDevice &device)
         {
@@ -44,6 +45,12 @@ namespace mv
                 containers.clear();
             }
             return;
+        }
+
+        // returns handle to current pool in use
+        Container *get(void)
+        {
+            return containers.at(current_pool).get();
         }
 
         typedef struct ContainerInitStruct
@@ -125,29 +132,43 @@ namespace mv
                 result = vkAllocateDescriptorSets(device, &alloc_info, &set);
                 if (result == VK_SUCCESS)
                 {
-                    std::cout << "Allocated descriptor set, current pool => " << self << std::endl;
+                    // ensure allocator index is up to date
+                    parent_allocator->current_pool = this->index;
                     return this;
                 }
                 else if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
                 {
                     if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
                     {
-                        std::cout << "Current descriptor pool is full, changing status" << std::endl;
                         status = Status::Full;
                     }
                     else
                     {
-                        std::cout << "Current descriptor pool is too fragmented, changing status" << std::endl;
                         status = Status::Fragmented;
                     }
-                    // allocate new pool & return its addr to caller
-                    std::cout << "Creating new pool" << std::endl;
-                    return parent_allocator->allocate_pool(type, count);
+                    // allocate new pool, store addr
+                     auto new_pool = parent_allocator->allocate_pool(type, count);
+                    // use new pool to allocate set
+                    return new_pool->allocate_set(layout, set);
                 }
                 else
                 {
                     throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
                 }
+            }
+
+            Container *update_set(VkDescriptorBufferInfo &buffer_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
+            {
+                VkWriteDescriptorSet update_info = {};
+                update_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                update_info.dstBinding = dst_binding;
+                update_info.dstSet = dst_set;
+                update_info.descriptorType = type;
+                update_info.descriptorCount = 1;
+                update_info.pBufferInfo = &buffer_info;
+
+                vkUpdateDescriptorSets(device, 1, &update_info, 0, nullptr);
+                parent_allocator->current_pool = this->index;
                 return this;
             }
         };
@@ -158,7 +179,7 @@ namespace mv
 
             if (type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
             {
-                pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2}};
+                pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 * count}};
             }
 
             if (pool_sizes.empty())
@@ -189,10 +210,11 @@ namespace mv
                 Container np(&init_struct);
                 np.pool = pool;
                 np.status = Status::Clear;
-                containers.push_back(std::make_unique<Container>(np));
+                containers.push_back(std::make_unique<Container>(std::move(np)));
                 // give object its addr & index
                 containers.back()->self = containers.back().get();
                 containers.back()->index = containers.size() - 1;
+                current_pool = containers.size() - 1;
 
                 return containers.back().get();
             }

@@ -109,7 +109,7 @@ namespace mv
         GlobalUniforms global_uniforms;
         std::unique_ptr<Camera> camera;
 
-        void add_new_model(const char *filename);
+        void add_new_model(mv::Allocator::Container *pool, const char *filename);
 
         void recreate_swapchain(void);
 
@@ -119,6 +119,11 @@ namespace mv
 
     protected:
         void prepare_uniforms(void);
+
+        void create_descriptor_layout(VkDescriptorType type,
+                                      uint32_t count,
+                                      uint32_t binding,
+                                      VkDescriptorSetLayout &layout);
 
         void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);
         void prepare_pipeline(void);

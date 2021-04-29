@@ -175,54 +175,8 @@ void mv::Engine::go(void)
     models[0].load(device, "models/player.obj");
     models[1].load(device, "models/car.obj");
 
-    
-    
-    
-    
-    
-    
-    
-    
     // Create descriptor pool allocator
     descriptor_allocator = std::make_unique<Allocator>(device->device);
-
-    // test pool allocation
-    Allocator::Container *pool;
-    pool = descriptor_allocator->allocate_pool(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2);
-
-    // test descriptor set creation
-    VkDescriptorSetLayoutBinding mvp_binding = {};
-    mvp_binding.binding = 0;
-    mvp_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    mvp_binding.descriptorCount = 1;
-    mvp_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    std::vector<VkDescriptorSetLayoutBinding> mvp_bindings = {mvp_binding};
-
-    VkDescriptorSetLayoutCreateInfo mvp_layout = {};
-    mvp_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    mvp_layout.bindingCount = 1;
-    mvp_layout.pBindings = mvp_bindings.data();
-
-    // layout for model matrix
-    VkDescriptorSetLayout test_layout = nullptr;
-    if (vkCreateDescriptorSetLayout(device->device, &mvp_layout, nullptr, &test_layout) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create descriptor set layout");
-    }
-
-    std::vector<VkDescriptorSet> test_sets(2);
-
-    // returns pointer to self OR a pointer to new pool if new
-    // allocation was necessary for descriptor set creation
-    pool = pool->allocate_set(test_layout, test_sets.at(0));
-
-
-
-
-
-
-
 
     create_descriptor_sets(&global_uniforms);
 
@@ -296,12 +250,19 @@ void mv::Engine::go(void)
             /*
                 For testing dynamic allocation of descriptor set
             */
-            if (kbd.is_key_pressed(' ') && added == false)
+            if (kbdEvent.get_type() == Keyboard::Event::Type::Press && kbdEvent.get_code() == ' ' && added == false)
             {
-                added = true;
-                //add_new_model("models/player.obj");
-                pool = pool->allocate_set(test_layout, test_sets.back());
-                pool->test();
+                //added = true;
+                uint32_t tc = 0;
+                add_new_model(descriptor_allocator->get(), "models/player.obj");
+                for (const auto &model : models)
+                {
+                    for (const auto &obj : model.objects)
+                    {
+                        tc ++;
+                    }
+                }
+                std::cout << "\tNew Model Added, COUNT => " << tc + 2 << std::endl;
             }
             /* ---------------------*/
 
@@ -399,13 +360,12 @@ void mv::Engine::go(void)
 
     // cleanup global uniforms
     vkDeviceWaitIdle(m_device);
-    vkDestroyDescriptorSetLayout(device->device, test_layout, nullptr); // TODO , delete
     global_uniforms.ubo_projection.destroy();
     global_uniforms.ubo_view.destroy();
     return;
 }
 
-void mv::Engine::add_new_model(const char *filename)
+void mv::Engine::add_new_model(mv::Allocator::Container *pool, const char *filename)
 {
     // resize models
     models.push_back(mv::Model());
@@ -451,31 +411,12 @@ void mv::Engine::add_new_model(const char *filename)
     // Load model
     models[(models.size() - 1)].load(device, filename);
 
-    // descriptor layout already created, use it to allocate from pool
-    // should get error, may not because we have about 1-3 extra pool allocations
-    VkDescriptorSetAllocateInfo model_alloc_info = {};
-    model_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    model_alloc_info.pNext = nullptr;
-    model_alloc_info.descriptorPool = descriptor_pool;
-    model_alloc_info.descriptorSetCount = 1;
-    model_alloc_info.pSetLayouts = &model_layout;
-
-    if (vkAllocateDescriptorSets(device->device, &model_alloc_info, &models[(models.size() - 1)].objects[0].descriptor_set) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to allocate descriptor set for newly created model");
-    }
-
-    // point the descriptor set to a resource
-    VkWriteDescriptorSet model_write_info = {};
-    model_write_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    model_write_info.dstBinding = 0;
-    model_write_info.dstSet = models[(models.size() - 1)].objects[0].descriptor_set;
-    model_write_info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    model_write_info.descriptorCount = 1;
-    model_write_info.pBufferInfo = &models[(models.size() - 1)].objects[0].uniform_buffer.descriptor;
-    std::vector<VkWriteDescriptorSet> writes = {model_write_info};
-
-    vkUpdateDescriptorSets(device->device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+    // allocate descriptor set for object of new model type
+    pool = pool->allocate_set(model_layout, models[(models.size() - 1)].objects[0].descriptor_set);
+    // point descriptor to models ubo
+    pool = pool->update_set(models[(models.size() - 1)].objects[0].uniform_buffer.descriptor,
+                     models[(models.size() - 1)].objects[0].descriptor_set,
+                     0);
 
     return;
 }
@@ -499,45 +440,59 @@ void mv::Engine::prepare_uniforms(void)
     return;
 }
 
+void mv::Engine::create_descriptor_layout(VkDescriptorType type, uint32_t count, uint32_t binding, VkDescriptorSetLayout &layout)
+{
+    VkDescriptorSetLayoutBinding bind_info = {};
+    bind_info.binding = binding;
+    bind_info.descriptorType = type;
+    bind_info.descriptorCount = count;
+    bind_info.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layout_info = {};
+    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_info.bindingCount = 1;
+    layout_info.pBindings = &bind_info;
+
+    // layout for model matrix
+    if (vkCreateDescriptorSetLayout(device->device, &layout_info, nullptr, &layout) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create descriptor set layout");
+    }
+}
+
 void mv::Engine::create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout)
 {
-    // Will create three seperate UBOs
-    // Model matrix buffer which will be updated via push constants
-    // View matrix buffer which will be updated push constants
-    // Projection matrix which will be updated via memcpy or via Vulkan API calls
     if (should_create_layout)
     {
-        // Every descriptor set has 1 binding
-        // set 0 - model uniform
-        // set 1 - view uniform
-        // set 2 - projection uniform
-        VkDescriptorSetLayoutBinding mvp_binding = {};
-        mvp_binding.binding = 0;
-        mvp_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        mvp_binding.descriptorCount = 1;
-        mvp_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        // Currently mvp ubo objects are all identical
+        // so we create one layout
+        // in future we may need two as model ubo will contain other data such as
+        // model uv, textures, normals, animation data, etc
+        create_descriptor_layout(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                 1,
+                                 0,
+                                 model_layout);
+    }
 
-        std::vector<VkDescriptorSetLayoutBinding> mvp_bindings = {mvp_binding};
+    // Create uniform buffer pool
+    mv::Allocator::Container *pool;
+    pool = descriptor_allocator->allocate_pool(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                               10);
 
-        VkDescriptorSetLayoutCreateInfo mvp_layout = {};
-        mvp_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        mvp_layout.bindingCount = 1;
-        mvp_layout.pBindings = mvp_bindings.data();
+    // Allocate sets for view & matrix ubos
+    pool = pool->allocate_set(model_layout, global_uniforms.view_descriptor_set);
+    pool = pool->update_set(global_uniforms.ubo_view.descriptor, global_uniforms.view_descriptor_set, 0);
 
-        // layout for model matrix
-        if (vkCreateDescriptorSetLayout(device->device, &mvp_layout, nullptr, &model_layout) != VK_SUCCESS)
+    pool = pool->allocate_set(model_layout, global_uniforms.proj_descriptor_set);
+    pool = pool->update_set(global_uniforms.ubo_projection.descriptor, global_uniforms.proj_descriptor_set, 0);
+
+    // allocate for per model ubo
+    for (auto &model : models)
+    {
+        for (auto &obj : model.objects)
         {
-            throw std::runtime_error("Failed to create descriptor set layout");
-        }
-        // layout for view matrix
-        if (vkCreateDescriptorSetLayout(device->device, &mvp_layout, nullptr, &view_layout) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create descriptor set layout");
-        }
-        // layout for projection matrix
-        if (vkCreateDescriptorSetLayout(device->device, &mvp_layout, nullptr, &projection_layout) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create descriptor set layout");
+            pool = pool->allocate_set(model_layout, obj.descriptor_set);
+            pool = pool->update_set(obj.uniform_buffer.descriptor, obj.descriptor_set, 0);
         }
     }
 
@@ -545,125 +500,128 @@ void mv::Engine::create_descriptor_sets(GlobalUniforms *view_proj_ubo_container,
         model view projection uniform
     */
     // get total count of objects
-    uint32_t total_object_count = 0;
-    for (const auto &model : models)
-    {
-        total_object_count += model.objects.size();
-    }
+    // uint32_t total_object_count = 0;
+    // for (const auto &model : models)
+    // {
+    //     total_object_count += model.objects.size();
+    // }
 
-    assert(total_object_count); // ensure non zero
+    // assert(total_object_count); // ensure non zero
 
-    VkDescriptorPoolSize obj_model = {};
-    obj_model.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    obj_model.descriptorCount = 1 + static_cast<uint32_t>(total_object_count);
+    // VkDescriptorPoolSize obj_model = {};
+    // obj_model.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    // obj_model.descriptorCount = 1 + static_cast<uint32_t>(total_object_count);
 
-    VkDescriptorPoolSize view_mat = {};
-    view_mat.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    view_mat.descriptorCount = 1;
+    // VkDescriptorPoolSize view_mat = {};
+    // view_mat.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    // view_mat.descriptorCount = 1;
 
-    VkDescriptorPoolSize proj_mat = {};
-    proj_mat.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    proj_mat.descriptorCount = 1;
+    // VkDescriptorPoolSize proj_mat = {};
+    // proj_mat.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    // proj_mat.descriptorCount = 1;
 
-    std::vector<VkDescriptorPoolSize> pool_sizes = {obj_model, view_mat, proj_mat};
+    // std::vector<VkDescriptorPoolSize> pool_sizes = {obj_model, view_mat, proj_mat};
 
-    VkDescriptorPoolCreateInfo pool_info = {};
-    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_info.pNext = nullptr;
-    pool_info.flags = 0;
-    pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
-    pool_info.pPoolSizes = pool_sizes.data();
-    pool_info.maxSets = 2000;
+    // VkDescriptorPoolCreateInfo pool_info = {};
+    // pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    // pool_info.pNext = nullptr;
+    // pool_info.flags = 0;
+    // pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+    // pool_info.pPoolSizes = pool_sizes.data();
+    // pool_info.maxSets = 2000;
 
-    if (vkCreateDescriptorPool(device->device, &pool_info, nullptr, &descriptor_pool) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create descriptor pool for model");
-    }
+    // if (vkCreateDescriptorPool(device->device, &pool_info, nullptr, &descriptor_pool) != VK_SUCCESS)
+    // {
+    //     throw std::runtime_error("Failed to create descriptor pool for model");
+    // }
 
-    // allocate descriptor set for view & projection matrices
-    VkDescriptorSetAllocateInfo view_alloc_info = {};
-    view_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    view_alloc_info.descriptorPool = descriptor_pool;
-    view_alloc_info.descriptorSetCount = 1;
-    view_alloc_info.pSetLayouts = &view_layout;
-    if (vkAllocateDescriptorSets(device->device,
-                                 &view_alloc_info,
-                                 &view_proj_ubo_container->view_descriptor_set) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to allocate descriptor set for view matrix");
-    }
+    // // allocate descriptor set for view & projection matrices
+    // VkDescriptorSetAllocateInfo view_alloc_info = {};
+    // view_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    // view_alloc_info.descriptorPool = descriptor_pool;
+    // view_alloc_info.descriptorSetCount = 1;
+    // view_alloc_info.pSetLayouts = &view_layout;
+    // if (vkAllocateDescriptorSets(device->device,
+    //                              &view_alloc_info,
+    //                              &view_proj_ubo_container->view_descriptor_set) != VK_SUCCESS)
+    // {
+    //     throw std::runtime_error("Failed to allocate descriptor set for view matrix");
+    // }
 
-    // projection alloc info
-    VkDescriptorSetAllocateInfo proj_alloc_info = {};
-    proj_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    proj_alloc_info.descriptorPool = descriptor_pool;
-    proj_alloc_info.descriptorSetCount = 1;
-    proj_alloc_info.pSetLayouts = &projection_layout;
-    if (vkAllocateDescriptorSets(device->device,
-                                 &proj_alloc_info,
-                                 &view_proj_ubo_container->proj_descriptor_set) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to allocate descriptor set for projection matrix");
-    }
+    // // projection alloc info
+    // VkDescriptorSetAllocateInfo proj_alloc_info = {};
+    // proj_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    // proj_alloc_info.descriptorPool = descriptor_pool;
+    // proj_alloc_info.descriptorSetCount = 1;
+    // proj_alloc_info.pSetLayouts = &projection_layout;
+    // if (vkAllocateDescriptorSets(device->device,
+    //                              &proj_alloc_info,
+    //                              &view_proj_ubo_container->proj_descriptor_set) != VK_SUCCESS)
+    // {
+    //     throw std::runtime_error("Failed to allocate descriptor set for projection matrix");
+    // }
 
-    // update bindings for view descriptor
-    VkWriteDescriptorSet view_write = {};
-    view_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    view_write.dstBinding = 0; // view binding
-    view_write.dstSet = view_proj_ubo_container->view_descriptor_set;
-    view_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    view_write.descriptorCount = 1;
-    view_write.pBufferInfo = &view_proj_ubo_container->ubo_view.descriptor;
+    // // update bindings for view descriptor
+    // VkWriteDescriptorSet view_write = {};
+    // view_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    // view_write.dstBinding = 0; // view binding
+    // view_write.dstSet = view_proj_ubo_container->view_descriptor_set;
+    // view_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    // view_write.descriptorCount = 1;
+    // view_write.pBufferInfo = &view_proj_ubo_container->ubo_view.descriptor;
 
-    // projection descriptor set
-    VkWriteDescriptorSet proj_write = {};
-    proj_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    proj_write.dstBinding = 0; // view binding
-    proj_write.dstSet = view_proj_ubo_container->proj_descriptor_set;
-    proj_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    proj_write.descriptorCount = 1;
-    proj_write.pBufferInfo = &view_proj_ubo_container->ubo_projection.descriptor;
+    // // projection descriptor set
+    // VkWriteDescriptorSet proj_write = {};
+    // proj_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    // proj_write.dstBinding = 0; // view binding
+    // proj_write.dstSet = view_proj_ubo_container->proj_descriptor_set;
+    // proj_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    // proj_write.descriptorCount = 1;
+    // proj_write.pBufferInfo = &view_proj_ubo_container->ubo_projection.descriptor;
 
-    std::vector<VkWriteDescriptorSet> vp_write_sets = {view_write, proj_write};
-    vkUpdateDescriptorSets(device->device,
-                           static_cast<uint32_t>(vp_write_sets.size()),
-                           vp_write_sets.data(),
-                           0, nullptr);
+    // std::vector<VkWriteDescriptorSet> vp_write_sets = {view_write, proj_write};
+    // vkUpdateDescriptorSets(device->device,
+    //                        static_cast<uint32_t>(vp_write_sets.size()),
+    //                        vp_write_sets.data(),
+    //                        0, nullptr);
 
-    // Allocate descriptor sets for objs
-    for (auto &model : models)
-    {
-        for (auto &obj : model.objects)
-        {
-            VkDescriptorSetAllocateInfo alloc_info = {};
-            alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-            alloc_info.descriptorPool = descriptor_pool;
-            alloc_info.descriptorSetCount = 1;
-            alloc_info.pSetLayouts = &model_layout;
-            if (vkAllocateDescriptorSets(device->device, &alloc_info, &obj.descriptor_set) != VK_SUCCESS)
-            {
-                throw std::runtime_error("Failed to allocate descriptor set for object");
-            }
-            // Now update to bind buffers
-            VkWriteDescriptorSet wrm = {};
-            wrm.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            wrm.dstBinding = 0; // model is always binding 0
-            wrm.dstSet = obj.descriptor_set;
-            wrm.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            wrm.descriptorCount = 1;
-            wrm.pBufferInfo = &obj.uniform_buffer.descriptor;
+    // // Allocate descriptor sets for objs
+    // for (auto &model : models)
+    // {
+    //     for (auto &obj : model.objects)
+    //     {
+    //         VkDescriptorSetAllocateInfo alloc_info = {};
+    //         alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    //         alloc_info.descriptorPool = descriptor_pool;
+    //         alloc_info.descriptorSetCount = 1;
+    //         alloc_info.pSetLayouts = &model_layout;
+    //         if (vkAllocateDescriptorSets(device->device, &alloc_info, &obj.descriptor_set) != VK_SUCCESS)
+    //         {
+    //             throw std::runtime_error("Failed to allocate descriptor set for object");
+    //         }
+    //         // Now update to bind buffers
+    //         VkWriteDescriptorSet wrm = {};
+    //         wrm.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    //         wrm.dstBinding = 0; // model is always binding 0
+    //         wrm.dstSet = obj.descriptor_set;
+    //         wrm.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    //         wrm.descriptorCount = 1;
+    //         wrm.pBufferInfo = &obj.uniform_buffer.descriptor;
 
-            std::vector<VkWriteDescriptorSet> writes = {wrm};
+    //         std::vector<VkWriteDescriptorSet> writes = {wrm};
 
-            vkUpdateDescriptorSets(device->device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
-        }
-    }
+    //         vkUpdateDescriptorSets(device->device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+    //     }
+    // }
     return;
 }
 
 void mv::Engine::prepare_pipeline(void)
 {
-    std::vector<VkDescriptorSetLayout> layouts = {model_layout, view_layout, projection_layout};
+    // TODO
+    // currently all descriptor sets are based off one set
+    // this will change later when shaders require more model data in ubo
+    std::vector<VkDescriptorSetLayout> layouts = {model_layout, model_layout, model_layout};
     VkPipelineLayoutCreateInfo pline_info = {};
     pline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pline_info.pNext = nullptr;
@@ -864,9 +822,6 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
         throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
         break;
     }
-
-    // TODO
-    // case checking
 
     if (wait_fences[cur_index] != VK_NULL_HANDLE)
     {
