@@ -175,6 +175,53 @@ void mv::Engine::go(void)
     models[0].load(device, "models/player.obj");
     models[1].load(device, "models/car.obj");
 
+    
+    
+    
+    
+    
+    
+    
+    
+    // Create descriptor pool allocator
+    descriptor_allocator = std::make_unique<Allocator>(device->device);
+
+    // test pool allocation
+    Allocator::Container *pool;
+    pool = descriptor_allocator->allocate_pool(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
+
+    // test descriptor set creation
+    VkDescriptorSetLayoutBinding mvp_binding = {};
+    mvp_binding.binding = 0;
+    mvp_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    mvp_binding.descriptorCount = 1;
+    mvp_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    std::vector<VkDescriptorSetLayoutBinding> mvp_bindings = {mvp_binding};
+
+    VkDescriptorSetLayoutCreateInfo mvp_layout = {};
+    mvp_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    mvp_layout.bindingCount = 1;
+    mvp_layout.pBindings = mvp_bindings.data();
+
+    // layout for model matrix
+    VkDescriptorSetLayout test_layout = nullptr;
+    if (vkCreateDescriptorSetLayout(device->device, &mvp_layout, nullptr, &test_layout) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create descriptor set layout");
+    }
+
+    std::vector<VkDescriptorSet> test_sets(2);
+
+    pool->allocate_set(test_layout, test_sets.at(0));
+
+
+
+
+
+
+
+
     create_descriptor_sets(&global_uniforms);
 
     prepare_pipeline();
@@ -184,6 +231,8 @@ void mv::Engine::go(void)
     uint32_t imageIndex = 0;
     size_t currentFrame = 0;
     bool added = false;
+    fps.startTimer();
+    int fps_counter = 0;
     while (running)
     {
         double fpsdt = timer.getElaspedMS();
@@ -247,8 +296,9 @@ void mv::Engine::go(void)
             */
             if (kbd.is_key_pressed(' ') && added == false)
             {
-                added = true;
-                add_new_model("models/player.obj");
+                //added = true;
+                //add_new_model("models/player.obj");
+                pool->allocate_set(test_layout, test_sets.back());
             }
             /* ---------------------*/
 
@@ -334,11 +384,19 @@ void mv::Engine::go(void)
 
         // Render
         draw(currentFrame, imageIndex);
+
+        fps_counter += 1;
+        if (fps.getElaspedMS() > 1000)
+        {
+            //printf("FPS => %i\n", fps_counter);
+            fps_counter = 0;
+            fps.restart();
+        }
     }
-    printf("leaving game loop\n");
 
     // cleanup global uniforms
     vkDeviceWaitIdle(m_device);
+    vkDestroyDescriptorSetLayout(device->device, test_layout, nullptr); // TODO , delete
     global_uniforms.ubo_projection.destroy();
     global_uniforms.ubo_view.destroy();
     return;
@@ -362,12 +420,20 @@ void mv::Engine::add_new_model(const char *filename)
     }
 
     // hardcoded for testing purposes
-    srand(time(0));
-    float x = (rand() % (5 - 0 + 1)) + 0;
-    float y = (rand() % (5 - 0 + 1)) + 0;
-    float z = (rand() % (5 - 0 + 1)) + 0;
-    models[(models.size() - 1)].objects[0].position = glm::vec3(x, y, z);
-    models[(models.size() - 1)].objects[0].rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    int min = 0;
+    int max = 30;
+    int z_max = 30;
+
+    std::random_device rd;
+    std::default_random_engine eng(rd());
+    std::uniform_int_distribution<int> xy_distr(min, max);
+    std::uniform_int_distribution<int> z_distr(min, z_max);
+
+    float x = xy_distr(eng);
+    float y = xy_distr(eng);
+    float z = z_distr(eng);
+    models[(models.size() - 1)].objects[0].position = glm::vec3(x, y, -z);
+    models[(models.size() - 1)].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f);
 
     // prepare descriptor for model
     device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -504,7 +570,7 @@ void mv::Engine::create_descriptor_sets(GlobalUniforms *view_proj_ubo_container,
     pool_info.flags = 0;
     pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
     pool_info.pPoolSizes = pool_sizes.data();
-    pool_info.maxSets = static_cast<uint32_t>(pool_sizes.size()) + total_object_count;
+    pool_info.maxSets = 2000;
 
     if (vkCreateDescriptorPool(device->device, &pool_info, nullptr, &descriptor_pool) != VK_SUCCESS)
     {

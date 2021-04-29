@@ -4,6 +4,9 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
+#include <random>
+
+#include "mvAllocator.h"
 #include "mvCamera.h"
 #include "mvWindow.h"
 #include "mvModel.h"
@@ -25,6 +28,8 @@ namespace mv
 
         Engine &operator=(const Engine &) = delete;
         Engine(const Engine &) = delete;
+
+        std::unique_ptr<Allocator> descriptor_allocator;
 
         Engine(int w, int h, const char *title);
         ~Engine() // Cleanup

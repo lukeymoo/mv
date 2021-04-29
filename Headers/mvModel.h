@@ -55,7 +55,7 @@ namespace mv
             rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
             rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
-            matrices.model = rotation_matrix * translation_matrix;
+            matrices.model = translation_matrix * rotation_matrix;
         }
 
         void get_front_face(void)

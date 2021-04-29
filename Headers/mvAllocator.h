@@ -8,131 +8,125 @@
 
 namespace mv
 {
+    enum Status
+    {
+        Clear,
+        Usable,
+        Full
+    };
+
     struct Allocator
     {
-        VkDevice *device = nullptr;
-        std::vector<VkDescriptorPool> cleared_pools; // completely cleared pools
-        std::vector<VkDescriptorPool> usable_pools;  // pool with unused space
-        std::vector<VkDescriptorPool> full_pools;    // completely full pools
+        VkDevice device;
 
-        Allocator(void) {}
+        Allocator(VkDevice &device)
+        {
+            this->device = device;
+            return;
+        }
         ~Allocator(void)
         {
-            if (!cleared_pools.empty())
+            if (!containers.empty())
             {
-                for (auto &pool : cleared_pools)
+                for (auto &container : containers)
                 {
-                    if (pool)
+                    if (container->pool)
                     {
-                        vkDestroyDescriptorPool(*device, pool, nullptr);
-                        pool = nullptr;
+                        vkDestroyDescriptorPool(device, container->pool, nullptr);
+                        container->pool = nullptr;
                     }
                 }
-            }
-            if (!usable_pools.empty())
-            {
-                for (auto &pool : usable_pools)
-                {
-                    if (pool)
-                    {
-                        vkDestroyDescriptorPool(*device, pool, nullptr);
-                        pool = nullptr;
-                    }
-                }
-            }
-            if (!full_pools.empty())
-            {
-                for (auto &pool : full_pools)
-                {
-                    if (pool)
-                    {
-                        vkDestroyDescriptorPool(*device, pool, nullptr);
-                        pool = nullptr;
-                    }
-                }
+
+                containers.clear();
             }
             return;
         }
 
-        /*
-            Initializes allocator with 1 of each specified type
-        */
-        void init(VkDescriptorType *types, uint32_t type_count)
+        struct Container
         {
-            for (uint32_t i = 0; i < type_count; i++)
-            {
-                if (types[i] == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-                {
-                    // for testing purposes this number will be very low to test how well it handles allocation reqs
-                    // default 2000 max sets for uniform buffer
-                    cleared_pools.push_back(allocate_pool(types[i], 2000));
-                }
-                if (types[i] == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                {
-                    // will allocate few max sets depending on how textures are structured in app
-                    throw std::runtime_error("Unsupported descriptor type requested from allocator, sorry");
-                }
-                if (types[i] == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT)
-                {
-                    throw std::runtime_error("Unsupported descriptor type requested from allocator, sorry");
-                }
-            }
-            return;
-        }
+            VkDevice device = nullptr;
 
-        /*
-            Called when fetching a pool to allocate from
-        */
-        VkDescriptorPool get_pool(VkDescriptorType type)
+            Container(VkDevice &device)
+            {
+                this->device = device;
+            }
+            ~Container()
+            {
+            }
+
+            VkDescriptorPool pool;
+            Status status = Status::Clear;
+
+            // Allocate descriptor set
+            bool allocate_set(VkDescriptorSetLayout &layout, VkDescriptorSet &set)
+            {
+                VkResult result;
+                VkDescriptorSetAllocateInfo alloc_info = {};
+                alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                alloc_info.descriptorPool = pool;
+                alloc_info.descriptorSetCount = 1;
+                alloc_info.pSetLayouts = &layout;
+
+                result = vkAllocateDescriptorSets(device, &alloc_info, &set);
+                if (result == VK_SUCCESS)
+                {
+                    printf("Allocated descriptor set\n");
+                    return true;
+                }
+                else if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
+                {
+                    // allocate new pool & use that
+                    printf("Descriptor pool currently in use is now full or fragmented, creating new pool\n"); 
+                }
+                else
+                {
+                    throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
+                }
+                return true;
+            }
+        };
+
+        std::vector<std::unique_ptr<Container>> containers;
+
+        Container *allocate_pool(VkDescriptorType type, uint32_t count)
         {
-            VkDescriptorPool pool = nullptr;
+            std::vector<VkDescriptorPoolSize> pool_sizes;
 
-            // if there is a completely free pool
-            // prefer it
-            if (!cleared_pools.empty())
+            if (type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
             {
-                pool = cleared_pools.back();
-                cleared_pools.pop_back();
+                pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2}};
             }
-            // next in line is to check if an already in use pool is available & not yet full
-            else if (!usable_pools.empty())
+
+            if (pool_sizes.empty())
             {
-                pool = usable_pools.back();
-                usable_pools.pop_back();
+                throw std::runtime_error("Unsupported descriptor pool type requested");
             }
-            // next is to create a new pool since none are available
-            else
-            {
-                pool = allocate_pool(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2000);
-            }
-        }
 
-        /*
-            Called when no pools exist ready for use
-            Creates a new pool
-        */
-        VkDescriptorPool allocate_pool(VkDescriptorType type, uint32_t count)
-        {
-            VkDescriptorPool pool = nullptr;
-
-            VkDescriptorPoolSize p_size = {};
-            p_size.type = type;
-            p_size.descriptorCount = count;
-
+            VkResult result;
             VkDescriptorPoolCreateInfo pool_info = {};
             pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-            pool_info.pNext = nullptr;
-            pool_info.flags = 0; // VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT
-            pool_info.poolSizeCount = 1;
-            pool_info.pPoolSizes = &p_size;
+            pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+            pool_info.pPoolSizes = pool_sizes.data();
             pool_info.maxSets = count;
 
-            if (vkCreateDescriptorPool(*device, &pool_info, nullptr, &pool) != VK_SUCCESS)
+            VkDescriptorPool pool = nullptr;
+            result = vkCreateDescriptorPool(device, &pool_info, nullptr, &pool);
+            if (result == VK_SUCCESS)
             {
-                throw std::runtime_error("Descriptor pool allocator failed to allocate pool");
+                printf("Allocating descriptor pool with maxSets => %i\n", count);
+                Container np(device);
+                np.pool = pool;
+                np.status = Status::Clear;
+                containers.push_back(std::make_unique<Container>(np));
+                return containers.back().get();
             }
-
-            return pool;
+            else
+            {
+                // case VK_ERROR_FRAGMENTATION_EXT:
+                // case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+                // case VK_ERROR_OUT_OF_HOST_MEMORY:
+                throw std::runtime_error("Failed to allocate descriptor pool, system out of memory or excessive fragmentation");
+            }
         }
     };
 };
