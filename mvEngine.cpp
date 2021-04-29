@@ -188,7 +188,7 @@ void mv::Engine::go(void)
 
     // test pool allocation
     Allocator::Container *pool;
-    pool = descriptor_allocator->allocate_pool(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
+    pool = descriptor_allocator->allocate_pool(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2);
 
     // test descriptor set creation
     VkDescriptorSetLayoutBinding mvp_binding = {};
@@ -213,7 +213,9 @@ void mv::Engine::go(void)
 
     std::vector<VkDescriptorSet> test_sets(2);
 
-    pool->allocate_set(test_layout, test_sets.at(0));
+    // returns pointer to self OR a pointer to new pool if new
+    // allocation was necessary for descriptor set creation
+    pool = pool->allocate_set(test_layout, test_sets.at(0));
 
 
 
@@ -296,9 +298,10 @@ void mv::Engine::go(void)
             */
             if (kbd.is_key_pressed(' ') && added == false)
             {
-                //added = true;
+                added = true;
                 //add_new_model("models/player.obj");
-                pool->allocate_set(test_layout, test_sets.back());
+                pool = pool->allocate_set(test_layout, test_sets.back());
+                pool->test();
             }
             /* ---------------------*/
 
