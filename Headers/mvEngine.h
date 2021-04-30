@@ -22,9 +22,8 @@ namespace mv
         VkPipelineLayout pipeline_layout = nullptr;
 
         VkDescriptorPool descriptor_pool = nullptr;
-        VkDescriptorSetLayout model_layout = nullptr;
-        VkDescriptorSetLayout view_layout = nullptr;
-        VkDescriptorSetLayout projection_layout = nullptr;
+        VkDescriptorSetLayout sampler_layout = nullptr;
+        VkDescriptorSetLayout uniform_layout = nullptr;
 
         Engine &operator=(const Engine &) = delete;
         Engine(const Engine &) = delete;
@@ -55,21 +54,16 @@ namespace mv
                 descriptor_pool = nullptr;
             }
 
-            // cleanup layout
-            if (model_layout)
+            // cleanup layouts
+            if (uniform_layout)
             {
-                vkDestroyDescriptorSetLayout(device->device, model_layout, nullptr);
-                model_layout = nullptr;
+                vkDestroyDescriptorSetLayout(device->device, uniform_layout, nullptr);
+                uniform_layout = nullptr;
             }
-            if (view_layout)
+            if (sampler_layout)
             {
-                vkDestroyDescriptorSetLayout(device->device, view_layout, nullptr);
-                view_layout = nullptr;
-            }
-            if (projection_layout)
-            {
-                vkDestroyDescriptorSetLayout(device->device, projection_layout, nullptr);
-                projection_layout = nullptr;
+                vkDestroyDescriptorSetLayout(device->device, sampler_layout, nullptr);
+                sampler_layout = nullptr;
             }
 
             // objects
@@ -78,6 +72,26 @@ namespace mv
             {
                 if (device)
                 {
+                    if (model.image.sampler)
+                    {
+                        vkDestroySampler(device->device, model.image.sampler, nullptr);
+                        model.image.sampler = nullptr;
+                    }
+                    if (model.image.image_view)
+                    {
+                        vkDestroyImageView(device->device, model.image.image_view, nullptr);
+                        model.image.image_view = nullptr;
+                    }
+                    if (model.image.image)
+                    {
+                        vkDestroyImage(device->device, model.image.image, nullptr);
+                        model.image.image = nullptr;
+                    }
+                    if (model.image.memory)
+                    {
+                        vkFreeMemory(device->device, model.image.memory, nullptr);
+                        model.image.memory = nullptr;
+                    }
                     if (model.vertices.buffer)
                     {
                         vkDestroyBuffer(device->device, model.vertices.buffer, nullptr);
@@ -123,6 +137,7 @@ namespace mv
         void create_descriptor_layout(VkDescriptorType type,
                                       uint32_t count,
                                       uint32_t binding,
+                                      VkPipelineStageFlags stage_flags,
                                       VkDescriptorSetLayout &layout);
 
         void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);

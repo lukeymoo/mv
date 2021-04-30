@@ -148,7 +148,8 @@ void mv::Engine::go(void)
     models[0].resize_object_container(1);
     models[1].resize_object_container(1);
     models[0].objects[0].position = glm::vec3(0.0f, 0.0f, 0.0f);
-    models[0].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f);
+    //models[0].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f); // use this for player.obj
+    models[0].objects[0].rotation = glm::vec3(90.0f, 0.0f, 0.0f); // viking_room.obj
 
     models[1].objects[0].position = glm::vec3(0.0f, 0.0f, -5.0f);
     models[1].objects[0].rotation = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -172,7 +173,7 @@ void mv::Engine::go(void)
 
     // Load models
     // set each object model index to it's Model class container
-    models[0].load(device, "models/player.obj");
+    models[0].load(device, "models/viking_room.obj");
     models[1].load(device, "models/car.obj");
 
     // Create descriptor pool allocator
@@ -250,20 +251,17 @@ void mv::Engine::go(void)
             /*
                 For testing dynamic allocation of descriptor set
             */
-            if (kbdEvent.get_type() == Keyboard::Event::Type::Press && kbdEvent.get_code() == ' ' && added == false)
-            {
-                //added = true;
-                uint32_t tc = 0;
-                add_new_model(descriptor_allocator->get(), "models/player.obj");
-                for (const auto &model : models)
-                {
-                    for (const auto &obj : model.objects)
-                    {
-                        tc++;
-                    }
-                }
-                std::cout << "\tNew Model Added, COUNT => " << tc + 2 << std::endl;
-            }
+            // if (kbdEvent.get_type() == Keyboard::Event::Type::Press && kbdEvent.get_code() == ' ' && added == false)
+            // {
+            //     //added = true;
+            //     uint32_t tc = 0;
+            //     add_new_model(descriptor_allocator->get(), "models/player.obj");
+            //     for (const auto &model : models)
+            //     {
+            //         tc += model.objects.size();
+            //     }
+            //     std::cout << "\tNew Model Added, COUNT => " << tc + 2 << std::endl;
+            // }
             /* ---------------------*/
 
             if (kbd.is_key_pressed('i'))
@@ -401,11 +399,17 @@ void mv::Engine::add_new_model(mv::Allocator::Container *pool, const char *filen
     // Load model
     models[(models.size() - 1)].load(device, filename);
 
-    // allocate descriptor set for object of new model type
-    descriptor_allocator->allocate_set(pool, model_layout, models[(models.size() - 1)].objects[0].descriptor_set);
-    // point descriptor to models ubo
+    // allocate descriptor set for object model matrix data
+    descriptor_allocator->allocate_set(pool, uniform_layout, models[(models.size() - 1)].objects[0].model_descriptor);
+    // allocate descriptor set for object texture data
+    descriptor_allocator->allocate_set(pool, sampler_layout, models[(models.size() - 1)].objects[0].texture_descriptor);
+
+    // bind object matrix data buffer & its descriptor
     descriptor_allocator->update_set(pool, models[(models.size() - 1)].objects[0].uniform_buffer.descriptor,
-                                     models[(models.size() - 1)].objects[0].descriptor_set,
+                                     models[(models.size() - 1)].objects[0].model_descriptor,
+                                     0);
+    descriptor_allocator->update_set(pool, models[(models.size() - 1)].image.descriptor,
+                                     models[(models.size() - 1)].objects[0].texture_descriptor,
                                      0);
 
     return;
@@ -430,13 +434,13 @@ void mv::Engine::prepare_uniforms(void)
     return;
 }
 
-void mv::Engine::create_descriptor_layout(VkDescriptorType type, uint32_t count, uint32_t binding, VkDescriptorSetLayout &layout)
+void mv::Engine::create_descriptor_layout(VkDescriptorType type, uint32_t count, VkPipelineStageFlags stage_flags, uint32_t binding, VkDescriptorSetLayout &layout)
 {
     VkDescriptorSetLayoutBinding bind_info = {};
     bind_info.binding = binding;
     bind_info.descriptorType = type;
     bind_info.descriptorCount = count;
-    bind_info.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    bind_info.stageFlags = stage_flags;
 
     VkDescriptorSetLayoutCreateInfo layout_info = {};
     layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -454,26 +458,29 @@ void mv::Engine::create_descriptor_sets(GlobalUniforms *view_proj_ubo_container,
 {
     if (should_create_layout)
     {
-        // Currently mvp ubo objects are all identical
-        // so we create one layout
-        // in future we may need two as model ubo will contain other data such as
-        // model uv, textures, normals, animation data, etc
+        // single ubo layout
         create_descriptor_layout(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                  1,
+                                 VK_SHADER_STAGE_VERTEX_BIT,
                                  0,
-                                 model_layout);
+                                 uniform_layout);
+        create_descriptor_layout(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                 1,
+                                 VK_SHADER_STAGE_FRAGMENT_BIT,
+                                 0,
+                                 sampler_layout);
     }
 
     // Create uniform buffer pool
     mv::Allocator::Container *pool;
-    pool = descriptor_allocator->allocate_pool(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                                               2000);
+    // default pool sizes are uniform buffer & combined image sampler
+    pool = descriptor_allocator->allocate_pool(2000);
 
     // Allocate sets for view & matrix ubos
-    descriptor_allocator->allocate_set(pool, model_layout, global_uniforms.view_descriptor_set);
+    descriptor_allocator->allocate_set(pool, uniform_layout, global_uniforms.view_descriptor_set);
     descriptor_allocator->update_set(pool, global_uniforms.ubo_view.descriptor, global_uniforms.view_descriptor_set, 0);
 
-    descriptor_allocator->allocate_set(pool, model_layout, global_uniforms.proj_descriptor_set);
+    descriptor_allocator->allocate_set(pool, uniform_layout, global_uniforms.proj_descriptor_set);
     descriptor_allocator->update_set(pool, global_uniforms.ubo_projection.descriptor, global_uniforms.proj_descriptor_set, 0);
 
     // allocate for per model ubo
@@ -481,8 +488,15 @@ void mv::Engine::create_descriptor_sets(GlobalUniforms *view_proj_ubo_container,
     {
         for (auto &obj : model.objects)
         {
-            descriptor_allocator->allocate_set(pool, model_layout, obj.descriptor_set);
-            descriptor_allocator->update_set(pool, obj.uniform_buffer.descriptor, obj.descriptor_set, 0);
+            // allocate model matrix data descriptor
+            descriptor_allocator->allocate_set(pool, uniform_layout, obj.model_descriptor);
+            // allocate model texture sampler descriptor
+            descriptor_allocator->allocate_set(pool, sampler_layout, obj.texture_descriptor);
+
+            // bind model matrix descriptor with uniform buffer
+            descriptor_allocator->update_set(pool, obj.uniform_buffer.descriptor, obj.model_descriptor, 0);
+            // bind model texture descriptor with image sampler
+            descriptor_allocator->update_set(pool, model.image.descriptor, obj.texture_descriptor, 0);
         }
     }
     return;
@@ -490,10 +504,14 @@ void mv::Engine::create_descriptor_sets(GlobalUniforms *view_proj_ubo_container,
 
 void mv::Engine::prepare_pipeline(void)
 {
-    // TODO
-    // currently all descriptor sets are based off one set
-    // this will change later when shaders require more model data in ubo
-    std::vector<VkDescriptorSetLayout> layouts = {model_layout, model_layout, model_layout};
+    // layouts are as follows...
+    /*
+        model matrix data uniform
+        image sampler uniform
+        view matrix uniform
+        projection matrix uniform
+    */
+    std::vector<VkDescriptorSetLayout> layouts = {uniform_layout, uniform_layout, uniform_layout, sampler_layout};
     VkPipelineLayoutCreateInfo pline_info = {};
     pline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pline_info.pNext = nullptr;
@@ -643,9 +661,10 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
         for (const auto &obj : model.objects)
         {
             std::vector<VkDescriptorSet> to_bind = {
-                obj.descriptor_set,
+                obj.model_descriptor,
                 global_uniforms.view_descriptor_set,
-                global_uniforms.proj_descriptor_set};
+                global_uniforms.proj_descriptor_set,
+                obj.texture_descriptor};
             vkCmdBindDescriptorSets(command_buffers[image_index],
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     pipeline_layout,

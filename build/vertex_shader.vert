@@ -3,8 +3,6 @@
 
 layout(set = 0, binding = 0) uniform ObjectUniform {
     mat4 model;
-    // TODO
-    // uv, normals, textures, etc
 } ubo_obj;
 
 layout(set = 1, binding = 0) uniform ViewUniform {

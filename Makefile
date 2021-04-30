@@ -285,6 +285,33 @@ mvException.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvException.cpp.s
 .PHONY : mvException.cpp.s
 
+mvImage.o: mvImage.cpp.o
+
+.PHONY : mvImage.o
+
+# target to build an object file
+mvImage.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvImage.cpp.o
+.PHONY : mvImage.cpp.o
+
+mvImage.i: mvImage.cpp.i
+
+.PHONY : mvImage.i
+
+# target to preprocess a source file
+mvImage.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvImage.cpp.i
+.PHONY : mvImage.cpp.i
+
+mvImage.s: mvImage.cpp.s
+
+.PHONY : mvImage.s
+
+# target to generate assembly for a file
+mvImage.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvImage.cpp.s
+.PHONY : mvImage.cpp.s
+
 mvKeyboard.o: mvKeyboard.cpp.o
 
 .PHONY : mvKeyboard.o
@@ -474,6 +501,9 @@ help:
 	@echo "... mvException.o"
 	@echo "... mvException.i"
 	@echo "... mvException.s"
+	@echo "... mvImage.o"
+	@echo "... mvImage.i"
+	@echo "... mvImage.s"
 	@echo "... mvKeyboard.o"
 	@echo "... mvKeyboard.i"
 	@echo "... mvKeyboard.s"

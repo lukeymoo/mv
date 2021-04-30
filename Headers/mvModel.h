@@ -13,6 +13,7 @@
 #include "tiny_loader.h"
 
 #include "mvDevice.h"
+#include "mvImage.h"
 
 const std::string MODEL_PATH = "models/viking_room.obj";
 const float MOVESPEED = 0.005f;
@@ -39,7 +40,8 @@ namespace mv
             // uv, texture, normals
         } matrices;
 
-        VkDescriptorSet descriptor_set;
+        VkDescriptorSet model_descriptor;
+        VkDescriptorSet texture_descriptor;
         mv::Buffer uniform_buffer;
         glm::vec3 rotation;
         glm::vec3 position;
@@ -155,7 +157,7 @@ namespace mv
         Model(const Model &m) = delete;
         // Prefer move operations over copy
         Model(Model &&) = default;
-        ~Model(void){}
+        ~Model(void) {}
 
         mv::Device *device;
         VkDescriptorPool descriptor_pool = nullptr;
@@ -177,6 +179,7 @@ namespace mv
         tinyobj::attrib_t attribute;
         std::vector<tinyobj::material_t> materials;
         std::vector<tinyobj::shape_t> shapes;
+        mv::Image image;
 
         uint32_t image_count = 0;
 
@@ -220,10 +223,8 @@ namespace mv
                     // only x,y positions are used
                     vertex.uv = {
                         attribute.texcoords[2 * index.texcoord_index + 0],
-                        attribute.texcoords[2 * index.texcoord_index + 1],
-                        0.0f, 0.0f
-                    };
-
+                        1.0f - attribute.texcoords[2 * index.texcoord_index + 1],
+                        0.0f, 0.0f};
 
                     // generate random colors
                     float random_r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
@@ -265,6 +266,20 @@ namespace mv
                                   &indices.buffer,
                                   &indices.memory,
                                   t_indices.data());
+
+            // load texture
+            mv::Image::ImageCreateInfo image_info = {};
+            image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+            image_info.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+            image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+            image_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+            std::string delimiter = ".";
+            std::string f_name = filename;
+            std::string no_ext = f_name.substr(0, f_name.find(delimiter)); // should return filename without extention
+            std::string f_name_png = no_ext + ".png";
+
+            image.create(device, image_info, f_name_png);
         }
     };
 };
