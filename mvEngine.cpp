@@ -173,7 +173,7 @@ void mv::Engine::go(void)
 
     // Load models
     // set each object model index to it's Model class container
-    models[0].load(device, "models/viking_room.obj");
+    models[0].load(device, "models/player.obj");
     models[1].load(device, "models/car.obj");
 
     // Create descriptor pool allocator
@@ -251,17 +251,17 @@ void mv::Engine::go(void)
             /*
                 For testing dynamic allocation of descriptor set
             */
-            // if (kbdEvent.get_type() == Keyboard::Event::Type::Press && kbdEvent.get_code() == ' ' && added == false)
-            // {
-            //     //added = true;
-            //     uint32_t tc = 0;
-            //     add_new_model(descriptor_allocator->get(), "models/player.obj");
-            //     for (const auto &model : models)
-            //     {
-            //         tc += model.objects.size();
-            //     }
-            //     std::cout << "\tNew Model Added, COUNT => " << tc + 2 << std::endl;
-            // }
+            if (kbdEvent.get_type() == Keyboard::Event::Type::Press && kbdEvent.get_code() == ' ' && added == false)
+            {
+                //added = true;
+                uint32_t tc = 0;
+                add_new_model(descriptor_allocator->get(), "models/viking_room.obj");
+                for (const auto &model : models)
+                {
+                    tc += model.objects.size();
+                }
+                std::cout << "\tNew Model Added, COUNT => " << tc + 2 << std::endl;
+            }
             /* ---------------------*/
 
             if (kbd.is_key_pressed('i'))
@@ -535,7 +535,7 @@ void mv::Engine::prepare_pipeline(void)
     vi_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
     vi_state.pVertexAttributeDescriptions = attribute_description.data();
     VkPipelineInputAssemblyStateCreateInfo ia_state = mv::initializer::input_assembly_state_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE, 0);
+    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE, 0);
     VkPipelineColorBlendAttachmentState cba_state = mv::initializer::color_blend_attachment_state(0xf, VK_FALSE);
     VkPipelineColorBlendStateCreateInfo cb_state = mv::initializer::color_blend_state_info(1, &cba_state);
     VkPipelineDepthStencilStateCreateInfo ds_state = mv::initializer::depth_stencil_state_info(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);

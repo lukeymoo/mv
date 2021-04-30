@@ -207,6 +207,19 @@ namespace mv
                 throw std::runtime_error(warn + err);
             }
 
+            if (!warn.empty() || !err.empty())
+            {
+                std::cout << "Loader supplied this => " << warn << " :: " << err << std::endl;
+            }
+
+            std::cout << "Current model => " << filename << std::endl;
+            for (auto &material : materials)
+            {
+                std::cout << "RGB => " << material.ambient[0] << ", " << material.ambient[1] << ", " << material.ambient[2] << std::endl;
+            }
+
+            std::cout << "Finished displaying material data" << std::endl;
+
             for (const auto &shape : shapes)
             {
                 for (const auto &index : shape.mesh.indices)
@@ -266,6 +279,11 @@ namespace mv
                                   &indices.buffer,
                                   &indices.memory,
                                   t_indices.data());
+
+            // TODO
+            // Make loading texture conditional
+            // Make allocation of image descriptor conditional
+            // we crash if the texture is not available
 
             // load texture
             mv::Image::ImageCreateInfo image_info = {};
