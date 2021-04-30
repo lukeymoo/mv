@@ -210,8 +210,8 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
                   << "Height-> " << *h << std::endl;
     }
 
-    VkPresentModeKHR selected_present_mode = VK_PRESENT_MODE_FIFO_KHR;
-    //VkPresentModeKHR selected_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+    //VkPresentModeKHR selected_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    VkPresentModeKHR selected_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
     // determine number of swap images
     uint32_t requested_image_count = capabilities.minImageCount + 1;
     // ensure not exceeding limit

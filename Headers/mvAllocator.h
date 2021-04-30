@@ -53,6 +53,59 @@ namespace mv
             return containers.at(current_pool).get();
         }
 
+        void allocate_set(Container *container, VkDescriptorSetLayout &layout, VkDescriptorSet &set)
+        {
+            VkResult result;
+            VkDescriptorSetAllocateInfo alloc_info = {};
+            alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            alloc_info.descriptorPool = container->pool;
+            alloc_info.descriptorSetCount = 1;
+            alloc_info.pSetLayouts = &layout;
+
+            result = vkAllocateDescriptorSets(device, &alloc_info, &set);
+            if (result == VK_SUCCESS)
+            {
+                // ensure allocator index is up to date
+                current_pool = container->index;
+            }
+            else if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
+            {
+                if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
+                {
+                    container->status = Status::Full;
+                }
+                else
+                {
+                    container->status = Status::Fragmented;
+                }
+                // allocate new pool
+                auto new_pool = allocate_pool(container->type, container->count);
+                // use new pool to allocate set
+                allocate_set(new_pool, layout, set);
+                // change passed container to new one
+                container = new_pool;
+            }
+            else
+            {
+                throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
+            }
+        }
+
+        void update_set(Container* container, VkDescriptorBufferInfo &buffer_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
+        {
+            VkWriteDescriptorSet update_info = {};
+            update_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            update_info.dstBinding = dst_binding;
+            update_info.dstSet = dst_set;
+            update_info.descriptorType = container->type;
+            update_info.descriptorCount = 1;
+            update_info.pBufferInfo = &buffer_info;
+
+            vkUpdateDescriptorSets(device, 1, &update_info, 0, nullptr);
+            current_pool = container->index;
+            return;
+        }
+
         typedef struct ContainerInitStruct
         {
             ContainerInitStruct(){};
@@ -120,57 +173,57 @@ namespace mv
             }
 
             // Allocate descriptor set
-            Container *allocate_set(VkDescriptorSetLayout &layout, VkDescriptorSet &set)
-            {
-                VkResult result;
-                VkDescriptorSetAllocateInfo alloc_info = {};
-                alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-                alloc_info.descriptorPool = pool;
-                alloc_info.descriptorSetCount = 1;
-                alloc_info.pSetLayouts = &layout;
+            // Container *allocate_set(VkDescriptorSetLayout &layout, VkDescriptorSet &set)
+            // {
+            //     VkResult result;
+            //     VkDescriptorSetAllocateInfo alloc_info = {};
+            //     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            //     alloc_info.descriptorPool = pool;
+            //     alloc_info.descriptorSetCount = 1;
+            //     alloc_info.pSetLayouts = &layout;
 
-                result = vkAllocateDescriptorSets(device, &alloc_info, &set);
-                if (result == VK_SUCCESS)
-                {
-                    // ensure allocator index is up to date
-                    parent_allocator->current_pool = this->index;
-                    return this;
-                }
-                else if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
-                {
-                    if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
-                    {
-                        status = Status::Full;
-                    }
-                    else
-                    {
-                        status = Status::Fragmented;
-                    }
-                    // allocate new pool, store addr
-                     auto new_pool = parent_allocator->allocate_pool(type, count);
-                    // use new pool to allocate set
-                    return new_pool->allocate_set(layout, set);
-                }
-                else
-                {
-                    throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
-                }
-            }
+            //     result = vkAllocateDescriptorSets(device, &alloc_info, &set);
+            //     if (result == VK_SUCCESS)
+            //     {
+            //         // ensure allocator index is up to date
+            //         parent_allocator->current_pool = this->index;
+            //         return this;
+            //     }
+            //     else if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
+            //     {
+            //         if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
+            //         {
+            //             status = Status::Full;
+            //         }
+            //         else
+            //         {
+            //             status = Status::Fragmented;
+            //         }
+            //         // allocate new pool, store addr
+            //          auto new_pool = parent_allocator->allocate_pool(type, count);
+            //         // use new pool to allocate set
+            //         return new_pool->allocate_set(layout, set);
+            //     }
+            //     else
+            //     {
+            //         throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
+            //     }
+            // }
 
-            Container *update_set(VkDescriptorBufferInfo &buffer_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
-            {
-                VkWriteDescriptorSet update_info = {};
-                update_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                update_info.dstBinding = dst_binding;
-                update_info.dstSet = dst_set;
-                update_info.descriptorType = type;
-                update_info.descriptorCount = 1;
-                update_info.pBufferInfo = &buffer_info;
+            // Container *update_set(VkDescriptorBufferInfo &buffer_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
+            // {
+            //     VkWriteDescriptorSet update_info = {};
+            //     update_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            //     update_info.dstBinding = dst_binding;
+            //     update_info.dstSet = dst_set;
+            //     update_info.descriptorType = type;
+            //     update_info.descriptorCount = 1;
+            //     update_info.pBufferInfo = &buffer_info;
 
-                vkUpdateDescriptorSets(device, 1, &update_info, 0, nullptr);
-                parent_allocator->current_pool = this->index;
-                return this;
-            }
+            //     vkUpdateDescriptorSets(device, 1, &update_info, 0, nullptr);
+            //     parent_allocator->current_pool = this->index;
+            //     return this;
+            // }
         };
 
         Container *allocate_pool(VkDescriptorType type, uint32_t count)
