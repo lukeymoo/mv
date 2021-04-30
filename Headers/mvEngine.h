@@ -4,6 +4,9 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
+#include <random>
+
+#include "mvAllocator.h"
 #include "mvCamera.h"
 #include "mvWindow.h"
 #include "mvModel.h"
@@ -26,17 +29,22 @@ namespace mv
         Engine &operator=(const Engine &) = delete;
         Engine(const Engine &) = delete;
 
+        std::unique_ptr<Allocator> descriptor_allocator;
+
         Engine(int w, int h, const char *title);
         ~Engine() // Cleanup
         {
             vkDeviceWaitIdle(device->device);
+
             if (pipeline)
             {
                 vkDestroyPipeline(device->device, pipeline, nullptr);
+                pipeline = nullptr;
             }
             if (pipeline_layout)
             {
                 vkDestroyPipelineLayout(device->device, pipeline_layout, nullptr);
+                pipeline_layout = nullptr;
             }
 
             // cleanup descriptor sets
@@ -44,23 +52,49 @@ namespace mv
             if (descriptor_pool)
             {
                 vkDestroyDescriptorPool(device->device, descriptor_pool, nullptr);
+                descriptor_pool = nullptr;
             }
 
             // cleanup layout
             if (model_layout)
             {
                 vkDestroyDescriptorSetLayout(device->device, model_layout, nullptr);
+                model_layout = nullptr;
             }
             if (view_layout)
             {
                 vkDestroyDescriptorSetLayout(device->device, view_layout, nullptr);
+                view_layout = nullptr;
             }
             if (projection_layout)
             {
                 vkDestroyDescriptorSetLayout(device->device, projection_layout, nullptr);
+                projection_layout = nullptr;
             }
 
             // objects
+            // destroy model data
+            for (auto &model : models)
+            {
+                if (device)
+                {
+                    if (model.vertices.buffer)
+                    {
+                        vkDestroyBuffer(device->device, model.vertices.buffer, nullptr);
+                        vkFreeMemory(device->device, model.vertices.memory, nullptr);
+                        model.vertices.buffer = nullptr;
+                        model.vertices.memory = nullptr;
+                    }
+                    if (model.indices.buffer)
+                    {
+                        vkDestroyBuffer(device->device, model.indices.buffer, nullptr);
+                        vkFreeMemory(device->device, model.indices.memory, nullptr);
+                        model.indices.buffer = nullptr;
+                        model.indices.memory = nullptr;
+                    }
+                }
+            }
+            // destroy uniforms
             for (auto &model : models)
             {
                 for (auto &obj : model.objects)
@@ -75,6 +109,8 @@ namespace mv
         GlobalUniforms global_uniforms;
         std::unique_ptr<Camera> camera;
 
+        void add_new_model(mv::Allocator::Container *pool, const char *filename);
+
         void recreate_swapchain(void);
 
         void go(void);
@@ -83,6 +119,12 @@ namespace mv
 
     protected:
         void prepare_uniforms(void);
+
+        void create_descriptor_layout(VkDescriptorType type,
+                                      uint32_t count,
+                                      uint32_t binding,
+                                      VkDescriptorSetLayout &layout);
+
         void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);
         void prepare_pipeline(void);
         void cleanup_swapchain(void);

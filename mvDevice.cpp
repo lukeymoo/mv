@@ -36,10 +36,12 @@ mv::Device::~Device(void)
     if (m_command_pool)
     {
         vkDestroyCommandPool(device, m_command_pool, nullptr);
+        m_command_pool = nullptr;
     }
     if (device) // logical device
     {
         vkDestroyDevice(device, nullptr);
+        device = nullptr;
     }
 }
 

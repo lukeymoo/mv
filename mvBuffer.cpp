@@ -45,9 +45,11 @@ void mv::Buffer::destroy(void)
     if (buffer)
     {
         vkDestroyBuffer(device, buffer, nullptr);
+        buffer = nullptr;
     }
     if (memory)
     {
         vkFreeMemory(device, memory, nullptr);
+        memory = nullptr;
     }
 }

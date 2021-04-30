@@ -55,7 +55,7 @@ namespace mv
             rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
             rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
-            matrices.model = rotation_matrix * translation_matrix;
+            matrices.model = translation_matrix * rotation_matrix;
         }
 
         void get_front_face(void)
@@ -144,25 +144,37 @@ namespace mv
 
     public:
         Model(){};
+        // Resize with copy was losing data
+        Model(const Model &m) = delete;
+        // Prefer move operations over copy
+        Model(Model &&) = default;
         ~Model()
         {
-            if (device)
-            {
-                if (vertices.buffer)
-                {
-                    vkDestroyBuffer(device->device, vertices.buffer, nullptr);
-                    vkFreeMemory(device->device, vertices.memory, nullptr);
-                }
-                if (indices.buffer)
-                {
-                    vkDestroyBuffer(device->device, indices.buffer, nullptr);
-                    vkFreeMemory(device->device, indices.memory, nullptr);
-                }
-                if (descriptor_pool)
-                {
-                    vkDestroyDescriptorPool(device->device, descriptor_pool, nullptr);
-                }
-            }
+            // MOVED TO ENGINE ~
+            // cleanup of each models buffers must be done in some other way
+            // vector resize or push_back implicitly calls destructor for all contents even when using move instead of copy
+            // if (device)
+            // {
+            //     if (vertices.buffer)
+            //     {
+            //         vkDestroyBuffer(device->device, vertices.buffer, nullptr);
+            //         vkFreeMemory(device->device, vertices.memory, nullptr);
+            //         vertices.buffer = nullptr;
+            //         vertices.memory = nullptr;
+            //     }
+            //     if (indices.buffer)
+            //     {
+            //         vkDestroyBuffer(device->device, indices.buffer, nullptr);
+            //         vkFreeMemory(device->device, indices.memory, nullptr);
+            //         indices.buffer = nullptr;
+            //         indices.memory = nullptr;
+            //     }
+            //     if (descriptor_pool)
+            //     {
+            //         vkDestroyDescriptorPool(device->device, descriptor_pool, nullptr);
+            //         descriptor_pool = nullptr;
+            //     }
+            // }
         }
 
         mv::Device *device;
@@ -291,25 +303,6 @@ namespace mv
                                   &indices.buffer,
                                   &indices.memory,
                                   t_indices.data());
-
-            // configure descriptor pool, layout, sets
-            // std::vector<VkDescriptorPoolSize> poolSizes = {
-            //     {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
-
-            // VkDescriptorPoolCreateInfo poolInfo = {};
-            // poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-            // poolInfo.pNext = nullptr;
-            // poolInfo.flags = 0;
-            // poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-            // poolInfo.pPoolSizes = poolSizes.data();
-            // poolInfo.maxSets = (static_cast<uint32_t>(poolSizes.size()) * imageCount);
-
-            // if (vkCreateDescriptorPool(device->device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
-            // {
-            //     throw std::runtime_error("Failed to create descriptor pool for model");
-            // }
-
-            // Descriptor layout done in Engine as the layout is global
         }
     };
 };

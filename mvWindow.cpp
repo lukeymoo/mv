@@ -109,6 +109,7 @@ mv::MWindow::~MWindow(void)
         if (fence != nullptr)
         {
             vkDestroyFence(m_device, fence, nullptr);
+            fence = nullptr;
         }
     }
 
@@ -123,6 +124,7 @@ mv::MWindow::~MWindow(void)
             if (frame_buffers[i])
             {
                 vkDestroyFramebuffer(m_device, frame_buffers[i], nullptr);
+                frame_buffers[i] = nullptr;
             }
         }
     }
@@ -132,11 +134,14 @@ mv::MWindow::~MWindow(void)
     if (m_pipeline_cache)
     {
         vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
+        m_pipeline_cache = nullptr;
     }
 
     destroy_command_pool();
     vkDestroySemaphore(m_device, semaphores.render_complete, nullptr);
     vkDestroySemaphore(m_device, semaphores.present_complete, nullptr);
+    semaphores.present_complete = nullptr;
+    semaphores.render_complete = nullptr;
 
     if (device)
     {
@@ -146,6 +151,7 @@ mv::MWindow::~MWindow(void)
     if (m_instance)
     {
         vkDestroyInstance(m_instance, nullptr);
+        m_instance = nullptr;
     }
 
     if (display && window)
@@ -634,6 +640,7 @@ void mv::MWindow::destroy_command_pool(void)
     if (m_command_pool != nullptr)
     {
         vkDestroyCommandPool(m_device, m_command_pool, nullptr);
+        m_command_pool = nullptr;
     }
     return;
 }
@@ -835,14 +842,14 @@ void mv::MWindow::handle_x_event(void)
     case LeaveNotify:
     case FocusOut:
         mouse.on_mouse_leave();
-        XUngrabPointer(display, CurrentTime);
+        //XUngrabPointer(display, CurrentTime);
         break;
     case MapNotify:
     case EnterNotify:
         mouse.on_mouse_enter();
         // confine cursor to interior of window
         // mouse released on focus out or cursor leaving window
-        XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
+        //XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
         break;
     case ButtonPress:
         if (event.xbutton.button == Button1)
