@@ -97,6 +97,7 @@ namespace mv
     struct Vertex
     {
         glm::vec4 position;
+        glm::vec4 uv;
         glm::vec4 color;
 
         static VkVertexInputBindingDescription get_binding_description()
@@ -109,22 +110,28 @@ namespace mv
             return binding_description;
         }
 
-        static std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions()
+        static std::array<VkVertexInputAttributeDescription, 3> get_attribute_descriptions()
         {
             // Temp container to be returned
-            std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions{};
+            std::array<VkVertexInputAttributeDescription, 3> attribute_descriptions{};
 
-            // Position
+            // position
             attribute_descriptions[0].binding = 0;
             attribute_descriptions[0].location = 0;
             attribute_descriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
             attribute_descriptions[0].offset = offsetof(Vertex, position);
 
-            // Color
+            // texture uv coordinates
             attribute_descriptions[1].binding = 0;
             attribute_descriptions[1].location = 1;
             attribute_descriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-            attribute_descriptions[1].offset = offsetof(Vertex, color);
+            attribute_descriptions[1].offset = offsetof(Vertex, uv);
+
+            // color
+            attribute_descriptions[2].binding = 0;
+            attribute_descriptions[2].location = 2;
+            attribute_descriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            attribute_descriptions[2].offset = offsetof(Vertex, color);
 
             return attribute_descriptions;
         }
@@ -143,39 +150,12 @@ namespace mv
         }
 
     public:
-        Model(){};
+        Model(void){};
         // Resize with copy was losing data
         Model(const Model &m) = delete;
         // Prefer move operations over copy
         Model(Model &&) = default;
-        ~Model()
-        {
-            // MOVED TO ENGINE ~
-            // cleanup of each models buffers must be done in some other way
-            // vector resize or push_back implicitly calls destructor for all contents even when using move instead of copy
-            // if (device)
-            // {
-            //     if (vertices.buffer)
-            //     {
-            //         vkDestroyBuffer(device->device, vertices.buffer, nullptr);
-            //         vkFreeMemory(device->device, vertices.memory, nullptr);
-            //         vertices.buffer = nullptr;
-            //         vertices.memory = nullptr;
-            //     }
-            //     if (indices.buffer)
-            //     {
-            //         vkDestroyBuffer(device->device, indices.buffer, nullptr);
-            //         vkFreeMemory(device->device, indices.memory, nullptr);
-            //         indices.buffer = nullptr;
-            //         indices.memory = nullptr;
-            //     }
-            //     if (descriptor_pool)
-            //     {
-            //         vkDestroyDescriptorPool(device->device, descriptor_pool, nullptr);
-            //         descriptor_pool = nullptr;
-            //     }
-            // }
-        }
+        ~Model(void){}
 
         mv::Device *device;
         VkDescriptorPool descriptor_pool = nullptr;
@@ -217,30 +197,6 @@ namespace mv
             std::vector<Vertex> t_vertices;
             std::vector<uint32_t> t_indices;
 
-            // std::vector<Vertex> t_vertices = {
-            //     {{-0.5f, -0.5f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-            //     {{0.5f, -0.5f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-            //     {{0.5f, 0.5f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
-            //     {{-0.5f, 0.5f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-
-            //     {{-0.5f, -0.5f, -0.5f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-            //     {{0.5f, -0.5f, -0.5f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-            //     {{0.5f, 0.5f, -0.5f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
-            //     {{-0.5f, 0.5f, -0.5f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}}};
-
-            // std::vector<uint32_t> t_indices = {
-            //     0, 1, 2, 2, 3, 0,
-            //     4, 5, 6, 6, 7, 4};
-
-            // should be a square if aspect ratio is 1.0
-            // std::vector<Vertex> t_vertices = {
-            //     {{ 0.25f,  0.25f, 0.0f, 1.0f }, {1.0f, 0.0f, 0.0f, 1.0f}},
-            //     {{ 0.75f,  0.25f, 0.0f, 1.0f }, {0.0f, 1.0f, 0.0f, 1.0f}},
-            //     {{ 0.75f, -0.25f, 0.0f, 1.0f }, {0.0f, 0.0f, 1.0f, 1.0f}},
-            //     {{ 0.25f, -0.25f, 0.0f, 1.0f }, {1.0f, 1.0f, 1.0f, 1.0f}}
-            // };
-            // std::vector<uint32_t> t_indices = {0, 1, 2, 3, 0, 2};
-
             std::string warn, err;
 
             if (!tinyobj::LoadObj(&attribute, &shapes, &materials, &warn, &err, filename))
@@ -260,6 +216,16 @@ namespace mv
                         attribute.vertices[3 * index.vertex_index + 2],
                         1.0f};
 
+                    // vec4 for maintaining alignment
+                    // only x,y positions are used
+                    vertex.uv = {
+                        attribute.texcoords[2 * index.texcoord_index + 0],
+                        attribute.texcoords[2 * index.texcoord_index + 1],
+                        0.0f, 0.0f
+                    };
+
+
+                    // generate random colors
                     float random_r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
                     float random_g = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
                     float random_b = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
@@ -272,10 +238,6 @@ namespace mv
                     float b = (random_b * range) + min;
 
                     vertex.color = {r, g, b, 1.0f};
-
-                    // TODO
-                    // Perform removal of duplicate vertices before adding
-                    // Add texture UV data to loader
 
                     t_vertices.push_back(vertex);
                     vertices.count++;

@@ -232,7 +232,10 @@ namespace mv
 
             if (type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
             {
-                pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 * count}};
+                pool_sizes = {
+                    {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+                    {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}
+                };
             }
 
             if (pool_sizes.empty())
@@ -259,6 +262,7 @@ namespace mv
                 init_struct.count = count;
 
                 // assign self after move to vector
+                std::cout << "Allocating new pool" << std::endl;
 
                 Container np(&init_struct);
                 np.pool = pool;
