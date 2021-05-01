@@ -18,13 +18,15 @@ namespace mv
     public:
         std::vector<mv::Model> models;
 
-        VkPipeline pipeline = nullptr;
-        VkPipelineLayout pipeline_layout = nullptr;
+        VkPipeline pipeline_w_sampler = nullptr;
+        VkPipeline pipeline_no_sampler = nullptr;
+
+        VkPipelineLayout pipeline_layout_w_sampler = nullptr;
+        VkPipelineLayout pipeline_layout_no_sampler = nullptr;
 
         VkDescriptorPool descriptor_pool = nullptr;
-        VkDescriptorSetLayout model_layout = nullptr;
-        VkDescriptorSetLayout view_layout = nullptr;
-        VkDescriptorSetLayout projection_layout = nullptr;
+        VkDescriptorSetLayout sampler_layout = nullptr;
+        VkDescriptorSetLayout uniform_layout = nullptr;
 
         Engine &operator=(const Engine &) = delete;
         Engine(const Engine &) = delete;
@@ -36,15 +38,28 @@ namespace mv
         {
             vkDeviceWaitIdle(device->device);
 
-            if (pipeline)
+            // pipelines
+            if (pipeline_w_sampler)
             {
-                vkDestroyPipeline(device->device, pipeline, nullptr);
-                pipeline = nullptr;
+                vkDestroyPipeline(device->device, pipeline_w_sampler, nullptr);
+                pipeline_w_sampler = nullptr;
             }
-            if (pipeline_layout)
+            if (pipeline_no_sampler)
             {
-                vkDestroyPipelineLayout(device->device, pipeline_layout, nullptr);
-                pipeline_layout = nullptr;
+                vkDestroyPipeline(device->device, pipeline_no_sampler, nullptr);
+                pipeline_no_sampler = nullptr;
+            }
+            
+            // pipeline layouts
+            if (pipeline_layout_w_sampler)
+            {
+                vkDestroyPipelineLayout(device->device, pipeline_layout_w_sampler, nullptr);
+                pipeline_layout_w_sampler = nullptr;
+            }
+            if (pipeline_layout_no_sampler)
+            {
+                vkDestroyPipelineLayout(device->device, pipeline_layout_no_sampler, nullptr);
+                pipeline_layout_no_sampler = nullptr;
             }
 
             // cleanup descriptor sets
@@ -55,29 +70,76 @@ namespace mv
                 descriptor_pool = nullptr;
             }
 
-            // cleanup layout
-            if (model_layout)
+            // cleanup layouts
+            if (uniform_layout)
             {
-                vkDestroyDescriptorSetLayout(device->device, model_layout, nullptr);
-                model_layout = nullptr;
+                vkDestroyDescriptorSetLayout(device->device, uniform_layout, nullptr);
+                uniform_layout = nullptr;
             }
-            if (view_layout)
+            if (sampler_layout)
             {
-                vkDestroyDescriptorSetLayout(device->device, view_layout, nullptr);
-                view_layout = nullptr;
-            }
-            if (projection_layout)
-            {
-                vkDestroyDescriptorSetLayout(device->device, projection_layout, nullptr);
-                projection_layout = nullptr;
+                vkDestroyDescriptorSetLayout(device->device, sampler_layout, nullptr);
+                sampler_layout = nullptr;
             }
 
             // objects
             // destroy model data
             for (auto &model : models)
             {
+                for (auto &mesh : model._meshes)
+                {
+                    if (mesh.vertex_buffer)
+                    {
+                        vkDestroyBuffer(device->device, mesh.vertex_buffer, nullptr);
+                        mesh.vertex_buffer = nullptr;
+                    }
+                    if (mesh.vertex_memory)
+                    {
+                        vkFreeMemory(device->device, mesh.vertex_memory, nullptr);
+                        mesh.vertex_memory = nullptr;
+                    }
+
+                    if (mesh.index_buffer)
+                    {
+                        vkDestroyBuffer(device->device, mesh.index_buffer, nullptr);
+                        mesh.index_buffer = nullptr;
+                    }
+                    if (mesh.index_memory)
+                    {
+                        vkFreeMemory(device->device, mesh.index_memory, nullptr);
+                        mesh.index_memory = nullptr;
+                    }
+                    // cleanup textures
+                    for (auto &texture : mesh.textures)
+                    {
+                        vkDestroySampler(device->device, texture.texture.sampler, nullptr);
+                        vkDestroyImageView(device->device, texture.texture.image_view, nullptr);
+                        vkDestroyImage(device->device, texture.texture.image, nullptr);
+                        vkFreeMemory(device->device, texture.texture.memory, nullptr);
+                    }
+                }
                 if (device)
                 {
+                    if (model.image.sampler)
+                    {
+                        vkDestroySampler(device->device, model.image.sampler, nullptr);
+                        model.image.sampler = nullptr;
+                    }
+                    if (model.image.image_view)
+                    {
+                        vkDestroyImageView(device->device, model.image.image_view, nullptr);
+                        model.image.image_view = nullptr;
+                    }
+                    if (model.image.image)
+                    {
+                        vkDestroyImage(device->device, model.image.image, nullptr);
+                        model.image.image = nullptr;
+                    }
+                    if (model.image.memory)
+                    {
+                        vkFreeMemory(device->device, model.image.memory, nullptr);
+                        model.image.memory = nullptr;
+                    }
                     if (model.vertices.buffer)
                     {
                         vkDestroyBuffer(device->device, model.vertices.buffer, nullptr);
@@ -123,6 +185,7 @@ namespace mv
         void create_descriptor_layout(VkDescriptorType type,
                                       uint32_t count,
                                       uint32_t binding,
+                                      VkPipelineStageFlags stage_flags,
                                       VkDescriptorSetLayout &layout);
 
         void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);

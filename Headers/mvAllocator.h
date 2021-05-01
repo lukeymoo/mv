@@ -79,7 +79,7 @@ namespace mv
                     container->status = Status::Fragmented;
                 }
                 // allocate new pool
-                auto new_pool = allocate_pool(container->type, container->count);
+                auto new_pool = allocate_pool(container->count);
                 // use new pool to allocate set
                 allocate_set(new_pool, layout, set);
                 // change passed container to new one
@@ -91,15 +91,30 @@ namespace mv
             }
         }
 
-        void update_set(Container* container, VkDescriptorBufferInfo &buffer_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
+        void update_set(Container *container, VkDescriptorBufferInfo &buffer_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
         {
             VkWriteDescriptorSet update_info = {};
             update_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             update_info.dstBinding = dst_binding;
             update_info.dstSet = dst_set;
-            update_info.descriptorType = container->type;
+            update_info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             update_info.descriptorCount = 1;
             update_info.pBufferInfo = &buffer_info;
+
+            vkUpdateDescriptorSets(device, 1, &update_info, 0, nullptr);
+            current_pool = container->index;
+            return;
+        }
+
+        void update_set(Container *container, VkDescriptorImageInfo &image_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
+        {
+            VkWriteDescriptorSet update_info = {};
+            update_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            update_info.dstBinding = dst_binding;
+            update_info.dstSet = dst_set;
+            update_info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            update_info.descriptorCount = 1;
+            update_info.pImageInfo = &image_info;
 
             vkUpdateDescriptorSets(device, 1, &update_info, 0, nullptr);
             current_pool = container->index;
@@ -113,7 +128,6 @@ namespace mv
             VkDevice *device;
             Allocator *parent_allocator = nullptr;                // ptr to allocator all pools have been allocated with
             std::vector<std::unique_ptr<Container>> *pools_array; // ptr to container for all pools
-            VkDescriptorType type;                                // type of descriptors this pool was allocated for
             uint32_t count;                                       // max sets specified at pool allocation
         } ContainerInitStruct;
 
@@ -150,7 +164,6 @@ namespace mv
                 this->device = *(init_struct->device);
                 this->parent_allocator = init_struct->parent_allocator;
                 this->pools_array = init_struct->pools_array;
-                this->type = init_struct->type;
                 this->count = init_struct->count;
             }
             // parent container `Allocator` does the cleanup of all it's child objects
@@ -226,14 +239,11 @@ namespace mv
             // }
         };
 
-        Container *allocate_pool(VkDescriptorType type, uint32_t count)
+        Container *allocate_pool(uint32_t count)
         {
-            std::vector<VkDescriptorPoolSize> pool_sizes;
-
-            if (type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-            {
-                pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 * count}};
-            }
+            std::vector<VkDescriptorPoolSize> pool_sizes = {
+                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+                {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
 
             if (pool_sizes.empty())
             {
@@ -255,10 +265,10 @@ namespace mv
                 init_struct.device = &device;
                 init_struct.parent_allocator = this;
                 init_struct.pools_array = &containers;
-                init_struct.type = type;
                 init_struct.count = count;
 
                 // assign self after move to vector
+                std::cout << "Allocating new pool" << std::endl;
 
                 Container np(&init_struct);
                 np.pool = pool;

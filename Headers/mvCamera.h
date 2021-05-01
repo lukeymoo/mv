@@ -162,7 +162,7 @@ namespace mv
             */
             if (camera_type == Camera::Type::third_person)
             {
-                set_position(glm::vec3(target->position.x, target->position.y, target->position.z));
+                set_position(glm::vec3(target->position.x, target->position.y - 0.5f, target->position.z));
 
                 // angle around player
                 glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f), glm::radians(orbit_angle + target->rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -208,6 +208,8 @@ namespace mv
             translation_matrix = glm::translate(glm::mat4(1.0), position);
 
             matrices->view = rotation_matrix * translation_matrix;
+            memcpy(matrices->ubo_view.mapped, &matrices->view, sizeof(matrices->view));
+
         }
 
         /*
@@ -286,7 +288,7 @@ namespace mv
         }
         void rotate(glm::vec3 delta, float frame_delta)
         {
-            float speed_limit = 0.06f;
+            float speed_limit = 0.10f;
             float to_apply_x = (delta.x * frame_delta * speed_limit);
             float to_apply_y = (delta.y * frame_delta * speed_limit);
 

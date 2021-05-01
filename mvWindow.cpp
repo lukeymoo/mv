@@ -277,6 +277,7 @@ bool mv::MWindow::init_vulkan(void)
 
     // get graphics queue
     vkGetDeviceQueue(m_device, device->queue_family_indices.graphics, 0, &m_graphics_queue);
+    device->graphics_queue = m_graphics_queue; // ensure device obj has handle to graphics queue
 
     swapchain.connect(m_instance, m_physical_device, m_device);
 
