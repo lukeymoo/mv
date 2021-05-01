@@ -25,23 +25,37 @@ void mv::Engine::cleanup_swapchain(void)
 
     cleanup_depth_stencil();
 
-    // destroy pipeline
-    if (pipeline)
+    // destroy pipelines
+    if (pipeline_w_sampler)
     {
-        vkDestroyPipeline(m_device, pipeline, nullptr);
-        pipeline = nullptr;
+        vkDestroyPipeline(m_device, pipeline_w_sampler, nullptr);
+        pipeline_w_sampler = nullptr;
     }
+    if (pipeline_no_sampler)
+    {
+        vkDestroyPipeline(m_device, pipeline_no_sampler, nullptr);
+        pipeline_no_sampler = nullptr;
+    }
+
+    // pipeline cache
     if (m_pipeline_cache)
     {
         vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
         m_pipeline_cache = nullptr;
     }
-    // destroy pipeline layout
-    if (pipeline_layout)
+
+    // pipeline layouts
+    if (pipeline_layout_w_sampler)
     {
-        vkDestroyPipelineLayout(m_device, pipeline_layout, nullptr);
-        pipeline_layout = nullptr;
+        vkDestroyPipelineLayout(m_device, pipeline_layout_w_sampler, nullptr);
+        pipeline_layout_w_sampler = nullptr;
     }
+    if (pipeline_layout_no_sampler)
+    {
+        vkDestroyPipelineLayout(m_device, pipeline_layout_no_sampler, nullptr);
+        pipeline_layout_no_sampler = nullptr;
+    }
+
     // destroy render pass
     if (m_render_pass)
     {
@@ -130,7 +144,7 @@ void mv::Engine::go(void)
     }
 
     // Initialze model types
-    uint32_t model_type_count = 2;
+    uint32_t model_type_count = 3;
 
     models.resize(model_type_count);
 
@@ -146,35 +160,57 @@ void mv::Engine::go(void)
     // configure every OBJECTs position, rotation BEFORE uniform buffer creation
     // the OBJECTs count will be set by a map editor of some sort later
     models[0].resize_object_container(1);
-    models[1].resize_object_container(1);
     models[0].objects[0].position = glm::vec3(0.0f, 0.0f, 0.0f);
-    //models[0].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f); // use this for player.obj
-    models[0].objects[0].rotation = glm::vec3(90.0f, 0.0f, 0.0f); // viking_room.obj
+    models[0].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f); // viking_room.obj
+    models[0].objects[0].scale_factor = 1.0f;
 
-    models[1].objects[0].position = glm::vec3(0.0f, 0.0f, -5.0f);
-    models[1].objects[0].rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    models[1].resize_object_container(1);
+    models[1].objects[0].position = glm::vec3(0.0f, 0.0f, -4.0f);
+    models[1].objects[0].rotation = glm::vec3(90.0f, 0.0f, 0.0f);
+    models[1].objects[0].scale_factor = 0.7f;
+
+    models[2].resize_object_container(1);
+    models[2].objects[0].position = glm::vec3(5.0f, 0.0f, 0.0f);
+    models[2].objects[0].rotation = glm::vec3(90.0f, 0.0f, 0.0f);
+    models[2].objects[0].scale_factor = 0.01f;
 
     // configure camera before uniform buffer creation
     camera_init_struct camera_params;
     camera_params.fov = 50.0f * ((float)swapchain.swap_extent.width / swapchain.swap_extent.height);
     camera_params.aspect = static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
     camera_params.nearz = 0.01f;
-    camera_params.farz = 100.0f;
+    camera_params.farz = 200.0f;
     camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
     camera_params.matrices = &global_uniforms;
 
     camera_params.camera_type = Camera::Type::third_person;
-    camera_params.target = &models[0].objects[0];
+    camera_params.target = &models[2].objects[0];
 
     camera = std::make_unique<Camera>(camera_params);
 
     // Prepare uniforms
     prepare_uniforms();
 
+    models[0]._load(device, "models/Male.obj");
+    models[1]._load(device, "models/viking_room.fbx");
+    models[2]._load(device, "models/Security.fbx");
+
+    uint32_t total_vertices = 0;
+    uint32_t total_indices = 0;
+    uint32_t total_textures = 0;
+    for (auto &mesh : models[0]._meshes)
+    {
+        total_vertices += mesh.vertices.size();
+        total_indices += mesh.indices.size();
+        total_textures += mesh.textures.size();
+    }
+    std::cout << "Total vertices => " << total_vertices << std::endl
+              << "Total indices => " << total_indices << std::endl
+              << "Total textures => " << total_textures << std::endl;
+
     // Load models
     // set each object model index to it's Model class container
-    models[0].load(device, "models/player.obj");
-    models[1].load(device, "models/car.obj");
+    //models[0].load(device, "models/viking_room.obj");
 
     // Create descriptor pool allocator
     descriptor_allocator = std::make_unique<Allocator>(device->device);
@@ -207,12 +243,15 @@ void mv::Engine::go(void)
         // Handle input events
         if (camera->get_type() == Camera::Type::first_person)
         {
-            if (mouseEvent.get_type() == Mouse::Event::Type::Move && mouse.is_in_window())
+            if (mouse.is_left_pressed())
             {
-                // get delta
-                std::pair<int, int> mouse_delta = mouse.get_pos_delta();
-                glm::vec3 rotation_delta = glm::vec3(mouse_delta.second, mouse_delta.first, 0.0f);
-                camera->rotate(rotation_delta, fpsdt);
+                if (mouseEvent.get_type() == Mouse::Event::Type::Move && mouse.is_in_window())
+                {
+                    // get delta
+                    std::pair<int, int> mouse_delta = mouse.get_pos_delta();
+                    glm::vec3 rotation_delta = glm::vec3(mouse_delta.second, mouse_delta.first, 0.0f);
+                    camera->rotate(rotation_delta, fpsdt);
+                }
             }
         }
 
@@ -251,34 +290,34 @@ void mv::Engine::go(void)
             /*
                 For testing dynamic allocation of descriptor set
             */
-            if (kbdEvent.get_type() == Keyboard::Event::Type::Press && kbdEvent.get_code() == ' ' && added == false)
-            {
-                //added = true;
-                uint32_t tc = 0;
-                add_new_model(descriptor_allocator->get(), "models/viking_room.obj");
-                for (const auto &model : models)
-                {
-                    tc += model.objects.size();
-                }
-                std::cout << "\tNew Model Added, COUNT => " << tc + 2 << std::endl;
-            }
+            // if (kbdEvent.get_type() == Keyboard::Event::Type::Press && kbdEvent.get_code() == ' ' && added == false)
+            // {
+            //     //added = true;
+            //     uint32_t tc = 0;
+            //     add_new_model(descriptor_allocator->get(), "models/viking_room.obj");
+            //     for (const auto &model : models)
+            //     {
+            //         tc += model.objects.size();
+            //     }
+            //     std::cout << "\tNew Model Added, COUNT => " << tc + 2 << std::endl;
+            // }
             /* ---------------------*/
 
             if (kbd.is_key_pressed('i'))
             {
-                models[0].objects[0].move_forward(fpsdt);
+                camera->target->move_forward(fpsdt);
             }
             if (kbd.is_key_pressed('k'))
             {
-                models[0].objects[0].move_backward(fpsdt);
+                camera->target->move_backward(fpsdt);
             }
             if (kbd.is_key_pressed('j'))
             {
-                models[0].objects[0].move_left(fpsdt);
+                camera->target->move_left(fpsdt);
             }
             if (kbd.is_key_pressed('l'))
             {
-                models[0].objects[0].move_right(fpsdt);
+                camera->target->move_right(fpsdt);
             }
 
             if (kbd.is_key_pressed('w'))
@@ -486,17 +525,34 @@ void mv::Engine::create_descriptor_sets(GlobalUniforms *view_proj_ubo_container,
     // allocate for per model ubo
     for (auto &model : models)
     {
+        if (model.has_texture)
+        {
+            // create descriptor for each mesh sampler
+            for (auto &mesh : model._meshes)
+            {
+                for (auto &texture : mesh.textures)
+                {
+                    descriptor_allocator->allocate_set(pool, sampler_layout, texture.descriptor);
+                    descriptor_allocator->update_set(pool, texture.texture.descriptor, texture.descriptor, 0);
+                }
+            }
+        }
+
         for (auto &obj : model.objects)
         {
             // allocate model matrix data descriptor
             descriptor_allocator->allocate_set(pool, uniform_layout, obj.model_descriptor);
-            // allocate model texture sampler descriptor
-            descriptor_allocator->allocate_set(pool, sampler_layout, obj.texture_descriptor);
-
             // bind model matrix descriptor with uniform buffer
             descriptor_allocator->update_set(pool, obj.uniform_buffer.descriptor, obj.model_descriptor, 0);
-            // bind model texture descriptor with image sampler
-            descriptor_allocator->update_set(pool, model.image.descriptor, obj.texture_descriptor, 0);
+
+            // only if model has texture to avoid crashes
+            if (model.has_texture)
+            {
+                // // allocate model texture sampler descriptor
+                // descriptor_allocator->allocate_set(pool, sampler_layout, obj.texture_descriptor);
+                // // bind model texture descriptor with image sampler
+                // descriptor_allocator->update_set(pool, model.image.descriptor, obj.texture_descriptor, 0);
+            }
         }
     }
     return;
@@ -511,18 +567,31 @@ void mv::Engine::prepare_pipeline(void)
         view matrix uniform
         projection matrix uniform
     */
-    std::vector<VkDescriptorSetLayout> layouts = {uniform_layout, uniform_layout, uniform_layout, sampler_layout};
-    VkPipelineLayoutCreateInfo pline_info = {};
-    pline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pline_info.pNext = nullptr;
-    pline_info.flags = 0;
-    pline_info.setLayoutCount = static_cast<uint32_t>(layouts.size());
-    pline_info.pSetLayouts = layouts.data();
-    // TODO
-    // push constants
-    if (vkCreatePipelineLayout(device->device, &pline_info, nullptr, &pipeline_layout) != VK_SUCCESS)
+    std::vector<VkDescriptorSetLayout> layout_w_sampler = {uniform_layout, uniform_layout, uniform_layout, sampler_layout};
+    std::vector<VkDescriptorSetLayout> layout_no_sampler = {uniform_layout, uniform_layout, uniform_layout};
+    //std::vector<VkDescriptorSetLayout> layouts = {uniform_layout, uniform_layout, uniform_layout};
+    VkPipelineLayoutCreateInfo w_sampler_info = {};
+    w_sampler_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    w_sampler_info.pNext = nullptr;
+    w_sampler_info.flags = 0;
+    w_sampler_info.setLayoutCount = static_cast<uint32_t>(layout_w_sampler.size());
+    w_sampler_info.pSetLayouts = layout_w_sampler.data();
+
+    if (vkCreatePipelineLayout(device->device, &w_sampler_info, nullptr, &pipeline_layout_w_sampler) != VK_SUCCESS)
     {
-        throw std::runtime_error("Failed to create pipeline layout");
+        throw std::runtime_error("Failed to create pipeline layout with sampler");
+    }
+
+    VkPipelineLayoutCreateInfo no_sampler_info = {};
+    no_sampler_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    no_sampler_info.pNext = nullptr;
+    no_sampler_info.flags = 0;
+    no_sampler_info.setLayoutCount = static_cast<uint32_t>(layout_no_sampler.size());
+    no_sampler_info.pSetLayouts = layout_no_sampler.data();
+
+    if (vkCreatePipelineLayout(device->device, &no_sampler_info, nullptr, &pipeline_layout_no_sampler) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create pipeline layout with no sampler");
     }
 
     auto binding_description = Vertex::get_binding_description();
@@ -560,15 +629,17 @@ void mv::Engine::prepare_pipeline(void)
     // Load shaders
     auto vertex_shader = read_file("shaders/vertex.spv");
     auto fragment_shader = read_file("shaders/fragment.spv");
+    auto fragment_shader_no_sampler = read_file("shaders/fragment_no_sampler.spv");
 
     // Ensure we have files
-    if (vertex_shader.empty() || fragment_shader.empty())
+    if (vertex_shader.empty() || fragment_shader.empty() || fragment_shader_no_sampler.empty())
     {
         throw std::runtime_error("Failed to load fragment or vertex shader spv files");
     }
 
     VkShaderModule vertex_shader_module = create_shader_module(vertex_shader);
     VkShaderModule fragment_shader_module = create_shader_module(fragment_shader);
+    VkShaderModule fragment_shader_no_sampler_module = create_shader_module(fragment_shader_no_sampler);
 
     // describe vertex shader stage
     VkPipelineShaderStageCreateInfo vertex_shader_stage_info{};
@@ -580,7 +651,7 @@ void mv::Engine::prepare_pipeline(void)
     vertex_shader_stage_info.pName = "main";
     vertex_shader_stage_info.pSpecializationInfo = nullptr;
 
-    // describe fragment shader stage
+    // describe fragment shader stage WITH sampler
     VkPipelineShaderStageCreateInfo fragment_shader_stage_info{};
     fragment_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     fragment_shader_stage_info.pNext = nullptr;
@@ -590,27 +661,58 @@ void mv::Engine::prepare_pipeline(void)
     fragment_shader_stage_info.pName = "main";
     fragment_shader_stage_info.pSpecializationInfo = nullptr;
 
+    // fragment shader stage NO sampler
+    VkPipelineShaderStageCreateInfo fragment_shader_stage_no_sampler_info{};
+    fragment_shader_stage_no_sampler_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragment_shader_stage_no_sampler_info.pNext = nullptr;
+    fragment_shader_stage_no_sampler_info.flags = 0;
+    fragment_shader_stage_no_sampler_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragment_shader_stage_no_sampler_info.module = fragment_shader_no_sampler_module;
+    fragment_shader_stage_no_sampler_info.pName = "main";
+    fragment_shader_stage_no_sampler_info.pSpecializationInfo = nullptr;
+
     std::vector<VkPipelineShaderStageCreateInfo> shader_stages = {vertex_shader_stage_info, fragment_shader_stage_info};
+    std::vector<VkPipelineShaderStageCreateInfo> shader_stages_no_sampler = {vertex_shader_stage_info, fragment_shader_stage_no_sampler_info};
 
-    VkGraphicsPipelineCreateInfo pipeline_obj_info = mv::initializer::pipeline_create_info(pipeline_layout, m_render_pass);
-    pipeline_obj_info.pInputAssemblyState = &ia_state;
-    pipeline_obj_info.pRasterizationState = &rs_state;
-    pipeline_obj_info.pColorBlendState = &cb_state;
-    pipeline_obj_info.pDepthStencilState = &ds_state;
-    pipeline_obj_info.pViewportState = &vp_state;
-    pipeline_obj_info.pMultisampleState = &ms_state;
-    pipeline_obj_info.stageCount = static_cast<uint32_t>(shader_stages.size());
-    pipeline_obj_info.pStages = shader_stages.data();
-    pipeline_obj_info.pVertexInputState = &vi_state;
-    pipeline_obj_info.pDynamicState = nullptr;
+    // create pipeline WITH sampler
+    VkGraphicsPipelineCreateInfo pipeline_w_sampler_info = mv::initializer::pipeline_create_info(pipeline_layout_w_sampler, m_render_pass);
+    pipeline_w_sampler_info.pInputAssemblyState = &ia_state;
+    pipeline_w_sampler_info.pRasterizationState = &rs_state;
+    pipeline_w_sampler_info.pColorBlendState = &cb_state;
+    pipeline_w_sampler_info.pDepthStencilState = &ds_state;
+    pipeline_w_sampler_info.pViewportState = &vp_state;
+    pipeline_w_sampler_info.pMultisampleState = &ms_state;
+    pipeline_w_sampler_info.stageCount = static_cast<uint32_t>(shader_stages.size());
+    pipeline_w_sampler_info.pStages = shader_stages.data();
+    pipeline_w_sampler_info.pVertexInputState = &vi_state;
+    pipeline_w_sampler_info.pDynamicState = nullptr;
 
-    if (vkCreateGraphicsPipelines(device->device, m_pipeline_cache, 1, &pipeline_obj_info, nullptr, &pipeline) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(device->device, m_pipeline_cache, 1, &pipeline_w_sampler_info, nullptr, &pipeline_w_sampler) != VK_SUCCESS)
     {
-        throw std::runtime_error("Failed to create graphics pipeline");
+        throw std::runtime_error("Failed to create graphics pipeline with sampler");
+    }
+
+    // Create pipeline with NO sampler
+    VkGraphicsPipelineCreateInfo pipeline_no_sampler_info = mv::initializer::pipeline_create_info(pipeline_layout_no_sampler, m_render_pass);
+    pipeline_no_sampler_info.pInputAssemblyState = &ia_state;
+    pipeline_no_sampler_info.pRasterizationState = &rs_state;
+    pipeline_no_sampler_info.pColorBlendState = &cb_state;
+    pipeline_no_sampler_info.pDepthStencilState = &ds_state;
+    pipeline_no_sampler_info.pViewportState = &vp_state;
+    pipeline_no_sampler_info.pMultisampleState = &ms_state;
+    pipeline_no_sampler_info.stageCount = static_cast<uint32_t>(shader_stages_no_sampler.size());
+    pipeline_no_sampler_info.pStages = shader_stages_no_sampler.data();
+    pipeline_no_sampler_info.pVertexInputState = &vi_state;
+    pipeline_no_sampler_info.pDynamicState = nullptr;
+
+    if (vkCreateGraphicsPipelines(device->device, nullptr, 1, &pipeline_no_sampler_info, nullptr, &pipeline_no_sampler) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create graphics pipeline with no sampler");
     }
 
     vkDestroyShaderModule(device->device, vertex_shader_module, nullptr);
     vkDestroyShaderModule(device->device, fragment_shader_module, nullptr);
+    vkDestroyShaderModule(device->device, fragment_shader_no_sampler_module, nullptr);
     return;
 }
 
@@ -644,39 +746,64 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
     pass_info.pClearValues = cls.data();
 
     vkCmdBeginRenderPass(command_buffers[image_index], &pass_info, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(command_buffers[image_index],
-                      VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      pipeline);
-
-    // for each model bind it's buffers
+    
     for (auto &model : models)
     {
-        model.bindBuffers(command_buffers[image_index]);
-        // VkDeviceSize offsets[] = {0};
-        // vkCmdBindVertexBuffers(command_buffers[image_index], 0, 1, &model.vertices.buffer, offsets);
-        // vkCmdBindIndexBuffer(command_buffers[image_index], model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-        // TODO
-        // draw each object
-        // will eventually instance draw to be more efficient
-        for (const auto &obj : model.objects)
+        // for each model select the appropriate pipeline
+        if (model.has_texture)
         {
-            std::vector<VkDescriptorSet> to_bind = {
-                obj.model_descriptor,
-                global_uniforms.view_descriptor_set,
-                global_uniforms.proj_descriptor_set,
-                obj.texture_descriptor};
-            vkCmdBindDescriptorSets(command_buffers[image_index],
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    pipeline_layout,
-                                    0,
-                                    static_cast<uint32_t>(to_bind.size()),
-                                    to_bind.data(),
-                                    0,
-                                    nullptr);
-            // Call model draw
-            // Reformat later for instanced drawing of each model type we bind
-            vkCmdDraw(command_buffers[image_index], static_cast<uint32_t>(model.vertices.count), 1, 0, 0);
-            //vkCmdDrawIndexed(command_buffers[image_index], static_cast<uint32_t>(models[obj.model_index].indices.count), 1, 0, 0, 0);
+            vkCmdBindPipeline(command_buffers[image_index],
+                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              pipeline_w_sampler);
+        }
+        else
+        {
+            vkCmdBindPipeline(command_buffers[image_index],
+                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              pipeline_no_sampler);
+        }
+        for (auto &object : model.objects)
+        {
+            for (auto &mesh : model._meshes)
+            {
+                std::vector<VkDescriptorSet> to_bind = {
+                    object.model_descriptor,
+                    global_uniforms.view_descriptor_set,
+                    global_uniforms.proj_descriptor_set};
+                if (model.has_texture)
+                {
+                    to_bind.push_back(mesh.textures[0].descriptor);
+                    vkCmdBindDescriptorSets(command_buffers[image_index],
+                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            pipeline_layout_w_sampler,
+                                            0,
+                                            static_cast<uint32_t>(to_bind.size()),
+                                            to_bind.data(),
+                                            0,
+                                            nullptr);
+                }
+                else
+                {
+                    vkCmdBindDescriptorSets(command_buffers[image_index],
+                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            pipeline_layout_no_sampler,
+                                            0,
+                                            static_cast<uint32_t>(to_bind.size()),
+                                            to_bind.data(),
+                                            0,
+                                            nullptr);
+                }
+                // Bind mesh buffers
+                mesh.bindBuffers(command_buffers[image_index]);
+                // VkDeviceSize offsets[] = {0};
+                // vkCmdBindIndexBuffer(command_buffers[image_index], mesh.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+                // vkCmdBindVertexBuffers(command_buffers[image_index], 0, 1, &mesh.vertex_buffer, offsets);
+
+                // Indexed draw
+                vkCmdDrawIndexed(command_buffers[image_index],
+                                 static_cast<uint32_t>(mesh.indices.size()),
+                                 1, 0, 0, 0);
+            }
         }
     }
 

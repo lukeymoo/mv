@@ -4,7 +4,7 @@
             "type": "cppbuild",
             "label": "C/C++: clang++ build active file",
             "command": "make",
-            "args": [],
+            "args": ["-j10"],
             "options": {
                 "cwd": "${workspaceFolder}"
             },

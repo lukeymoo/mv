@@ -10,7 +10,13 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+// TODO
+// replace with assimp
 #include "tiny_loader.h"
+
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 #include "mvDevice.h"
 #include "mvImage.h"
@@ -31,6 +37,14 @@ namespace mv
         VkDescriptorSet proj_descriptor_set;
     };
 
+    struct _Texture
+    {
+        std::string type;
+        std::string path;
+        mv::Image texture;
+        VkDescriptorSet descriptor;
+    };
+
     struct Object
     {
         struct Matrices
@@ -47,6 +61,7 @@ namespace mv
         glm::vec3 position;
         uint32_t model_index;
         glm::vec3 front_face;
+        float scale_factor = 1.0f;
 
         void update(void)
         {
@@ -57,7 +72,9 @@ namespace mv
             rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
             rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
-            matrices.model = translation_matrix * rotation_matrix;
+            glm::mat4 scale_matrix = glm::scale(glm::mat4(1.0), glm::vec3(scale_factor));
+
+            matrices.model = translation_matrix * rotation_matrix * scale_matrix;
         }
 
         void get_front_face(void)
@@ -139,6 +156,29 @@ namespace mv
         }
     };
 
+    struct _Mesh
+    {
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+        std::vector<_Texture> textures;
+
+        // TEMPORARY OBJECTS
+        // EXTREMELY INEFFICIENT USE OF MEMORY
+        VkBuffer vertex_buffer = nullptr;
+        VkBuffer index_buffer = nullptr;
+
+        VkDeviceMemory vertex_memory = nullptr;
+        VkDeviceMemory index_memory = nullptr;
+
+        void bindBuffers(VkCommandBuffer cmdbuffer)
+        {
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vertex_buffer, offsets);
+            vkCmdBindIndexBuffer(cmdbuffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
+            return;
+        }
+    };
+
     class Model
     {
     public:
@@ -160,7 +200,11 @@ namespace mv
         ~Model(void) {}
 
         mv::Device *device;
+        mv::Image image;
+        bool has_texture = false; // do not assume model has texture
         VkDescriptorPool descriptor_pool = nullptr;
+
+        uint32_t image_count = 0;
 
         struct Vertices
         {
@@ -176,19 +220,192 @@ namespace mv
             VkDeviceMemory memory = nullptr;
         } indices;
 
+        /*
+            TinyObj Loader Params
+        */
         tinyobj::attrib_t attribute;
         std::vector<tinyobj::material_t> materials;
         std::vector<tinyobj::shape_t> shapes;
-        mv::Image image;
 
-        uint32_t image_count = 0;
+        /*
+            Assimp Loader Params
+        */
+        std::vector<_Mesh> _meshes;
+        std::vector<_Texture> _loaded_textures;
 
-        void bindBuffers(VkCommandBuffer cmdbuffer)
+        void _load(mv::Device *dvc, const char *filename)
         {
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vertices.buffer, offsets);
-            vkCmdBindIndexBuffer(cmdbuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+            assert(dvc);
+            device = dvc;
+
+            Assimp::Importer importer;
+            const aiScene *ai_scene = importer.ReadFile(filename, aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs);
+
+            if (!ai_scene)
+            {
+                throw std::runtime_error("Assimp failed to load model");
+            }
+
+            // process model data
+            std::cout << "Processing model => " << filename << std::endl;
+            _process_node(ai_scene->mRootNode, ai_scene);
+
+            std::cout << "Meshes loaded => " << _meshes.size() << std::endl;
+
+            // Create buffer for each mesh
+            for (auto &mesh : _meshes)
+            {
+                if (!mesh.textures.empty())
+                {
+                    has_texture = true;
+                }
+                std::cout << "\t[+] Creating buffers for mesh => " << &mesh << std::endl;
+                std::cout << "mvDevice => " << device << std::endl;
+                // create vertex buffer and load vertices
+                device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                      mesh.vertices.size() * sizeof(Vertex),
+                                      &mesh.vertex_buffer,
+                                      &mesh.vertex_memory,
+                                      mesh.vertices.data());
+
+                // create index buffer, load indices data into it
+                device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                      mesh.indices.size() * sizeof(uint32_t),
+                                      &mesh.index_buffer,
+                                      &mesh.index_memory,
+                                      mesh.indices.data());
+            }
+
             return;
+        }
+
+        void _process_node(aiNode *node, const aiScene *scene)
+        {
+            for (uint32_t i = 0; i < node->mNumMeshes; i++)
+            {
+                aiMesh *l_mesh = scene->mMeshes[node->mMeshes[i]];
+                std::cout << "Loading mesh" << std::endl;
+                _meshes.push_back(_process_mesh(l_mesh, scene));
+            }
+
+            // recall function for children of this node
+            for (uint32_t i = 0; i < node->mNumChildren; i++)
+            {
+                std::cout << "Recalling process for child node" << std::endl;
+                _process_node(node->mChildren[i], scene);
+            }
+            return;
+        }
+
+        _Mesh _process_mesh(aiMesh *mesh, const aiScene *scene)
+        {
+            std::cout << "Processing mesh..." << std::endl;
+            std::vector<Vertex> verts;
+            std::vector<uint32_t> inds;
+            std::vector<_Texture> texs;
+
+            for (uint32_t i = 0; i < mesh->mNumVertices; i++)
+            {
+                Vertex v = {};
+
+                // get vertices
+                v.position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z, 1.0f};
+
+                // get uv
+                if (mesh->mTextureCoords[0])
+                {
+                    v.uv = {
+                        // uv
+                        (float)mesh->mTextureCoords[0][i].x,
+                        (float)mesh->mTextureCoords[0][i].y,
+                        0.0f, // fill last 2 float as ubo padding
+                        0.0f};
+                }
+
+                aiColor4D cc;
+                aiGetMaterialColor(scene->mMaterials[mesh->mMaterialIndex], AI_MATKEY_COLOR_DIFFUSE, &cc);
+                v.color = {cc.r, cc.g, cc.b, cc.a};
+
+                verts.push_back(v);
+            }
+
+            for (uint32_t i = 0; i < mesh->mNumFaces; i++)
+            {
+                aiFace face = mesh->mFaces[i];
+
+                for (uint32_t j = 0; j < face.mNumIndices; j++)
+                {
+                    // get indices
+                    inds.push_back(face.mIndices[j]);
+                }
+            }
+
+            // get material textures
+            if (mesh->mMaterialIndex >= 0)
+            {
+                aiMaterial *mat = scene->mMaterials[mesh->mMaterialIndex];
+                std::vector<_Texture> diffuse_maps = _load_material_textures(mat, aiTextureType_DIFFUSE, "texture_diffuse", scene);
+                texs.insert(texs.end(), diffuse_maps.begin(), diffuse_maps.end());
+            }
+
+            // construct _Mesh then return
+            _Mesh m;
+            m.vertices = verts;
+            m.indices = inds;
+            m.textures = texs;
+            return m;
+        }
+
+        std::vector<_Texture> _load_material_textures(aiMaterial *mat, aiTextureType type, std::string type_name, const aiScene *scene)
+        {
+            std::cout << "Loading material textures" << std::endl;
+            std::vector<_Texture> textures;
+            for (uint32_t i = 0; i < mat->GetTextureCount(type); i++)
+            {
+                aiString t_name;
+                mat->GetTexture(type, i, &t_name);
+                bool skip = false;
+                // check if this material texture has already been loaded
+                for (uint32_t j = 0; j < _loaded_textures.size(); j++)
+                {
+                    if (strcmp(_loaded_textures[j].path.c_str(), t_name.C_Str()) == 0)
+                    {
+                        textures.push_back(_loaded_textures[j]);
+                        skip = true;
+                        break;
+                    }
+                }
+
+                // if not already loaded, load it
+                if (!skip)
+                {
+                    _Texture tex;
+                    // TODO
+                    // if embedded compressed texture type
+                    std::string filename = std::string(t_name.C_Str());
+                    filename = "models/" + filename;
+                    std::replace(filename.begin(), filename.end(), '\\', '/');
+
+                    tex.path = filename;
+                    tex.type = type;
+                    mv::Image::ImageCreateInfo create_info = {};
+                    create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+                    create_info.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+                    create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+                    create_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+                    // load texture
+                    tex.texture.create(device, create_info, filename);
+                    // add to vector for return
+                    textures.push_back(tex);
+                    // add to loaded_textures to save processing time in event of duplicate
+                    _loaded_textures.push_back(tex);
+                }
+            }
+            std::cout << "Loaded => " << textures.size() << " material textures" << std::endl;
+            return textures;
         }
 
         void load(mv::Device *dvc, const char *filename)

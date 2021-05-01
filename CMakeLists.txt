@@ -40,10 +40,10 @@ set(SOURCES
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -std=c++17 -m64 -O3 -g)
+add_compile_options(-Wall -std=c++17 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 
 target_include_directories(main PUBLIC Headers/)
 
-target_link_libraries(main gcc vulkan dl X11 Xxf86vm Xrandr Xi stdc++fs)
+target_link_libraries(main gcc vulkan dl X11 Xxf86vm Xrandr Xi stdc++fs assimp)

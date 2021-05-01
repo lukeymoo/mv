@@ -18,8 +18,11 @@ namespace mv
     public:
         std::vector<mv::Model> models;
 
-        VkPipeline pipeline = nullptr;
-        VkPipelineLayout pipeline_layout = nullptr;
+        VkPipeline pipeline_w_sampler = nullptr;
+        VkPipeline pipeline_no_sampler = nullptr;
+
+        VkPipelineLayout pipeline_layout_w_sampler = nullptr;
+        VkPipelineLayout pipeline_layout_no_sampler = nullptr;
 
         VkDescriptorPool descriptor_pool = nullptr;
         VkDescriptorSetLayout sampler_layout = nullptr;
@@ -35,15 +38,28 @@ namespace mv
         {
             vkDeviceWaitIdle(device->device);
 
-            if (pipeline)
+            // pipelines
+            if (pipeline_w_sampler)
             {
-                vkDestroyPipeline(device->device, pipeline, nullptr);
-                pipeline = nullptr;
+                vkDestroyPipeline(device->device, pipeline_w_sampler, nullptr);
+                pipeline_w_sampler = nullptr;
             }
-            if (pipeline_layout)
+            if (pipeline_no_sampler)
             {
-                vkDestroyPipelineLayout(device->device, pipeline_layout, nullptr);
-                pipeline_layout = nullptr;
+                vkDestroyPipeline(device->device, pipeline_no_sampler, nullptr);
+                pipeline_no_sampler = nullptr;
+            }
+            
+            // pipeline layouts
+            if (pipeline_layout_w_sampler)
+            {
+                vkDestroyPipelineLayout(device->device, pipeline_layout_w_sampler, nullptr);
+                pipeline_layout_w_sampler = nullptr;
+            }
+            if (pipeline_layout_no_sampler)
+            {
+                vkDestroyPipelineLayout(device->device, pipeline_layout_no_sampler, nullptr);
+                pipeline_layout_no_sampler = nullptr;
             }
 
             // cleanup descriptor sets
@@ -70,6 +86,38 @@ namespace mv
             // destroy model data
             for (auto &model : models)
             {
+                for (auto &mesh : model._meshes)
+                {
+                    if (mesh.vertex_buffer)
+                    {
+                        vkDestroyBuffer(device->device, mesh.vertex_buffer, nullptr);
+                        mesh.vertex_buffer = nullptr;
+                    }
+                    if (mesh.vertex_memory)
+                    {
+                        vkFreeMemory(device->device, mesh.vertex_memory, nullptr);
+                        mesh.vertex_memory = nullptr;
+                    }
+
+                    if (mesh.index_buffer)
+                    {
+                        vkDestroyBuffer(device->device, mesh.index_buffer, nullptr);
+                        mesh.index_buffer = nullptr;
+                    }
+                    if (mesh.index_memory)
+                    {
+                        vkFreeMemory(device->device, mesh.index_memory, nullptr);
+                        mesh.index_memory = nullptr;
+                    }
+                    // cleanup textures
+                    for (auto &texture : mesh.textures)
+                    {
+                        vkDestroySampler(device->device, texture.texture.sampler, nullptr);
+                        vkDestroyImageView(device->device, texture.texture.image_view, nullptr);
+                        vkDestroyImage(device->device, texture.texture.image, nullptr);
+                        vkFreeMemory(device->device, texture.texture.memory, nullptr);
+                    }
+                }
                 if (device)
                 {
                     if (model.image.sampler)
