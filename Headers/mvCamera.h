@@ -321,6 +321,7 @@ namespace mv
             rotation.x = upcoming_x;
             rotation.y = upcoming_y;
             rotation.z = upcoming_z;
+            return;
         }
         void move_up(float frame_delta)
         {

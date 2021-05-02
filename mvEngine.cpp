@@ -169,7 +169,7 @@ void mv::Engine::go(void)
     camera_params.view_uniform_object = &collection_handler->view_uniform;
     camera_params.projection_uniform_object = &collection_handler->projection_uniform;
 
-    camera_params.camera_type = Camera::camera_type::third_person;
+    camera_params.camera_type = Camera::camera_type::free_look;
     camera_params.target_index = 0;
     camera_params.objects_list = collection_handler->models->at(1).objects;
 
@@ -208,18 +208,6 @@ void mv::Engine::go(void)
         mouse_delta.first = (float)i_mouse_delta.first;
         mouse_delta.second = (float)i_mouse_delta.second;
 
-        if (camera->type == Camera::camera_type::free_look)
-        {
-        }
-        else if (camera->type == Camera::camera_type::first_person)
-        {
-        }
-        else if (camera->type == Camera::camera_type::third_person)
-        {
-            mouse_delta.first *= 0.05f;
-            mouse_delta.second *= 0.05f;
-        }
-
         // Handle input events
 
         /*
@@ -229,10 +217,10 @@ void mv::Engine::go(void)
         */
         if (camera->type == Camera::camera_type::free_look)
         {
+            mouse_delta.first *= 0.9f;
+            mouse_delta.second *= 0.9f;
             if (mouseEvent.get_type() == Mouse::Event::Type::Move)
             {
-                mouse_delta.first *= 0.9f;
-                mouse_delta.second *= 0.9f;
                 glm::vec3 rotation_delta = glm::vec3(-(mouse_delta.second), mouse_delta.first, 0.0f);
                 camera->rotate(rotation_delta, fpsdt);
             }
@@ -278,18 +266,23 @@ void mv::Engine::go(void)
         */
         else if (camera->type == Camera::camera_type::third_person)
         {
-            // handle mouse rotation
-            if (mouse.is_middle_pressed() && mouse.is_in_window())
+            mouse_delta.first *= 0.125f;
+            mouse_delta.second *= 0.125f;
+            if (mouseEvent.get_type() == Mouse::Event::Type::Move)
             {
-                if (mouse_delta.first > 0)
+                // handle mouse rotation
+                if (mouse.is_middle_pressed() && mouse.is_in_window())
                 {
-                    camera->increase_orbit(fabs(mouse_delta.first), fpsdt);
+                    if (mouse_delta.first > 0)
+                    {
+                        camera->increase_orbit(fabs(mouse_delta.first), fpsdt);
+                    }
+                    else if (mouse_delta.first < 0)
+                    {
+                        camera->decrease_orbit(fabs(mouse_delta.first), fpsdt);
+                    }
+                    // glm::vec3 rotation_delta = glm::vec3(0.0f, mouse_delta.first, 0.0f);
                 }
-                else if (mouse_delta.first < 0)
-                {
-                    camera->decrease_orbit(fabs(mouse_delta.first), fpsdt);
-                }
-                // glm::vec3 rotation_delta = glm::vec3(0.0f, mouse_delta.first, 0.0f);
             }
             if (kbdEvent.get_type() == Keyboard::Event::Type::Press)
             {
