@@ -4,6 +4,7 @@
 #define WHEEL_DELTA 120
 
 #include <queue>
+#include <iostream>
 
 namespace mv
 {
@@ -91,7 +92,14 @@ namespace mv
         };
 
     public:
-        Mouse() = default;
+        Mouse(int window_width, int window_height)
+        {
+            this->window_width = window_width;
+            this->window_height = window_height;
+
+            center_x = window_width / 2;
+            center_y = window_height / 2;
+        }
         Mouse(const Mouse &) = delete;
         Mouse &operator=(const Mouse &) = delete;
         std::pair<int, int> get_pos() const noexcept;
@@ -110,6 +118,16 @@ namespace mv
         }
         void clear_state() noexcept;
 
+        void update_window_spec(int n_width, int n_height)
+        {
+            this->window_width = n_width;
+            this->window_height = n_height;
+
+            center_x = window_width / 2;
+            center_y = window_height / 2;
+            return;
+        }
+
     private:
         void on_mouse_move(int nx, int ny) noexcept;
         void on_left_press(int nx, int ny) noexcept;
@@ -126,7 +144,7 @@ namespace mv
         void trim_buffer(void) noexcept;
 
     private:
-        static constexpr unsigned int max_buffer_size = 5u;
+        static constexpr unsigned int max_buffer_size = 4u;
 
         int x = 0;
         int y = 0;
@@ -135,6 +153,12 @@ namespace mv
         int mouse_x_delta = 0;
         int mouse_y_delta = 0;
         int wheel_delta_carry = 0;
+
+        int center_x = 0;
+        int center_y = 0;
+
+        int window_width = 0;
+        int window_height = 0;
 
         bool left_is_pressed = false;
         bool middle_is_pressed = false;

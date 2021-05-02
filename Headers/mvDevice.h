@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include <iostream>
+
 #include "mvInit.h"
 #include "mvBuffer.h"
 

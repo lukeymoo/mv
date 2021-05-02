@@ -15,7 +15,7 @@ mv::MWindow::Exception::~Exception(void)
 
 /* Create window and initialize Vulkan */
 mv::MWindow::MWindow(int w, int h, const char *title)
-    : window_width(w), window_height(h)
+    : window_width(w), window_height(h), mouse(w, h)
 {
     // Connect to x server
     display = XOpenDisplay(NULL);
@@ -193,6 +193,7 @@ void mv::MWindow::prepare(void)
     swapchain.init_surface(display, window);
     m_command_pool = device->create_command_pool(swapchain.queue_index);
     swapchain.create(&window_width, &window_height);
+    mouse.update_window_spec(window_width, window_height);
     create_command_buffers();
     create_synchronization_primitives();
     setup_depth_stencil();
@@ -833,10 +834,18 @@ XEvent mv::MWindow::create_event(const char *event_type)
     return cev;
 }
 
-void mv::MWindow::handle_x_event(void)
+void mv::MWindow::handle_x_event(bool &first_event_in_loop)
 {
     // count time for processing events
     XNextEvent(display, &event);
+    if (first_event_in_loop)
+    {
+        if (event.type == MotionNotify)
+        {
+            first_event_in_loop = false;
+            return;
+        }
+    }
     KeySym key;
     switch (event.type)
     {
@@ -855,21 +864,29 @@ void mv::MWindow::handle_x_event(void)
     case ButtonPress:
         if (event.xbutton.button == Button1)
         {
-            mouse.on_left_press(event.xmotion.x, event.xmotion.y);
+            mouse.on_left_press(event.xbutton.x, event.xbutton.y);
         }
         else if (event.xbutton.button == Button2)
         {
-            mouse.on_right_press(event.xmotion.x, event.xmotion.y);
+            mouse.on_middle_press(event.xbutton.x, event.xbutton.y);
+        }
+        else if (event.xbutton.button == Button3)
+        {
+            mouse.on_right_press(event.xbutton.x, event.xbutton.y);
         }
         break;
     case ButtonRelease:
         if (event.xbutton.button == Button1)
         {
-            mouse.on_left_release(event.xmotion.x, event.xmotion.y);
+            mouse.on_left_release(event.xbutton.x, event.xbutton.y);
         }
         else if (event.xbutton.button == Button2)
         {
-            mouse.on_right_release(event.xmotion.x, event.xmotion.y);
+            mouse.on_middle_release(event.xbutton.x, event.xbutton.y);
+        }
+        else if (event.xbutton.button == Button3)
+        {
+            mouse.on_right_release(event.xbutton.x, event.xbutton.y);
         }
         break;
     case KeyPress:
@@ -888,7 +905,7 @@ void mv::MWindow::handle_x_event(void)
         break;
     case MotionNotify:
         // printf("Mouse movement (%d, %d)\n", event.xmotion.x, event.xmotion.y);
-        mouse.on_mouse_move(event.xmotion.x, event.xmotion.y);
+        mouse.on_mouse_move(event.xbutton.x, event.xbutton.y);
     case Expose:
         break;
         // configured to only capture WM_DELETE_WINDOW so we exit here

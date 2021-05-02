@@ -23,7 +23,7 @@
 #include "mvInit.h"
 #include "mvTimer.h"
 
-const size_t MAX_IN_FLIGHT = 2;
+const size_t MAX_IN_FLIGHT = 3;
 #define WINDOW_WIDTH 2560
 #define WINDOW_HEIGHT 1440
 
@@ -66,7 +66,7 @@ namespace mv
         void prepare(void);
 
         XEvent create_event(const char *eventType);
-        void handle_x_event(void);
+        void handle_x_event(bool& skipped_warp_pointer);
 
     protected:
         bool init_vulkan(void);

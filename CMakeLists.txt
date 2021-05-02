@@ -10,6 +10,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(HEADERS
+    Headers/mvCollection.h
     Headers/mvImage.h
     Headers/mvAllocator.h
     Headers/mvTimer.h

@@ -9,29 +9,25 @@
 #include "mvAllocator.h"
 #include "mvCamera.h"
 #include "mvWindow.h"
-#include "mvModel.h"
+#include "mvCollection.h"
 
 namespace mv
 {
     class Engine : public mv::MWindow
     {
     public:
-        std::vector<mv::Model> models;
-
         VkPipeline pipeline_w_sampler = nullptr;
         VkPipeline pipeline_no_sampler = nullptr;
 
         VkPipelineLayout pipeline_layout_w_sampler = nullptr;
         VkPipelineLayout pipeline_layout_no_sampler = nullptr;
 
-        VkDescriptorPool descriptor_pool = nullptr;
-        VkDescriptorSetLayout sampler_layout = nullptr;
-        VkDescriptorSetLayout uniform_layout = nullptr;
-
         Engine &operator=(const Engine &) = delete;
         Engine(const Engine &) = delete;
 
-        std::unique_ptr<Allocator> descriptor_allocator;
+        std::shared_ptr<Allocator> descriptor_allocator; // descriptor pool/set manager
+        std::unique_ptr<Collection> collection_handler;  // model/obj manager
+        std::unique_ptr<Camera> camera;                  // camera manager(view/proj matrix handler)
 
         Engine(int w, int h, const char *title);
         ~Engine() // Cleanup
@@ -49,7 +45,7 @@ namespace mv
                 vkDestroyPipeline(device->device, pipeline_no_sampler, nullptr);
                 pipeline_no_sampler = nullptr;
             }
-            
+
             // pipeline layouts
             if (pipeline_layout_w_sampler)
             {
@@ -62,114 +58,12 @@ namespace mv
                 pipeline_layout_no_sampler = nullptr;
             }
 
-            // cleanup descriptor sets
-            // free pool
-            if (descriptor_pool)
+            // collection struct will handle cleanup of models & objs
+            if (collection_handler)
             {
-                vkDestroyDescriptorPool(device->device, descriptor_pool, nullptr);
-                descriptor_pool = nullptr;
-            }
-
-            // cleanup layouts
-            if (uniform_layout)
-            {
-                vkDestroyDescriptorSetLayout(device->device, uniform_layout, nullptr);
-                uniform_layout = nullptr;
-            }
-            if (sampler_layout)
-            {
-                vkDestroyDescriptorSetLayout(device->device, sampler_layout, nullptr);
-                sampler_layout = nullptr;
-            }
-
-            // objects
-            // destroy model data
-            for (auto &model : models)
-            {
-                for (auto &mesh : model._meshes)
-                {
-                    if (mesh.vertex_buffer)
-                    {
-                        vkDestroyBuffer(device->device, mesh.vertex_buffer, nullptr);
-                        mesh.vertex_buffer = nullptr;
-                    }
-                    if (mesh.vertex_memory)
-                    {
-                        vkFreeMemory(device->device, mesh.vertex_memory, nullptr);
-                        mesh.vertex_memory = nullptr;
-                    }
-
-                    if (mesh.index_buffer)
-                    {
-                        vkDestroyBuffer(device->device, mesh.index_buffer, nullptr);
-                        mesh.index_buffer = nullptr;
-                    }
-                    if (mesh.index_memory)
-                    {
-                        vkFreeMemory(device->device, mesh.index_memory, nullptr);
-                        mesh.index_memory = nullptr;
-                    }
-                    // cleanup textures
-                    for (auto &texture : mesh.textures)
-                    {
-                        vkDestroySampler(device->device, texture.texture.sampler, nullptr);
-                        vkDestroyImageView(device->device, texture.texture.image_view, nullptr);
-                        vkDestroyImage(device->device, texture.texture.image, nullptr);
-                        vkFreeMemory(device->device, texture.texture.memory, nullptr);
-                    }
-                }
-                if (device)
-                {
-                    if (model.image.sampler)
-                    {
-                        vkDestroySampler(device->device, model.image.sampler, nullptr);
-                        model.image.sampler = nullptr;
-                    }
-                    if (model.image.image_view)
-                    {
-                        vkDestroyImageView(device->device, model.image.image_view, nullptr);
-                        model.image.image_view = nullptr;
-                    }
-                    if (model.image.image)
-                    {
-                        vkDestroyImage(device->device, model.image.image, nullptr);
-                        model.image.image = nullptr;
-                    }
-                    if (model.image.memory)
-                    {
-                        vkFreeMemory(device->device, model.image.memory, nullptr);
-                        model.image.memory = nullptr;
-                    }
-                    if (model.vertices.buffer)
-                    {
-                        vkDestroyBuffer(device->device, model.vertices.buffer, nullptr);
-                        vkFreeMemory(device->device, model.vertices.memory, nullptr);
-                        model.vertices.buffer = nullptr;
-                        model.vertices.memory = nullptr;
-                    }
-                    if (model.indices.buffer)
-                    {
-                        vkDestroyBuffer(device->device, model.indices.buffer, nullptr);
-                        vkFreeMemory(device->device, model.indices.memory, nullptr);
-                        model.indices.buffer = nullptr;
-                        model.indices.memory = nullptr;
-                    }
-                }
-            }
-            // destroy uniforms
-            for (auto &model : models)
-            {
-                for (auto &obj : model.objects)
-                {
-                    obj.uniform_buffer.destroy();
-                }
+                collection_handler->cleanup();
             }
         }
-
-        // contains view & projection matrix data
-        // as well as mv buffer objects for both
-        GlobalUniforms global_uniforms;
-        std::unique_ptr<Camera> camera;
 
         void add_new_model(mv::Allocator::Container *pool, const char *filename);
 
