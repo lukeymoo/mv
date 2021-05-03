@@ -209,13 +209,10 @@ namespace mv
     {
     public:
         // objects of this model type
-        std::shared_ptr<std::vector<Object>> objects;
+        std::vector<std::unique_ptr<mv::Object>> objects;
 
     public:
-        Model(void){
-            // create empty vector for objects
-            objects = std::make_shared<std::vector<Object>>();
-        };
+        Model(){};
         // Resize with copy was losing data
         Model(const Model &m) = delete;
         // Prefer move operations over copy

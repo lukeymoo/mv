@@ -152,12 +152,12 @@ void mv::Engine::go(void)
 
     // Create object
     collection_handler->create_object("models/_viking_room.fbx");
-    collection_handler->models->at(0).objects->at(0).position = glm::vec3(0.0f, 0.0f, -5.0f);
-    collection_handler->models->at(0).objects->at(0).rotation = glm::vec3(0.0f, 90.0f, 0.0f);
+    collection_handler->models[0].objects[0]->position = glm::vec3(0.0f, 0.0f, -5.0f);
+    collection_handler->models[0].objects[0]->rotation = glm::vec3(0.0f, 90.0f, 0.0f);
 
     collection_handler->create_object("models/Male.obj");
-    collection_handler->models->at(1).objects->at(0).position = glm::vec3(0.0f, 0.0f, 0.0f);
-    collection_handler->models->at(1).objects->at(0).rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    collection_handler->models[1].objects[0]->rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    collection_handler->models[1].objects[0]->position = glm::vec3(0.0f, 0.0f, 0.0f);
 
     // configure camera before uniform buffer creation
     camera_init_struct camera_params;
@@ -170,8 +170,7 @@ void mv::Engine::go(void)
     camera_params.projection_uniform_object = &collection_handler->projection_uniform;
 
     camera_params.camera_type = Camera::camera_type::third_person;
-    camera_params.target_index = 0;
-    camera_params.objects_list = collection_handler->models->at(1).objects;
+    camera_params.target = collection_handler->models.at(1).objects.at(0).get();
 
     camera = std::make_unique<Camera>(camera_params);
 
@@ -320,11 +319,14 @@ void mv::Engine::go(void)
             {
                 camera->increase_pitch(2.5f, delta_to_use);
             }
+
+
+
             if (kbd_event.get_type() == Keyboard::Event::Type::Press)
             {
                 if (kbd_event.get_code() == ' ' && added == false)
                 {
-                    added = true;
+                    //added = true;
                     collection_handler->create_object("models/Male.obj");
                 }
             }
@@ -333,19 +335,19 @@ void mv::Engine::go(void)
             // change object movement to require float *
             if (kbd.is_key_pressed('i'))
             {
-                camera->objects_list->at(camera->target_index).move_forward(fpsdt);
+                camera->target->move_forward(fpsdt);
             }
             if (kbd.is_key_pressed('k'))
             {
-                camera->objects_list->at(camera->target_index).move_backward(fpsdt);
+                camera->target->move_backward(fpsdt);
             }
             if (kbd.is_key_pressed('j'))
             {
-                camera->objects_list->at(camera->target_index).move_left(fpsdt);
+                camera->target->move_left(fpsdt);
             }
             if (kbd.is_key_pressed('l'))
             {
-                camera->objects_list->at(camera->target_index).move_right(fpsdt);
+                camera->target->move_right(fpsdt);
             }
 
             if (kbd.is_key_pressed('w'))
@@ -390,13 +392,13 @@ void mv::Engine::go(void)
         // use last 3 frames
         if (last_frame_index > 2)
         {
-            //std::cout << "Last 3 Delta => " << last_frames_list[0] << ", " << last_frames_list[1] << ", " << last_frames_list[2] << std::endl;
+            std::cout << "Last 3 Delta => " << last_frames_list[0] << ", " << last_frames_list[1] << ", " << last_frames_list[2] << std::endl;
             // on third frame calculate average
             average_frame_delta = last_frames_list[0] + last_frames_list[1] + last_frames_list[2];
             average_frame_delta = average_frame_delta / 3;
             // reset index
             last_frame_index = 0;
-            //std::cout << "Average Frame Delta => " << average_frame_delta << std::endl;
+            std::cout << "Average Frame Delta => " << average_frame_delta << std::endl;
         }
         else
         {
@@ -681,7 +683,7 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
 
     vkCmdBeginRenderPass(command_buffers[image_index], &pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
-    for (auto &model : *(collection_handler->models.get()))
+    for (auto &model : collection_handler->models)
     {
         // for each model select the appropriate pipeline
         if (model.has_texture)
@@ -696,12 +698,12 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
                               VK_PIPELINE_BIND_POINT_GRAPHICS,
                               pipeline_no_sampler);
         }
-        for (auto &object : *(model.objects.get()))
+        for (auto &object : model.objects)
         {
             for (auto &mesh : model._meshes)
             {
                 std::vector<VkDescriptorSet> to_bind = {
-                    object.model_descriptor,
+                    object->model_descriptor,
                     collection_handler->view_uniform.descriptor,
                     collection_handler->projection_uniform.descriptor};
                 if (model.has_texture)

@@ -27,11 +27,8 @@ namespace mv
         float nearz = -1;
         float farz = -1;
 
-        int camera_type = 0;
-        // if camera type is third person
-        // the camera initalizer must be given an object as a target
-        uint32_t target_index = 0;
-        std::shared_ptr<std::vector<mv::Object>> objects_list = nullptr;
+        int camera_type = 0;        
+        mv::Object* target = nullptr;
 
         glm::vec3 position = glm::vec3(1.0);
     };
@@ -63,8 +60,7 @@ namespace mv
         /*
             Third person camera params
         */
-        uint32_t target_index = 0;
-        std::shared_ptr<std::vector<mv::Object>> objects_list;
+        mv::Object* target = nullptr;
         float pitch = 45.0f;
         float orbit_angle = 0.0f;
         float zoom_level = 10.0f;
@@ -96,13 +92,11 @@ namespace mv
             // ensure target is given if type is third person
             if (type == camera_type::third_person)
             {
-                if (init_params.objects_list == nullptr)
+                if (init_params.target == nullptr)
                 {
                     throw std::runtime_error("Camera type is specified as third person yet no target specified in initialization structure");
                 }
-
-                target_index = init_params.target_index;
-                objects_list = std::move(init_params.objects_list);
+                target = init_params.target;
             }
 
             rotation = glm::vec3(0.01f, 0.01f, 0.01f);
@@ -112,9 +106,6 @@ namespace mv
 
             projection_uniform_object->matrix = glm::perspective(glm::radians(fov), aspect, nearz, farz);
             projection_uniform_object->matrix[1][1] *= -1.0f;
-
-            // matrices->projection = glm::perspective(glm::radians(fov), aspect, nearz, farz);
-            // matrices->projection[1][1] *= -1.0f;
 
             // TODO
             // add non host visible/coherent update support
@@ -165,13 +156,13 @@ namespace mv
             else if (type == camera_type::third_person)
             {
                 // set camera origin to target's position
-                set_position(glm::vec3(objects_list->at(target_index).position.x,
-                                       objects_list->at(target_index).position.y - 0.5f,
-                                       objects_list->at(target_index).position.z));
+                set_position(glm::vec3(target->position.x,
+                                       target->position.y - 0.5f,
+                                       target->position.z));
 
                 // angle around player
                 glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f),
-                                              glm::radians(orbit_angle + objects_list->at(target_index).rotation.y),
+                                              glm::radians(orbit_angle + target->rotation.y),
                                               glm::vec3(0.0f, 1.0f, 0.0f));
 
                 // camera pitch angle

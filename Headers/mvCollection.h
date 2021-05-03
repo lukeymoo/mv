@@ -23,7 +23,7 @@ namespace mv
     struct Collection
     {
         mv::Device *device = nullptr;
-        std::shared_ptr<std::vector<mv::Model>> models;
+        std::vector<mv::Model> models;
         std::vector<std::string> model_names;
         std::shared_ptr<mv::Allocator> descriptor_allocator;
 
@@ -36,8 +36,6 @@ namespace mv
 
         Collection(mv::Device *device, std::shared_ptr<mv::Allocator> &descriptor_allocator)
         {
-            // initialize pointer to models
-            models = std::make_shared<std::vector<mv::Model>>();
             this->device = device;
             this->descriptor_allocator = descriptor_allocator;
 
@@ -115,9 +113,9 @@ namespace mv
             if (!already_loaded)
             {
                 // make space for new model
-                models->push_back(mv::Model());
+                models.push_back(mv::Model());
                 // call model routine _load
-                models->back()._load(device, descriptor_allocator, filename);
+                models.back()._load(device, descriptor_allocator, filename);
 
                 // add filename to model_names container
                 model_names.push_back(filename);
@@ -131,12 +129,12 @@ namespace mv
             // ensure model exists
             bool model_exist = false;
             bool model_index = 0;
-            for (const auto &model : *(models.get()))
+            for (const auto &model : models)
             {
                 if (model.model_name == model_name)
                 {
                     model_exist = true;
-                    model_index = (&model - &models.get()->at(0));
+                    model_index = (&model - &models[0]);
                     break;
                 }
             }
@@ -151,14 +149,15 @@ namespace mv
             std::cout << "[+] Creating object of model type => " << model_name << std::endl;
 
             // create new object element in specified model
-            models->at(model_index).objects->push_back(mv::Object());
+            std::unique_ptr<mv::Object> tmp = std::make_unique<mv::Object>();
+            models[model_index].objects.push_back(std::move(tmp));
 
             // create uniform buffer for object
             device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                  &models->at(model_index).objects->back().uniform_buffer,
+                                  &models[model_index].objects.back()->uniform_buffer,
                                   sizeof(mv::Object::matrices));
-            if (models->at(model_index).objects->back().uniform_buffer.map() != VK_SUCCESS)
+            if (models[model_index].objects.back()->uniform_buffer.map() != VK_SUCCESS)
             {
                 throw std::runtime_error("Failed to create uniform buffer for new object");
             }
@@ -168,21 +167,21 @@ namespace mv
             // allocate descriptor set for object's model uniform
             descriptor_allocator->allocate_set(descriptor_allocator->get(),
                                                uniform_layout,
-                                               models->at(model_index).objects->back().model_descriptor);
+                                               models[model_index].objects.back()->model_descriptor);
             descriptor_allocator->update_set(descriptor_allocator->get(),
-                                             models->at(model_index).objects->back().uniform_buffer.descriptor,
-                                             models->at(model_index).objects->back().model_descriptor,
+                                             models[model_index].objects.back()->uniform_buffer.descriptor,
+                                             models[model_index].objects.back()->model_descriptor,
                                              0);
             return;
         }
 
         void update(void)
         {
-            for (auto &model : *(models.get()))
+            for (auto &model : models)
             {
-                for (auto &object : *(model.objects.get()))
+                for (auto &object : model.objects)
                 {
-                    object.update();
+                    object->update();
                 }
             }
             return;
@@ -196,11 +195,11 @@ namespace mv
             descriptor_allocator->cleanup();
 
             // cleanup models & objects buffers
-            for (auto &model : *(models.get()))
+            for (auto &model : models)
             {
-                for (auto &object : *(model.objects.get()))
+                for (auto &object : model.objects)
                 {
-                    object.uniform_buffer.destroy();
+                    object->uniform_buffer.destroy();
                 }
                 for (auto &mesh : model._meshes)
                 {
