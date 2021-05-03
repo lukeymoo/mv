@@ -199,6 +199,7 @@ void mv::Engine::go(void)
         assert(descriptor_allocator);
 
         float fpsdt = timer.getElaspedMS();
+        fpsdt = std::clamp(fpsdt, 0.1f, 1.0f);
         timer.restart();
 
         // if last_frames_list has been filled & an average calculated
@@ -235,13 +236,6 @@ void mv::Engine::go(void)
         mouse_delta.first = (float)i_mouse_delta.first;
         mouse_delta.second = (float)i_mouse_delta.second;
 
-        // Handle input events
-
-        /*
-            -----------------------------
-            free look input tree
-            -----------------------------
-        */
         if (camera->type == Camera::camera_type::free_look)
         {
             mouse_delta.first *= 0.9f;
@@ -310,24 +304,37 @@ void mv::Engine::go(void)
                     }
                 }
             }
+
             // handle mouse scroll wheel
             if (mouse_event.get_type() == Mouse::Event::Type::WheelUp)
             {
-                camera->decrease_pitch(2.5f, delta_to_use);
+                camera->decrease_pitch(0.9f, delta_to_use);
             }
             if (mouse_event.get_type() == Mouse::Event::Type::WheelDown)
             {
-                camera->increase_pitch(2.5f, delta_to_use);
+                camera->increase_pitch(0.9f, delta_to_use);
             }
-
-
 
             if (kbd_event.get_type() == Keyboard::Event::Type::Press)
             {
                 if (kbd_event.get_code() == ' ' && added == false)
                 {
-                    //added = true;
-                    collection_handler->create_object("models/Male.obj");
+                    // added = true;
+                    int min = 0;
+                    int max = 30;
+                    int z_max = 30;
+
+                    std::random_device rd;
+                    std::default_random_engine eng(rd());
+                    std::uniform_int_distribution<int> xy_distr(min, max);
+                    std::uniform_int_distribution<int> z_distr(min, z_max);
+
+                    float x = xy_distr(eng);
+                    float y = xy_distr(eng);
+                    float z = z_distr(eng);
+                    collection_handler->create_object("models/_viking_room.fbx");
+                    collection_handler->models.at(0).objects.back()->position =
+                        glm::vec3(x, y, z);
                 }
             }
 
@@ -358,15 +365,16 @@ void mv::Engine::go(void)
             {
                 camera->increase_pitch(delta_to_use);
             }
-            if (kbd.is_key_pressed('a'))
-            {
-                // change camera orbit angle
-                camera->decrease_orbit(delta_to_use); // counter clockwise rotation
-            }
+
             if (kbd.is_key_pressed('d'))
             {
                 // change camera orbit angle
                 camera->increase_orbit(delta_to_use); // clockwise rotation
+            }
+            if (kbd.is_key_pressed('a'))
+            {
+                // change camera orbit angle
+                camera->decrease_orbit(delta_to_use); // counter clockwise rotation
             }
         }
 
@@ -392,7 +400,7 @@ void mv::Engine::go(void)
         // use last 3 frames
         if (last_frame_index > 2)
         {
-            std::cout << "Last 3 Delta => " << last_frames_list[0] << ", " << last_frames_list[1] << ", " << last_frames_list[2] << std::endl;
+            //std::cout << "Last 3 Delta => " << last_frames_list[0] << ", " << last_frames_list[1] << ", " << last_frames_list[2] << std::endl;
             // on third frame calculate average
             average_frame_delta = last_frames_list[0] + last_frames_list[1] + last_frames_list[2];
             average_frame_delta = average_frame_delta / 3;
@@ -402,7 +410,7 @@ void mv::Engine::go(void)
         }
         else
         {
-            last_frames_list.at(last_frame_index) = timer.getElaspedMS();
+            last_frames_list.at(last_frame_index) = fpsdt;
             last_frame_index += 1;
         }
         if (fps.getElaspedMS() > 1000)
@@ -412,6 +420,12 @@ void mv::Engine::go(void)
             fps.restart();
         }
     }
+    int total_object_count = 0;
+    for (const auto &model : collection_handler->models)
+    {
+        total_object_count += model.objects.size();
+    }
+    std::cout << "Total objects => " << total_object_count << std::endl;
     return;
 }
 

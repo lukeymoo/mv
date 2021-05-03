@@ -191,7 +191,7 @@ namespace mv
         */
         void increase_pitch(float *frame_delta)
         {
-            float f_zoom = zoom_level - (0.01f * (*frame_delta));
+            float f_zoom = zoom_level + (0.01f * (*frame_delta));
             if (f_zoom < 20.0f)
             {
                 zoom_level += 0.01f * (*frame_delta);
@@ -201,7 +201,7 @@ namespace mv
         }
         void increase_pitch(float speed_limit, float *frame_delta)
         {
-            float f_zoom = zoom_level - (speed_limit * (*frame_delta));
+            float f_zoom = zoom_level + (speed_limit * (*frame_delta));
             if (f_zoom < 20.0f)
             {
                 zoom_level += speed_limit * (*frame_delta);
