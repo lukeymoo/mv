@@ -169,7 +169,7 @@ void mv::Engine::go(void)
     camera_params.view_uniform_object = &collection_handler->view_uniform;
     camera_params.projection_uniform_object = &collection_handler->projection_uniform;
 
-    camera_params.camera_type = Camera::camera_type::free_look;
+    camera_params.camera_type = Camera::camera_type::third_person;
     camera_params.target_index = 0;
     camera_params.objects_list = collection_handler->models->at(1).objects;
 
@@ -179,30 +179,58 @@ void mv::Engine::go(void)
 
     // Record commands to already created command buffers(per swap)
     // Create pipeline and tie all resources together
-    uint32_t imageIndex = 0;
-    size_t currentFrame = 0;
+    uint32_t image_index = 0;
+    size_t current_frame = 0;
     bool added = false;
     fps.startTimer();
     int fps_counter = 0;
+
+    // points to either the last frame delta or the average if one has been calculated
+    float *delta_to_use;
+
+    // variables used to calculated average frame delta from last 3 frames
+    float average_frame_delta = 0;
+    uint32_t last_frame_index = 0;
+    std::vector<float> last_frames_list(3, 0.0f);
+
     while (running)
     {
         assert(camera);
         assert(collection_handler);
         assert(descriptor_allocator);
-        bool first_event_in_loop = true;
 
-        double fpsdt = timer.getElaspedMS();
+        float fpsdt = timer.getElaspedMS();
         timer.restart();
+
+        // if last_frames_list has been filled & an average calculated
+        // use average_frame_delta for input functions
+        if (last_frames_list[0] > 0.0f && last_frames_list[1] > 0.0f && last_frames_list[2] > 0.0f)
+        {
+            delta_to_use = &average_frame_delta;
+        }
+        else
+        {
+            delta_to_use = &fpsdt;
+        }
 
         while (XPending(display))
         {
-            handle_x_event(first_event_in_loop);
+            handle_x_event();
         }
-        XWarpPointer(display, None, window, 0, 0, 0, 0, (window_width / 2), (window_height / 2));
+        if (camera->type == Camera::camera_type::free_look || camera->type == Camera::camera_type::first_person)
+        {
+            XWarpPointer(display, None, window, 0, 0, 0, 0, (window_width / 2), (window_height / 2));
+            XFlush(display);
+        }
+        else // third person do not lock mouse pointer
+        {
+        }
+
+        // use fpsdt until we have an average
 
         // Get input events
-        Keyboard::Event kbdEvent = kbd.read_key();
-        Mouse::Event mouseEvent = mouse.read();
+        Keyboard::Event kbd_event = kbd.read_key();
+        Mouse::Event mouse_event = mouse.read();
         std::pair<int, int> i_mouse_delta = mouse.get_pos_delta();
         std::pair<float, float> mouse_delta;
         mouse_delta.first = (float)i_mouse_delta.first;
@@ -219,36 +247,36 @@ void mv::Engine::go(void)
         {
             mouse_delta.first *= 0.9f;
             mouse_delta.second *= 0.9f;
-            if (mouseEvent.get_type() == Mouse::Event::Type::Move)
+            if (mouse_event.get_type() == Mouse::Event::Type::Move)
             {
                 glm::vec3 rotation_delta = glm::vec3(-(mouse_delta.second), mouse_delta.first, 0.0f);
-                camera->rotate(rotation_delta, fpsdt);
+                camera->rotate(rotation_delta, delta_to_use);
             }
             if (kbd.is_key_pressed(' ')) // space
             {
-                camera->move_up(fpsdt);
+                camera->move_up(delta_to_use);
             }
             if (kbd.is_key_pressed(65507)) // ctrl key
             {
-                camera->move_down(fpsdt);
+                camera->move_down(delta_to_use);
             }
 
             // lateral movements
             if (kbd.is_key_pressed('w'))
             {
-                camera->move_forward(fpsdt);
+                camera->move_forward(delta_to_use);
             }
             if (kbd.is_key_pressed('a'))
             {
-                camera->move_left(fpsdt);
+                camera->move_left(delta_to_use);
             }
             if (kbd.is_key_pressed('s'))
             {
-                camera->move_backward(fpsdt);
+                camera->move_backward(delta_to_use);
             }
             if (kbd.is_key_pressed('d'))
             {
-                camera->move_right(fpsdt);
+                camera->move_right(delta_to_use);
             }
         }
         /*
@@ -266,33 +294,43 @@ void mv::Engine::go(void)
         */
         else if (camera->type == Camera::camera_type::third_person)
         {
-            mouse_delta.first *= 0.125f;
-            mouse_delta.second *= 0.125f;
-            if (mouseEvent.get_type() == Mouse::Event::Type::Move)
+            mouse_delta.first *= 0.5f;
+            mouse_delta.second *= 0.5f;
+            if (mouse_event.get_type() == Mouse::Event::Type::Move)
             {
                 // handle mouse rotation
                 if (mouse.is_middle_pressed() && mouse.is_in_window())
                 {
-                    if (mouse_delta.first > 0)
+                    if (mouse_delta.first < 0)
                     {
-                        camera->increase_orbit(fabs(mouse_delta.first), fpsdt);
+                        camera->increase_orbit(fabs(mouse_delta.first), delta_to_use);
                     }
-                    else if (mouse_delta.first < 0)
+                    else if (mouse_delta.first > 0)
                     {
-                        camera->decrease_orbit(fabs(mouse_delta.first), fpsdt);
+                        camera->decrease_orbit(fabs(mouse_delta.first), delta_to_use);
                     }
-                    // glm::vec3 rotation_delta = glm::vec3(0.0f, mouse_delta.first, 0.0f);
                 }
             }
-            if (kbdEvent.get_type() == Keyboard::Event::Type::Press)
+            // handle mouse scroll wheel
+            if (mouse_event.get_type() == Mouse::Event::Type::WheelUp)
             {
-                if (kbdEvent.get_code() == ' ' && added == false)
+                camera->decrease_pitch(2.5f, delta_to_use);
+            }
+            if (mouse_event.get_type() == Mouse::Event::Type::WheelDown)
+            {
+                camera->increase_pitch(2.5f, delta_to_use);
+            }
+            if (kbd_event.get_type() == Keyboard::Event::Type::Press)
+            {
+                if (kbd_event.get_code() == ' ' && added == false)
                 {
                     added = true;
                     collection_handler->create_object("models/Male.obj");
                 }
             }
 
+            // TODO
+            // change object movement to require float *
             if (kbd.is_key_pressed('i'))
             {
                 camera->objects_list->at(camera->target_index).move_forward(fpsdt);
@@ -312,21 +350,21 @@ void mv::Engine::go(void)
 
             if (kbd.is_key_pressed('w'))
             {
-                camera->decrease_pitch(fpsdt);
+                camera->decrease_pitch(delta_to_use);
             }
             if (kbd.is_key_pressed('s'))
             {
-                camera->increase_pitch(fpsdt);
+                camera->increase_pitch(delta_to_use);
             }
             if (kbd.is_key_pressed('a'))
             {
                 // change camera orbit angle
-                camera->decrease_orbit(fpsdt); // counter clockwise rotation
+                camera->decrease_orbit(delta_to_use); // counter clockwise rotation
             }
             if (kbd.is_key_pressed('d'))
             {
                 // change camera orbit angle
-                camera->increase_orbit(fpsdt); // clockwise rotation
+                camera->increase_orbit(delta_to_use); // clockwise rotation
             }
         }
 
@@ -345,9 +383,26 @@ void mv::Engine::go(void)
         camera->update();
 
         // Render
-        draw(currentFrame, imageIndex);
+        draw(current_frame, image_index);
 
         fps_counter += 1;
+
+        // use last 3 frames
+        if (last_frame_index > 2)
+        {
+            //std::cout << "Last 3 Delta => " << last_frames_list[0] << ", " << last_frames_list[1] << ", " << last_frames_list[2] << std::endl;
+            // on third frame calculate average
+            average_frame_delta = last_frames_list[0] + last_frames_list[1] + last_frames_list[2];
+            average_frame_delta = average_frame_delta / 3;
+            // reset index
+            last_frame_index = 0;
+            //std::cout << "Average Frame Delta => " << average_frame_delta << std::endl;
+        }
+        else
+        {
+            last_frames_list.at(last_frame_index) = timer.getElaspedMS();
+            last_frame_index += 1;
+        }
         if (fps.getElaspedMS() > 1000)
         {
             std::cout << "FPS => " << fps_counter << std::endl;
@@ -697,8 +752,6 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
 {
     vkWaitForFences(device->device, 1, &in_flight_fences[cur_frame], VK_TRUE, UINT64_MAX);
 
-    cur_frame = (cur_frame + 1) % MAX_IN_FLIGHT;
-
     VkResult result;
     result = vkAcquireNextImageKHR(device->device, swapchain.swapchain, UINT64_MAX, semaphores.present_complete, VK_NULL_HANDLE, &cur_index);
     switch (result)
@@ -786,4 +839,5 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
         throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
         break;
     }
+    cur_frame = (cur_frame + 1) % MAX_IN_FLIGHT;
 }

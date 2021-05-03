@@ -198,33 +198,54 @@ namespace mv
             third person methods
             -----------------------------
         */
-        void increase_pitch(float frame_delta)
+        void increase_pitch(float *frame_delta)
         {
-            float f_zoom = zoom_level - (0.01f * frame_delta);
+            float f_zoom = zoom_level - (0.01f * (*frame_delta));
             if (f_zoom < 20.0f)
             {
-                zoom_level += 0.01f * frame_delta;
-                pitch += 0.01f * frame_delta;
+                zoom_level += 0.01f * (*frame_delta);
+                pitch += 0.01f * (*frame_delta);
+            }
+            return;
+        }
+        void increase_pitch(float speed_limit, float *frame_delta)
+        {
+            float f_zoom = zoom_level - (speed_limit * (*frame_delta));
+            if (f_zoom < 20.0f)
+            {
+                zoom_level += speed_limit * (*frame_delta);
+                pitch += speed_limit * (*frame_delta);
             }
             return;
         }
 
-        void decrease_pitch(float frame_delta)
+
+        void decrease_pitch(float *frame_delta)
         {
-            float f_zoom = zoom_level - (0.01f * frame_delta);
+            float f_zoom = zoom_level - (0.01f * (*frame_delta));
             if (f_zoom > 3.4f)
             {
-                zoom_level -= 0.01f * frame_delta;
-                pitch -= 0.01f * frame_delta;
+                zoom_level -= 0.01f * (*frame_delta);
+                pitch -= 0.01f * (*frame_delta);
+            }
+            return;
+        }
+        void decrease_pitch(float speed_limit, float *frame_delta)
+        {
+            float f_zoom = zoom_level - (speed_limit * (*frame_delta));
+            if (f_zoom > 3.4f)
+            {
+                zoom_level -= speed_limit * (*frame_delta);
+                pitch -= speed_limit * (*frame_delta);
             }
             return;
         }
 
-        void increase_orbit(float frame_delta)
+        void increase_orbit(float *frame_delta)
         {
             // keep orbit value in range of 0.0f -> 359.9f
             // larger floats lose accuracy
-            float f_orbit = orbit_angle + (0.1f * frame_delta);
+            float f_orbit = orbit_angle + (0.1f * (*frame_delta));
             if (f_orbit >= 360.0f)
             {
                 f_orbit = 0.0f;
@@ -232,12 +253,9 @@ namespace mv
             orbit_angle = f_orbit;
             return;
         }
-        void increase_orbit(float position_delta, float frame_delta)
+        void increase_orbit(float position_delta, float *frame_delta)
         {
-            // keep orbit value in range of 0.0f -> 359.9f
-            // larger floats lose accuracy
-            std::cout << "orbit => " << (position_delta * frame_delta) << std::endl;
-            float f_orbit = orbit_angle + (position_delta * frame_delta);
+            float f_orbit = orbit_angle + (position_delta * (*frame_delta));
             if (f_orbit >= 360.0f)
             {
                 f_orbit = 0.0f;
@@ -245,11 +263,9 @@ namespace mv
             orbit_angle = f_orbit;
         }
 
-        void decrease_orbit(float frame_delta)
+        void decrease_orbit(float *frame_delta)
         {
-            // keep orbit value in range of 0.0f -> 359.9f
-            // larger floats lose accuracy
-            float f_orbit = orbit_angle - (0.1f * frame_delta);
+            float f_orbit = orbit_angle - (0.1f * (*frame_delta));
             if (f_orbit < 0.0f)
             {
                 f_orbit = 359.9f;
@@ -258,12 +274,9 @@ namespace mv
             return;
         }
 
-        void decrease_orbit(float position_delta, float frame_delta)
+        void decrease_orbit(float position_delta, float *frame_delta)
         {
-            // keep orbit value in range of 0.0f -> 359.9f
-            // larger floats lose accuracy
-            std::cout << "orbit => " << (position_delta * frame_delta) << std::endl;
-            float f_orbit = orbit_angle - (position_delta * frame_delta);
+            float f_orbit = orbit_angle - (position_delta * (*frame_delta));
             if (f_orbit < 0.0f)
             {
                 f_orbit = 359.9f;
@@ -292,11 +305,11 @@ namespace mv
 
             camera_front = fr;
         }
-        void rotate(glm::vec3 delta, float frame_delta)
+        void rotate(glm::vec3 delta, float *frame_delta)
         {
             float speed_limit = 0.10f;
-            float to_apply_x = (delta.x * frame_delta * speed_limit);
-            float to_apply_y = (delta.y * frame_delta * speed_limit);
+            float to_apply_x = (delta.x * (*frame_delta) * speed_limit);
+            float to_apply_y = (delta.y * (*frame_delta) * speed_limit);
 
             float upcoming_z = 0.0f;
 
@@ -323,35 +336,35 @@ namespace mv
             rotation.z = upcoming_z;
             return;
         }
-        void move_up(float frame_delta)
+        void move_up(float *frame_delta)
         {
-            position.y += MOVESPEED * frame_delta;
+            position.y += MOVESPEED * (*frame_delta);
             return;
         }
-        void move_down(float frame_delta)
+        void move_down(float *frame_delta)
         {
-            position.y -= MOVESPEED * frame_delta;
+            position.y -= MOVESPEED * (*frame_delta);
             return;
         }
-        void move_left(float frame_delta)
+        void move_left(float *frame_delta)
         {
             get_front_face();
-            position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
+            position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * (*frame_delta);
         }
-        void move_right(float frame_delta)
+        void move_right(float *frame_delta)
         {
             get_front_face();
-            position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
+            position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * (*frame_delta);
         }
-        void move_forward(float frame_delta)
+        void move_forward(float *frame_delta)
         {
             get_front_face();
-            position += camera_front * MOVESPEED * frame_delta;
+            position += camera_front * MOVESPEED * (*frame_delta);
         }
-        void move_backward(float frame_delta)
+        void move_backward(float *frame_delta)
         {
             get_front_face();
-            position -= camera_front * MOVESPEED * frame_delta;
+            position -= camera_front * MOVESPEED * (*frame_delta);
         }
         /*
             -----------------------

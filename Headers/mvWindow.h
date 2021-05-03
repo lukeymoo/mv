@@ -24,8 +24,8 @@
 #include "mvTimer.h"
 
 const size_t MAX_IN_FLIGHT = 3;
-#define WINDOW_WIDTH 2560
-#define WINDOW_HEIGHT 1440
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 768
 
 const std::vector<const char *> requested_validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -66,7 +66,7 @@ namespace mv
         void prepare(void);
 
         XEvent create_event(const char *eventType);
-        void handle_x_event(bool& skipped_warp_pointer);
+        void handle_x_event(void);
 
     protected:
         bool init_vulkan(void);

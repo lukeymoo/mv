@@ -15,7 +15,7 @@ mv::MWindow::Exception::~Exception(void)
 
 /* Create window and initialize Vulkan */
 mv::MWindow::MWindow(int w, int h, const char *title)
-    : window_width(w), window_height(h), mouse(w, h)
+    : window_width(w), window_height(h), mouse(w, h, Mouse::delta_style::from_last_pos)
 {
     // Connect to x server
     display = XOpenDisplay(NULL);
@@ -193,7 +193,7 @@ void mv::MWindow::prepare(void)
     swapchain.init_surface(display, window);
     m_command_pool = device->create_command_pool(swapchain.queue_index);
     swapchain.create(&window_width, &window_height);
-    mouse.update_window_spec(window_width, window_height);
+    mouse.update_window_spec(window_width, window_height); // necessary for proper delta calculation
     create_command_buffers();
     create_synchronization_primitives();
     setup_depth_stencil();
@@ -382,7 +382,7 @@ void mv::MWindow::create_command_buffers(void)
 void mv::MWindow::create_synchronization_primitives(void)
 {
     VkFenceCreateInfo fence_info = mv::initializer::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
-    wait_fences.resize(command_buffers.size(), VK_NULL_HANDLE);
+    wait_fences.resize(swapchain.image_count, VK_NULL_HANDLE);
 
     in_flight_fences.resize(MAX_IN_FLIGHT);
     for (auto &fence : in_flight_fences)
@@ -834,18 +834,10 @@ XEvent mv::MWindow::create_event(const char *event_type)
     return cev;
 }
 
-void mv::MWindow::handle_x_event(bool &first_event_in_loop)
+void mv::MWindow::handle_x_event(void)
 {
     // count time for processing events
     XNextEvent(display, &event);
-    if (first_event_in_loop)
-    {
-        if (event.type == MotionNotify)
-        {
-            first_event_in_loop = false;
-            return;
-        }
-    }
     KeySym key;
     switch (event.type)
     {
@@ -873,6 +865,22 @@ void mv::MWindow::handle_x_event(bool &first_event_in_loop)
         else if (event.xbutton.button == Button3)
         {
             mouse.on_right_press(event.xbutton.x, event.xbutton.y);
+        }
+        /*
+            Mouse wheel scroll up
+        */
+        else if (event.xbutton.button == Button4)
+        {
+            mouse.on_wheel_up(event.xbutton.x, event.xbutton.y);
+            //mouse.on_wheel_delta(event.xbutton.x, event.xbutton.y, 1);
+        }
+        /*
+            Mouse wheel scroll down
+        */
+        else if (event.xbutton.button == Button5)
+        {
+            mouse.on_wheel_down(event.xbutton.x, event.xbutton.y);
+            //mouse.on_wheel_delta(event.xbutton.x, event.xbutton.y, -1);
         }
         break;
     case ButtonRelease:
