@@ -270,6 +270,7 @@ void mv::Engine::go(void)
             Keyboard::Event kbd_event = kbd.read_key();
             Mouse::Event mouse_event = mouse.read();
             std::pair<int, int> mouse_delta = mouse.get_pos_delta();
+            std::cout << "key event code => " << kbd_event.get_code() << "\n";
 
             if (camera->type == Camera::camera_type::third_person)
             {
@@ -284,49 +285,46 @@ void mv::Engine::go(void)
                 }
 
                 // capture initial middle press (might be another button future)
-                if (mouse_event.get_type() == Mouse::Event::Type::MDown)
+                if (kbd_event.get_type() == Keyboard::Event::Type::Press &&
+                    kbd_event.get_code() == 65513)
                 {
                     mouse_drag_startx = mouse_event.get_pos_x();
                     mouse_drag_starty = mouse_event.get_pos_y();
                     start_orbit = camera->orbit_angle;
+                    std::cout << "press\n";
                 }
+                // if (mouse_event.get_type() == Mouse::Event::Type::MDown)
                 // capture middle release
-                if (mouse_event.get_type() == Mouse::Event::Type::MRelease)
+                // if (mouse_event.get_type() == Mouse::Event::Type::MRelease)
+                if (kbd_event.get_type() == Keyboard::Event::Type::Release &&
+                    kbd_event.get_code() == 65513)
                 {
                     mouse_drag_startx = 0;
                     mouse_drag_starty = 0;
                     start_orbit = 0.0f;
-                    camera->realign_orbit(); // ensure 0-359.9f orbit bounds
+                    // ensure 0-359.9f orbit bounds
+                    if (mouse_drag_startx != 0 && mouse_drag_starty != 0 &&
+                        start_orbit != 0)
+                    {
+                        camera->realign_orbit();
+                    }
+                    std::cout << "release\n";
                 }
 
                 // send orbit updates with calculated delta
-                if (mouse.is_middle_pressed())
+                if (kbd.is_key_pressed(65513))
                 {
                     int m_dx = cur_mousex - mouse_drag_startx;
                     // int m_dy = cur_mousey - mouse_drag_starty;
                     if (m_dx > 0)
                     {
-                        camera->adjust_orbit(abs(m_dx), start_orbit);
+                        camera->adjust_orbit(-abs(m_dx), start_orbit);
                     }
                     else
                     {
-                        camera->adjust_orbit(-abs(m_dx), start_orbit);
+                        camera->adjust_orbit(abs(m_dx), start_orbit);
                     }
                 }
-
-                // if (mouse.is_middle_pressed() && mouse.is_in_window())
-                // {
-                //     if (mouse_delta.first < 0)
-                //     {
-                //         // camera->increase_orbit(abs(mouse_delta.first));
-                //         camera->adjust_orbit(camera->orbit_step * abs(mouse_delta.first));
-                //     }
-                //     else if (mouse_delta.first > 0)
-                //     {
-                //         // camera->decrease_orbit(abs(mouse_delta.first));
-                //         camera->adjust_orbit(-(camera->orbit_step * abs(mouse_delta.first)));
-                //     }
-                // }
 
                 // debug -- add new objects to world with random position
                 if (kbd.is_key_pressed(' ') && added == false)
