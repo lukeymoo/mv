@@ -12,6 +12,7 @@ namespace mv
     class Mouse
     {
         friend class MWindow;
+        friend class Engine;
 
     public:
         class Event
@@ -119,6 +120,11 @@ namespace mv
         bool is_right_pressed(void) const noexcept;
         bool is_in_window(void) const noexcept;
         int deltatest = 0;
+        void set_delta_style(delta_style style)
+        {
+            this->delta_style = style;
+            return;
+        }
         bool is_empty(void) const noexcept
         {
             return buffer.empty();
@@ -150,8 +156,8 @@ namespace mv
         void on_mouse_leave(void) noexcept;
         void trim_buffer(void) noexcept;
 
-    private:
-        static constexpr unsigned int max_buffer_size = 4u;
+    public:
+        static constexpr unsigned int max_buffer_size = 16u;
 
         int x = 0;
         int y = 0;

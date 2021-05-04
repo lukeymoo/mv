@@ -1,5 +1,33 @@
 #include "mvEngine.h"
 
+static inline void get_mouse(Display *display, Window &window, mv::Mouse *mouse, int &cur_x, int &cur_y, int &last_x, int &last_y)
+{
+    Window root, child;
+    int gx, gy;
+    unsigned int buttons;
+
+    int mx = 0;
+    int my = 0;
+    XQueryPointer(display, window, &root, &child, &gx, &gy, &mx, &my, &buttons);
+
+    last_x = cur_x;
+    last_y = cur_y;
+    cur_x = mx;
+    cur_y = my;
+
+    if (mouse->delta_style == mv::Mouse::delta_style::from_last_pos)
+    {
+        mouse->mouse_x_delta = cur_x - last_x;
+        mouse->mouse_y_delta = cur_y - last_y;
+    }
+    else
+    {
+        mouse->mouse_x_delta = cur_x - mouse->center_x;
+        mouse->mouse_y_delta = cur_y - mouse->center_y;
+    }
+    return;
+}
+
 mv::Engine::Engine(int w, int h, const char *title)
     : MWindow(w, h, title)
 {
@@ -174,44 +202,48 @@ void mv::Engine::go(void)
 
     camera = std::make_unique<Camera>(camera_params);
 
+    if (camera->type == Camera::camera_type::first_person || Camera::camera_type::free_look)
+    {
+        mouse.set_delta_style(Mouse::delta_style::from_center);
+    }
+    else
+    {
+        mouse.set_delta_style(Mouse::delta_style::from_last_pos);
+    }
+
     prepare_pipeline();
 
-    // Record commands to already created command buffers(per swap)
-    // Create pipeline and tie all resources together
+    // basic check
+    assert(camera);
+    assert(collection_handler);
+    assert(descriptor_allocator);
+
     uint32_t image_index = 0;
     size_t current_frame = 0;
+
     bool added = false;
+
     fps.startTimer();
     int fps_counter = 0;
 
-    // points to either the last frame delta or the average if one has been calculated
-    float *delta_to_use;
+    using chrono = std::chrono::high_resolution_clock;
 
-    // variables used to calculated average frame delta from last 3 frames
-    float average_frame_delta = 0;
-    uint32_t last_frame_index = 0;
-    std::vector<float> last_frames_list(3, 0.0f);
+    constexpr std::chrono::nanoseconds timestep(16ms);
+
+    std::chrono::nanoseconds accumulated(0ns);
+    auto start_time = chrono::now();
+
+    // used to force update mouse position
+    int last_mousex = 0;
+    int last_mousey = 0;
+    int cur_mousex = 0;
+    int cur_mousey = 0;
 
     while (running)
     {
-        assert(camera);
-        assert(collection_handler);
-        assert(descriptor_allocator);
-
-        float fpsdt = timer.getElaspedMS();
-        fpsdt = std::clamp(fpsdt, 0.1f, 1.0f);
-        timer.restart();
-
-        // if last_frames_list has been filled & an average calculated
-        // use average_frame_delta for input functions
-        if (last_frames_list[0] > 0.0f && last_frames_list[1] > 0.0f && last_frames_list[2] > 0.0f)
-        {
-            delta_to_use = &average_frame_delta;
-        }
-        else
-        {
-            delta_to_use = &fpsdt;
-        }
+        auto delta_time = chrono::now() - start_time;
+        start_time = chrono::now();
+        accumulated += std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time);
 
         while (XPending(display))
         {
@@ -222,107 +254,50 @@ void mv::Engine::go(void)
             XWarpPointer(display, None, window, 0, 0, 0, 0, (window_width / 2), (window_height / 2));
             XFlush(display);
         }
-        else // third person do not lock mouse pointer
-        {
-        }
 
-        // use fpsdt until we have an average
-
-        // Get input events
-        Keyboard::Event kbd_event = kbd.read_key();
-        Mouse::Event mouse_event = mouse.read();
-        std::pair<int, int> i_mouse_delta = mouse.get_pos_delta();
-        std::pair<float, float> mouse_delta;
-        mouse_delta.first = (float)i_mouse_delta.first;
-        mouse_delta.second = (float)i_mouse_delta.second;
-
-        if (camera->type == Camera::camera_type::free_look)
+        while (accumulated >= timestep)
         {
-            mouse_delta.first *= 0.9f;
-            mouse_delta.second *= 0.9f;
-            if (mouse_event.get_type() == Mouse::Event::Type::Move)
-            {
-                glm::vec3 rotation_delta = glm::vec3(-(mouse_delta.second), mouse_delta.first, 0.0f);
-                camera->rotate(rotation_delta, delta_to_use);
-            }
-            if (kbd.is_key_pressed(' ')) // space
-            {
-                camera->move_up(delta_to_use);
-            }
-            if (kbd.is_key_pressed(65507)) // ctrl key
-            {
-                camera->move_down(delta_to_use);
-            }
+            accumulated -= timestep;
 
-            // lateral movements
-            if (kbd.is_key_pressed('w'))
+            get_mouse(display, window, &mouse, cur_mousex, cur_mousey, last_mousex, last_mousey);
+
+            // Get input events
+            Keyboard::Event kbd_event = kbd.read_key();
+            Mouse::Event mouse_event = mouse.read();
+            std::pair<int, int> mouse_delta = mouse.get_pos_delta();
+
+            if (camera->type == Camera::camera_type::third_person)
             {
-                camera->move_forward(delta_to_use);
-            }
-            if (kbd.is_key_pressed('a'))
-            {
-                camera->move_left(delta_to_use);
-            }
-            if (kbd.is_key_pressed('s'))
-            {
-                camera->move_backward(delta_to_use);
-            }
-            if (kbd.is_key_pressed('d'))
-            {
-                camera->move_right(delta_to_use);
-            }
-        }
-        /*
-            -----------------------------
-            first person input tree
-            -----------------------------
-        */
-        else if (camera->type == Camera::camera_type::first_person)
-        {
-        }
-        /*
-            -----------------------------
-            third person input tree
-            -----------------------------
-        */
-        else if (camera->type == Camera::camera_type::third_person)
-        {
-            mouse_delta.first *= 0.5f;
-            mouse_delta.second *= 0.5f;
-            if (mouse_event.get_type() == Mouse::Event::Type::Move)
-            {
-                // handle mouse rotation
+                // handle mouse scroll wheel
+                if (mouse_event.get_type() == Mouse::Event::Type::WheelUp)
+                {
+                    camera->adjust_zoom(-(camera->zoom_step));
+                }
+                if (mouse_event.get_type() == Mouse::Event::Type::WheelDown)
+                {
+                    camera->adjust_zoom(camera->zoom_step);
+                }
+
+                // camera rotation
                 if (mouse.is_middle_pressed() && mouse.is_in_window())
                 {
                     if (mouse_delta.first < 0)
                     {
-                        camera->increase_orbit(fabs(mouse_delta.first), delta_to_use);
+                        camera->increase_orbit(abs(mouse_delta.first));
                     }
                     else if (mouse_delta.first > 0)
                     {
-                        camera->decrease_orbit(fabs(mouse_delta.first), delta_to_use);
+                        camera->decrease_orbit(abs(mouse_delta.first));
                     }
                 }
-            }
 
-            // handle mouse scroll wheel
-            if (mouse_event.get_type() == Mouse::Event::Type::WheelUp)
-            {
-                camera->decrease_pitch(0.9f, delta_to_use);
-            }
-            if (mouse_event.get_type() == Mouse::Event::Type::WheelDown)
-            {
-                camera->increase_pitch(0.9f, delta_to_use);
-            }
-
-            if (kbd_event.get_type() == Keyboard::Event::Type::Press)
-            {
-                if (kbd_event.get_code() == ' ' && added == false)
+                // debug -- add new objects to world with random position
+                if (kbd.is_key_pressed(' ') && added == false)
                 {
-                    // added = true;
+                    //added = true;
                     int min = 0;
-                    int max = 30;
-                    int z_max = 30;
+                    int max = 90;
+                    int z_max = 60;
 
                     std::random_device rd;
                     std::default_random_engine eng(rd());
@@ -336,89 +311,80 @@ void mv::Engine::go(void)
                     collection_handler->models.at(0).objects.back()->position =
                         glm::vec3(x, y, z);
                 }
+                if (kbd.is_key_pressed('w'))
+                {
+                    camera->decrease_pitch();
+                }
+                if (kbd.is_key_pressed('s'))
+                {
+                    camera->increase_pitch();
+                }
+
+                if (kbd.is_key_pressed('d'))
+                {
+                    camera->increase_orbit();
+                }
+                if (kbd.is_key_pressed('a'))
+                {
+                    camera->decrease_orbit();
+                }
             }
 
-            // TODO
-            // change object movement to require float *
-            if (kbd.is_key_pressed('i'))
-            {
-                camera->target->move_forward(fpsdt);
-            }
-            if (kbd.is_key_pressed('k'))
-            {
-                camera->target->move_backward(fpsdt);
-            }
-            if (kbd.is_key_pressed('j'))
-            {
-                camera->target->move_left(fpsdt);
-            }
-            if (kbd.is_key_pressed('l'))
-            {
-                camera->target->move_right(fpsdt);
-            }
+            // update game objects
+            collection_handler->update();
 
-            if (kbd.is_key_pressed('w'))
-            {
-                camera->decrease_pitch(delta_to_use);
-            }
-            if (kbd.is_key_pressed('s'))
-            {
-                camera->increase_pitch(delta_to_use);
-            }
-
-            if (kbd.is_key_pressed('d'))
-            {
-                // change camera orbit angle
-                camera->increase_orbit(delta_to_use); // clockwise rotation
-            }
-            if (kbd.is_key_pressed('a'))
-            {
-                // change camera orbit angle
-                camera->decrease_orbit(delta_to_use); // counter clockwise rotation
-            }
+            // update view and projection matrices
+            camera->update();
         }
 
-        /*
-            -----------------------------
-            update objects
-            -----------------------------
-        */
-        collection_handler->update();
+        //     // handle mouse scroll wheel
+        //     if (mouse_event.get_type() == Mouse::Event::Type::WheelUp)
+        //     {
+        //         // camera->decrease_pitch(180.0f, delta_to_use);
+        //         uint32_t i = 0;
+        //         while (i < 5)
+        //         {
+        //             camera->decrease_pitch(delta_to_use);
+        //             i++;
+        //         }
+        //     }
+        //     if (mouse_event.get_type() == Mouse::Event::Type::WheelDown)
+        //     {
+        //         // camera->increase_pitch(180.0f, delta_to_use);
+        //         uint32_t i = 0;
+        //         while (i < 5)
+        //         {
+        //             camera->increase_pitch(delta_to_use);
+        //             i++;
+        //         }
+        //     }
 
-        /*
-            --------------------------------------
-            update view matrix & if necessary proj
-            --------------------------------------
-        */
-        camera->update();
+        //     if (kbd_event.get_type() == Keyboard::Event::Type::Press)
+        //     {
+        //         if (kbd_event.get_code() == ' ' && added == false)
+        //         {
+        //             // added = true;
+        //             int min = 0;
+        //             int max = 30;
+        //             int z_max = 30;
+
+        //             std::random_device rd;
+        //             std::default_random_engine eng(rd());
+        //             std::uniform_int_distribution<int> xy_distr(min, max);
+        //             std::uniform_int_distribution<int> z_distr(min, z_max);
+
+        //             float x = xy_distr(eng);
+        //             float y = xy_distr(eng);
+        //             float z = z_distr(eng);
+        //             collection_handler->create_object("models/_viking_room.fbx");
+        //             collection_handler->models.at(0).objects.back()->position =
+        //                 glm::vec3(x, y, z);
+        //         }
+        //     }
+        // }
 
         // Render
         draw(current_frame, image_index);
-
-        fps_counter += 1;
-
-        // use last 3 frames
-        if (last_frame_index > 2)
-        {
-            //std::cout << "Last 3 Delta => " << last_frames_list[0] << ", " << last_frames_list[1] << ", " << last_frames_list[2] << std::endl;
-            // on third frame calculate average
-            average_frame_delta = last_frames_list[0] + last_frames_list[1] + last_frames_list[2];
-            average_frame_delta = average_frame_delta / 3;
-            // reset index
-            last_frame_index = 0;
-            std::cout << "Average Frame Delta => " << average_frame_delta << std::endl;
-        }
-        else
-        {
-            last_frames_list.at(last_frame_index) = fpsdt;
-            last_frame_index += 1;
-        }
-        if (fps.getElaspedMS() > 1000)
-        {
-            std::cout << "FPS => " << fps_counter << std::endl;
-            fps_counter = 0;
-            fps.restart();
-        }
     }
     int total_object_count = 0;
     for (const auto &model : collection_handler->models)

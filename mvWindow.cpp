@@ -905,14 +905,12 @@ void mv::MWindow::handle_x_event(void)
             XSendEvent(display, window, false, ExposureMask, &q);
         }
         kbd.on_key_press(static_cast<uint16_t>(key));
-        //printf("Key pressed => %c :: %d\n", key, key);
         break;
     case KeyRelease:
         key = XLookupKeysym(&event.xkey, 0);
         kbd.on_key_release(static_cast<uint16_t>(key));
         break;
     case MotionNotify:
-        // printf("Mouse movement (%d, %d)\n", event.xmotion.x, event.xmotion.y);
         mouse.on_mouse_move(event.xbutton.x, event.xbutton.y);
     case Expose:
         break;

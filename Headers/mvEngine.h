@@ -4,12 +4,15 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
+#include <chrono>
 #include <random>
 
 #include "mvAllocator.h"
 #include "mvCamera.h"
 #include "mvWindow.h"
 #include "mvCollection.h"
+
+using namespace std::chrono_literals;
 
 namespace mv
 {
