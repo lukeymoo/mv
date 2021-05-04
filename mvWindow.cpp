@@ -911,7 +911,7 @@ void mv::MWindow::handle_x_event(void)
         kbd.on_key_release(static_cast<uint16_t>(key));
         break;
     case MotionNotify:
-        mouse.on_mouse_move(event.xbutton.x, event.xbutton.y);
+        // mouse.on_mouse_move(event.xbutton.x, event.xbutton.y);
     case Expose:
         break;
         // configured to only capture WM_DELETE_WINDOW so we exit here
