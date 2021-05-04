@@ -68,7 +68,7 @@ namespace mv
             r_shift,
             l_ctrl,
             r_ctrl,
-            a_alt,
+            l_alt,
             r_alt,
             l_super,
             r_super,
