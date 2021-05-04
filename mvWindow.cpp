@@ -73,7 +73,6 @@ mv::MWindow::MWindow(int w, int h, const char *title)
                      ExposureMask |
                      KeyPressMask |
                      KeyReleaseMask |
-                     PointerMotionMask |
                      NoExpose |
                      SubstructureNotifyMask);
 
@@ -866,21 +865,15 @@ void mv::MWindow::handle_x_event(void)
         {
             mouse.on_right_press(event.xbutton.x, event.xbutton.y);
         }
-        /*
-            Mouse wheel scroll up
-        */
+        // Mouse wheel scroll up
         else if (event.xbutton.button == Button4)
         {
             mouse.on_wheel_up(event.xbutton.x, event.xbutton.y);
-            //mouse.on_wheel_delta(event.xbutton.x, event.xbutton.y, 1);
         }
-        /*
-            Mouse wheel scroll down
-        */
+        // Mouse wheel scroll down
         else if (event.xbutton.button == Button5)
         {
             mouse.on_wheel_down(event.xbutton.x, event.xbutton.y);
-            //mouse.on_wheel_delta(event.xbutton.x, event.xbutton.y, -1);
         }
         break;
     case ButtonRelease:
@@ -910,8 +903,6 @@ void mv::MWindow::handle_x_event(void)
         key = XLookupKeysym(&event.xkey, 0);
         kbd.on_key_release(static_cast<uint16_t>(key));
         break;
-    case MotionNotify:
-        // mouse.on_mouse_move(event.xbutton.x, event.xbutton.y);
     case Expose:
         break;
         // configured to only capture WM_DELETE_WINDOW so we exit here

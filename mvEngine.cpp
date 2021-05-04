@@ -233,11 +233,16 @@ void mv::Engine::go(void)
     std::chrono::nanoseconds accumulated(0ns);
     auto start_time = chrono::now();
 
-    // used to force update mouse position
+    // mouse tracking
     int last_mousex = 0;
     int last_mousey = 0;
     int cur_mousex = 0;
     int cur_mousey = 0;
+
+    // x,y of initial mouse middle press
+    int mouse_drag_startx = 0;
+    int mouse_drag_starty = 0;
+    float start_orbit = 0.0f;
 
     while (running)
     {
@@ -278,18 +283,50 @@ void mv::Engine::go(void)
                     camera->adjust_zoom(camera->zoom_step);
                 }
 
-                // camera rotation
-                if (mouse.is_middle_pressed() && mouse.is_in_window())
+                // capture initial middle press (might be another button future)
+                if (mouse_event.get_type() == Mouse::Event::Type::MDown)
                 {
-                    if (mouse_delta.first < 0)
+                    mouse_drag_startx = mouse_event.get_pos_x();
+                    mouse_drag_starty = mouse_event.get_pos_y();
+                    start_orbit = camera->orbit_angle;
+                }
+                // capture middle release
+                if (mouse_event.get_type() == Mouse::Event::Type::MRelease)
+                {
+                    mouse_drag_startx = 0;
+                    mouse_drag_starty = 0;
+                    start_orbit = 0.0f;
+                    camera->realign_orbit(); // ensure 0-359.9f orbit bounds
+                }
+
+                // send orbit updates with calculated delta
+                if (mouse.is_middle_pressed())
+                {
+                    int m_dx = cur_mousex - mouse_drag_startx;
+                    // int m_dy = cur_mousey - mouse_drag_starty;
+                    if (m_dx > 0)
                     {
-                        camera->increase_orbit(abs(mouse_delta.first));
+                        camera->adjust_orbit(abs(m_dx), start_orbit);
                     }
-                    else if (mouse_delta.first > 0)
+                    else
                     {
-                        camera->decrease_orbit(abs(mouse_delta.first));
+                        camera->adjust_orbit(-abs(m_dx), start_orbit);
                     }
                 }
+
+                // if (mouse.is_middle_pressed() && mouse.is_in_window())
+                // {
+                //     if (mouse_delta.first < 0)
+                //     {
+                //         // camera->increase_orbit(abs(mouse_delta.first));
+                //         camera->adjust_orbit(camera->orbit_step * abs(mouse_delta.first));
+                //     }
+                //     else if (mouse_delta.first > 0)
+                //     {
+                //         // camera->decrease_orbit(abs(mouse_delta.first));
+                //         camera->adjust_orbit(-(camera->orbit_step * abs(mouse_delta.first)));
+                //     }
+                // }
 
                 // debug -- add new objects to world with random position
                 if (kbd.is_key_pressed(' ') && added == false)
@@ -322,11 +359,11 @@ void mv::Engine::go(void)
 
                 if (kbd.is_key_pressed('d'))
                 {
-                    camera->increase_orbit();
+                    // camera->adjust_orbit(camera->orbit_step);
                 }
                 if (kbd.is_key_pressed('a'))
                 {
-                    camera->decrease_orbit();
+                    // camera->adjust_orbit(-(camera->orbit_step));
                 }
             }
 
@@ -336,52 +373,6 @@ void mv::Engine::go(void)
             // update view and projection matrices
             camera->update();
         }
-
-        //     // handle mouse scroll wheel
-        //     if (mouse_event.get_type() == Mouse::Event::Type::WheelUp)
-        //     {
-        //         // camera->decrease_pitch(180.0f, delta_to_use);
-        //         uint32_t i = 0;
-        //         while (i < 5)
-        //         {
-        //             camera->decrease_pitch(delta_to_use);
-        //             i++;
-        //         }
-        //     }
-        //     if (mouse_event.get_type() == Mouse::Event::Type::WheelDown)
-        //     {
-        //         // camera->increase_pitch(180.0f, delta_to_use);
-        //         uint32_t i = 0;
-        //         while (i < 5)
-        //         {
-        //             camera->increase_pitch(delta_to_use);
-        //             i++;
-        //         }
-        //     }
-
-        //     if (kbd_event.get_type() == Keyboard::Event::Type::Press)
-        //     {
-        //         if (kbd_event.get_code() == ' ' && added == false)
-        //         {
-        //             // added = true;
-        //             int min = 0;
-        //             int max = 30;
-        //             int z_max = 30;
-
-        //             std::random_device rd;
-        //             std::default_random_engine eng(rd());
-        //             std::uniform_int_distribution<int> xy_distr(min, max);
-        //             std::uniform_int_distribution<int> z_distr(min, z_max);
-
-        //             float x = xy_distr(eng);
-        //             float y = xy_distr(eng);
-        //             float z = z_distr(eng);
-        //             collection_handler->create_object("models/_viking_room.fbx");
-        //             collection_handler->models.at(0).objects.back()->position =
-        //                 glm::vec3(x, y, z);
-        //         }
-        //     }
-        // }
 
         // Render
         draw(current_frame, image_index);

@@ -119,7 +119,6 @@ namespace mv
         bool is_middle_pressed(void) const noexcept;
         bool is_right_pressed(void) const noexcept;
         bool is_in_window(void) const noexcept;
-        int deltatest = 0;
         void set_delta_style(delta_style style)
         {
             this->delta_style = style;

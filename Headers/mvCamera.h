@@ -81,13 +81,16 @@ namespace mv
         // & third_person requires user specified target
         camera_type type = free_look;
 
-        // float pitch_accel = 0.0f;
-        float zoom_accel = 0.0f;
-        // static constexpr float pitch_step = 2.0f;
-        static constexpr float zoom_step = 0.25f;
+        // should orbit steps be a multiple of some kind of window size ratio?
+        static constexpr float orbit_step = 0.125f;
 
-        // static constexpr float min_pitch = 45.0f;
-        // static constexpr float max_pitch = 50.0f;
+        static constexpr float min_orbit = 0.0f;
+        static constexpr float max_orbit = 359.9f;
+
+        // camera zoom
+        float zoom_accel = 0.0f;
+        static constexpr float zoom_step = 0.25f;
+        static constexpr float zoom_friction = zoom_step * 0.125f;
 
         static constexpr float max_zoom_level = 20.0f;
         static constexpr float min_zoom_level = 3.4f;
@@ -152,7 +155,7 @@ namespace mv
         inline void update(void)
         {
             // process camera zoom acceleration
-            if (zoom_accel)
+            if (zoom_accel != 0.0f)
             {
                 if (check_zoom(zoom_accel))
                 {
@@ -173,11 +176,11 @@ namespace mv
                 // friction implementation
                 if (zoom_accel > 0.0f)
                 {
-                    zoom_accel -= zoom_step * 0.125f;
+                    zoom_accel -= zoom_friction;
                 }
                 else if (zoom_accel < 0.0f)
                 {
-                    zoom_accel += zoom_step * 0.125f;
+                    zoom_accel += zoom_friction;
                 }
             }
 
@@ -236,12 +239,29 @@ namespace mv
             zoom_accel += delta;
             return;
         }
-
-        inline bool check_zoom(float n)
+        inline void adjust_orbit(float delta, float start_orbit)
         {
-            if (n > 0) // zooming out
+            orbit_angle = start_orbit + (orbit_step * delta);
+            return;
+        }
+        inline void realign_orbit(void)
+        {
+            if (orbit_angle > 359.9f)
             {
-                if ((zoom_level + n) < max_zoom_level)
+                orbit_angle = abs(orbit_angle) - 359.9f;
+            }
+            else if (orbit_angle < 0.0f)
+            {
+                orbit_angle = 359.9f - abs(orbit_angle);
+            }
+            return;
+        }
+
+        inline bool check_zoom(float delta)
+        {
+            if (delta > 0) // zooming out
+            {
+                if ((zoom_level + delta) < max_zoom_level)
                 {
                     return true;
                 }
@@ -252,7 +272,7 @@ namespace mv
             }
             else // zooming in
             {
-                if ((zoom_level + n) > min_zoom_level)
+                if ((zoom_level + delta) > min_zoom_level)
                 {
                     return true;
                 }

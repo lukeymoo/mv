@@ -246,7 +246,6 @@ namespace mv
             mouse_y_delta = y - center_y;
         }
 
-        deltatest += 1;
         buffer.push(Mouse::Event(Mouse::Event::Type::WheelUp, *this));
         trim_buffer();
         return;
@@ -269,7 +268,6 @@ namespace mv
             mouse_y_delta = y - center_y;
         }
 
-        deltatest -= 1;
         buffer.push(Mouse::Event(Mouse::Event::Type::WheelDown, *this));
         trim_buffer();
         return;
