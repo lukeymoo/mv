@@ -9,8 +9,7 @@
 #include <queue>
 #include <stdexcept>
 
-#include <iostream>
-
+// reworked keyboard handler
 namespace mv
 {
     template <typename T>
