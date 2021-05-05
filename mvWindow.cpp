@@ -770,7 +770,7 @@ std::vector<char> mv::MWindow::read_file(std::string filename)
 
     if (buffer.empty())
     {
-        throw std::runtime_error("File reading operation returned empty buffer");
+        throw std::runtime_error("File reading operation returned empty buffer :: shaders?");
     }
 
     return buffer;
@@ -795,7 +795,7 @@ VkShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code)
     return module;
 }
 
-XEvent mv::MWindow::create_event(const char *event_type)
+inline XEvent mv::MWindow::create_event(const char *event_type)
 {
     XEvent cev;
 

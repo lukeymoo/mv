@@ -9,7 +9,12 @@
 #include <queue>
 #include <stdexcept>
 
-// reworked keyboard handler
+
+/*
+    ~~~ IMPORTANT ~~~
+    IF NEW KEYS ARE ADDED TO ENUM BE SURE TO MODIFY max_key_count
+*/
+
 namespace mv
 {
     struct keyboard
@@ -33,7 +38,7 @@ namespace mv
         enum key
         {
             invalid = 0,
-            l_shift = 1,
+            l_shift,
             r_shift,
             l_ctrl,
             r_ctrl,

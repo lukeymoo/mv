@@ -67,10 +67,9 @@ namespace mv
 
         VkResult create_instance(void);
 
-        //void go(void);
         void prepare(void);
 
-        XEvent create_event(const char *eventType);
+        inline XEvent create_event(const char *eventType);
         void handle_x_event(void);
 
     protected:
