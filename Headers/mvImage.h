@@ -33,7 +33,7 @@ namespace mv
             VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
         };
 
-        void create(mv::Device* device, ImageCreateInfo &c_info, std::string image_filename)
+        void create(mv::Device *device, ImageCreateInfo &c_info, std::string image_filename)
         {
             assert(device->m_command_pool != nullptr);
             this->device = device;
@@ -94,7 +94,7 @@ namespace mv
             VkMemoryAllocateInfo alloc_info = {};
             alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
             alloc_info.memoryTypeIndex = device->get_memory_type(memory_requirements.memoryTypeBits,
-                                                                c_info.memory_properties);
+                                                                 c_info.memory_properties);
             alloc_info.allocationSize = memory_requirements.size;
 
             if (vkAllocateMemory(device->device, &alloc_info, nullptr, &memory) != VK_SUCCESS)
@@ -310,8 +310,26 @@ namespace mv
 
         void destroy(void)
         {
-            // free image
-            // free image memory
+            if (sampler)
+            {
+                vkDestroySampler(device->device, sampler, nullptr);
+                sampler = nullptr;
+            }
+            if (image_view)
+            {
+                vkDestroyImageView(device->device, image_view, nullptr);
+                image_view = nullptr;
+            }
+            if (image)
+            {
+                vkDestroyImage(device->device, image, nullptr);
+                image = nullptr;
+            }
+            if (memory)
+            {
+                vkFreeMemory(device->device, memory, nullptr);
+                memory = nullptr;
+            }
             return;
         }
     };

@@ -75,8 +75,16 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
         buffer.push(Mouse::Event(Mouse::Event::Type::Move, *this));
         trim_buffer();
@@ -89,8 +97,16 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
         left_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::LDown, *this));
@@ -104,8 +120,16 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
         right_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::RDown, *this));
@@ -119,8 +143,16 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
         left_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::LRelease, *this));
@@ -134,8 +166,16 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
         right_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::RRelease, *this));
@@ -149,8 +189,16 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
         middle_is_pressed = true;
         buffer.push(Mouse::Event(Mouse::Event::Type::MDown, *this));
@@ -164,8 +212,16 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
         middle_is_pressed = false;
         buffer.push(Mouse::Event(Mouse::Event::Type::MRelease, *this));
@@ -179,10 +235,17 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
-        deltatest += 1;
         buffer.push(Mouse::Event(Mouse::Event::Type::WheelUp, *this));
         trim_buffer();
         return;
@@ -194,10 +257,17 @@ namespace mv
         last_y = y;
         x = nx;
         y = ny;
-        mouse_x_delta = x - last_x;
-        mouse_y_delta = last_y - y;
+        if (delta_style == delta_style::from_last_pos)
+        {
+            mouse_x_delta = x - last_x;
+            mouse_y_delta = last_y - y;
+        }
+        else
+        {
+            mouse_x_delta = x - center_x;
+            mouse_y_delta = y - center_y;
+        }
 
-        deltatest -= 1;
         buffer.push(Mouse::Event(Mouse::Event::Type::WheelDown, *this));
         trim_buffer();
         return;

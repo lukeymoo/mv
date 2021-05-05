@@ -23,9 +23,9 @@
 #include "mvInit.h"
 #include "mvTimer.h"
 
-const size_t MAX_IN_FLIGHT = 2;
-#define WINDOW_WIDTH 2560
-#define WINDOW_HEIGHT 1440
+const size_t MAX_IN_FLIGHT = 3;
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 768
 
 const std::vector<const char *> requested_validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -38,6 +38,11 @@ const std::vector<const char *> requested_instance_extensions = {
 const std::vector<const char *> requested_device_extensions = {
     "VK_KHR_swapchain",
     "VK_KHR_maintenance1"};
+
+namespace mv
+{
+    
+};
 
 namespace mv
 {
@@ -88,7 +93,8 @@ namespace mv
         Timer fps;
         VkClearColorValue default_clear_color = {{0.0f, 0.0f, 0.0f, 1.0f}};
         bool good_init = true;
-        Keyboard kbd;
+
+        std::unique_ptr<mv::keyboard> kbd;
         Mouse mouse;
 
         mv::Device *device;

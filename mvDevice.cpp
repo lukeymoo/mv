@@ -187,6 +187,7 @@ VkFormat mv::Device::get_supported_depth_format(VkPhysicalDevice physical_device
 
 VkResult mv::Device::create_buffer(VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags memory_property_flags, VkDeviceSize size, VkBuffer *buffer, VkDeviceMemory *memory, void *data)
 {
+    std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(size) << std::endl;
     VkBufferCreateInfo buffer_info = mv::initializer::buffer_create_info(usage_flags, size);
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -237,6 +238,7 @@ VkResult mv::Device::create_buffer(VkBufferUsageFlags usage_flags, VkMemoryPrope
 
 VkResult mv::Device::create_buffer(VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags memory_property_flags, mv::Buffer *buffer, VkDeviceSize size, void *data)
 {
+    std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(size) << std::endl;
     buffer->device = device;
 
     // create buffer

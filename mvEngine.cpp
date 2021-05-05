@@ -1,5 +1,33 @@
 #include "mvEngine.h"
 
+static inline void get_mouse(Display *display, Window &window, mv::Mouse *mouse, int &cur_x, int &cur_y, int &last_x, int &last_y)
+{
+    Window root, child;
+    int gx, gy;
+    unsigned int buttons;
+
+    int mx = 0;
+    int my = 0;
+    XQueryPointer(display, window, &root, &child, &gx, &gy, &mx, &my, &buttons);
+
+    last_x = cur_x;
+    last_y = cur_y;
+    cur_x = mx;
+    cur_y = my;
+
+    if (mouse->delta_style == mv::Mouse::delta_style::from_last_pos)
+    {
+        mouse->mouse_x_delta = cur_x - last_x;
+        mouse->mouse_y_delta = cur_y - last_y;
+    }
+    else
+    {
+        mouse->mouse_x_delta = cur_x - mouse->center_x;
+        mouse->mouse_y_delta = cur_y - mouse->center_y;
+    }
+    return;
+}
+
 mv::Engine::Engine(int w, int h, const char *title)
     : MWindow(w, h, title)
 {
@@ -63,11 +91,11 @@ void mv::Engine::cleanup_swapchain(void)
         m_render_pass = nullptr;
     }
     // descriptors pool
-    if (descriptor_pool)
-    {
-        vkDestroyDescriptorPool(m_device, descriptor_pool, nullptr);
-        descriptor_pool = nullptr;
-    }
+    // if (descriptor_pool)
+    // {
+    //     vkDestroyDescriptorPool(m_device, descriptor_pool, nullptr);
+    //     descriptor_pool = nullptr;
+    // }
     // cleanup command pool
     if (m_command_pool)
     {
@@ -95,8 +123,10 @@ void mv::Engine::recreate_swapchain(void)
     // create swapchain
     swapchain.create(&window_width, &window_height);
 
+    mouse.update_window_spec(window_width, window_height);
+
     // create descriptor pool, dont recreate layout
-    create_descriptor_sets(&global_uniforms);
+    //create_descriptor_sets(&global_uniforms);
 
     // create render pass
     setup_render_pass();
@@ -120,358 +150,296 @@ void mv::Engine::go(void)
     std::cout << "[+] Preparing vulkan" << std::endl;
     prepare();
 
-    // Created in Engine class
-    // GlobalUniforms global_uniforms;
+    // Create descriptor pool allocator
+    descriptor_allocator = std::make_shared<Allocator>(device);
 
-    // create view matrix buffer
-    device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                          &global_uniforms.ubo_view,
-                          sizeof(GlobalUniforms::view));
-    if (global_uniforms.ubo_view.map() != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to map view matrix buffer");
-    }
+    // allocate pool
+    descriptor_allocator->allocate_pool(2000);
 
-    // create projection matrix buffer
-    device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                          &global_uniforms.ubo_projection,
-                          sizeof(GlobalUniforms::projection));
-    if (global_uniforms.ubo_projection.map() != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to map projection matrix buffer");
-    }
+    // create uniform buffer layout ( single mat4 object )
+    descriptor_allocator->create_layout("uniform_layout",
+                                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                        1,
+                                        VK_SHADER_STAGE_VERTEX_BIT,
+                                        0);
 
-    // Initialze model types
-    uint32_t model_type_count = 3;
+    // create texture sampler layout
+    descriptor_allocator->create_layout("sampler_layout",
+                                        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                        1,
+                                        VK_SHADER_STAGE_FRAGMENT_BIT,
+                                        0);
 
-    models.resize(model_type_count);
+    // initialize model/object container
+    // constructor by default creates `uniform_layout` for use with view & projection matrix buffers
+    collection_handler = std::make_unique<Collection>(device, descriptor_allocator);
 
-    // ensure every child OBJECT of MODEL type knows it's MODEL type index
-    for (int i = 0; i < model_type_count; i++)
-    {
-        for (auto &obj : models[i].objects)
-        {
-            obj.model_index = i;
-        }
-    }
+    // Load model
+    collection_handler->load_model("models/_viking_room.fbx");
+    collection_handler->load_model("models/Male.obj");
 
-    // configure every OBJECTs position, rotation BEFORE uniform buffer creation
-    // the OBJECTs count will be set by a map editor of some sort later
-    models[0].resize_object_container(1);
-    models[0].objects[0].position = glm::vec3(0.0f, 0.0f, 0.0f);
-    models[0].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f); // viking_room.obj
-    models[0].objects[0].scale_factor = 1.0f;
+    // Create object
+    collection_handler->create_object("models/_viking_room.fbx");
+    collection_handler->models[0].objects[0]->position = glm::vec3(0.0f, 0.0f, -5.0f);
+    collection_handler->models[0].objects[0]->rotation = glm::vec3(0.0f, 90.0f, 0.0f);
 
-    models[1].resize_object_container(1);
-    models[1].objects[0].position = glm::vec3(0.0f, 0.0f, -4.0f);
-    models[1].objects[0].rotation = glm::vec3(90.0f, 0.0f, 0.0f);
-    models[1].objects[0].scale_factor = 0.7f;
-
-    models[2].resize_object_container(1);
-    models[2].objects[0].position = glm::vec3(5.0f, 0.0f, 0.0f);
-    models[2].objects[0].rotation = glm::vec3(90.0f, 0.0f, 0.0f);
-    models[2].objects[0].scale_factor = 0.01f;
+    collection_handler->create_object("models/Male.obj");
+    collection_handler->models[1].objects[0]->rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    collection_handler->models[1].objects[0]->position = glm::vec3(0.0f, 0.0f, 0.0f);
 
     // configure camera before uniform buffer creation
     camera_init_struct camera_params;
-    camera_params.fov = 50.0f * ((float)swapchain.swap_extent.width / swapchain.swap_extent.height);
+    camera_params.fov = 40.0f * ((float)swapchain.swap_extent.width / swapchain.swap_extent.height);
     camera_params.aspect = static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
     camera_params.nearz = 0.01f;
     camera_params.farz = 200.0f;
     camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
-    camera_params.matrices = &global_uniforms;
+    camera_params.view_uniform_object = &collection_handler->view_uniform;
+    camera_params.projection_uniform_object = &collection_handler->projection_uniform;
 
-    camera_params.camera_type = Camera::Type::third_person;
-    camera_params.target = &models[2].objects[0];
+    camera_params.camera_type = Camera::camera_type::third_person;
+    camera_params.target = collection_handler->models.at(1).objects.at(0).get();
 
     camera = std::make_unique<Camera>(camera_params);
 
-    // Prepare uniforms
-    prepare_uniforms();
-
-    models[0]._load(device, "models/Male.obj");
-    models[1]._load(device, "models/viking_room.fbx");
-    models[2]._load(device, "models/Security.fbx");
-
-    uint32_t total_vertices = 0;
-    uint32_t total_indices = 0;
-    uint32_t total_textures = 0;
-    for (auto &mesh : models[0]._meshes)
+    if (camera->type == Camera::camera_type::first_person || Camera::camera_type::free_look)
     {
-        total_vertices += mesh.vertices.size();
-        total_indices += mesh.indices.size();
-        total_textures += mesh.textures.size();
+        mouse.set_delta_style(Mouse::delta_style::from_center);
     }
-    std::cout << "Total vertices => " << total_vertices << std::endl
-              << "Total indices => " << total_indices << std::endl
-              << "Total textures => " << total_textures << std::endl;
-
-    // Load models
-    // set each object model index to it's Model class container
-    //models[0].load(device, "models/viking_room.obj");
-
-    // Create descriptor pool allocator
-    descriptor_allocator = std::make_unique<Allocator>(device->device);
-
-    create_descriptor_sets(&global_uniforms);
+    else
+    {
+        mouse.set_delta_style(Mouse::delta_style::from_last_pos);
+    }
 
     prepare_pipeline();
 
-    // Record commands to already created command buffers(per swap)
-    // Create pipeline and tie all resources together
-    uint32_t imageIndex = 0;
-    size_t currentFrame = 0;
+    // basic check
+    assert(camera);
+    assert(collection_handler);
+    assert(descriptor_allocator);
+
+    uint32_t image_index = 0;
+    size_t current_frame = 0;
+
     bool added = false;
+
     fps.startTimer();
     int fps_counter = 0;
+
+    using chrono = std::chrono::high_resolution_clock;
+
+    constexpr std::chrono::nanoseconds timestep(16ms);
+
+    std::chrono::nanoseconds accumulated(0ns);
+    auto start_time = chrono::now();
+
+    // mouse tracking
+    int last_mousex = 0;
+    int last_mousey = 0;
+    int cur_mousex = 0;
+    int cur_mousey = 0;
+
+    // x,y of initial mouse middle press
+    int mouse_drag_startx = 0;
+    int mouse_drag_starty = 0;
+    float start_orbit = 0.0f;
+    bool start_drag = false;
+
     while (running)
     {
-        double fpsdt = timer.getElaspedMS();
-        timer.restart();
+        auto delta_time = chrono::now() - start_time;
+        start_time = chrono::now();
+        accumulated += std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time);
 
         while (XPending(display))
         {
             handle_x_event();
         }
-
-        // Get input events
-        Keyboard::Event kbdEvent = kbd.read_key();
-        Mouse::Event mouseEvent = mouse.read();
-
-        // Handle input events
-        if (camera->get_type() == Camera::Type::first_person)
+        if (camera->type == Camera::camera_type::free_look || camera->type == Camera::camera_type::first_person)
         {
-            if (mouse.is_left_pressed())
+            XWarpPointer(display, None, window, 0, 0, 0, 0, (window_width / 2), (window_height / 2));
+            XFlush(display);
+        }
+
+        while (accumulated >= timestep)
+        {
+            accumulated -= timestep;
+
+            get_mouse(display, window, &mouse, cur_mousex, cur_mousey, last_mousex, last_mousey);
+
+            // Get input events
+            mv::keyboard::event kbd_event = kbd->read();
+            Mouse::Event mouse_event = mouse.read();
+
+            if (camera->type == Camera::camera_type::third_person)
             {
-                if (mouseEvent.get_type() == Mouse::Event::Type::Move && mouse.is_in_window())
+                // handle mouse scroll wheel
+                if (mouse_event.get_type() == Mouse::Event::Type::WheelUp)
                 {
-                    // get delta
-                    std::pair<int, int> mouse_delta = mouse.get_pos_delta();
-                    glm::vec3 rotation_delta = glm::vec3(mouse_delta.second, mouse_delta.first, 0.0f);
-                    camera->rotate(rotation_delta, fpsdt);
+                    camera->adjust_zoom(-(camera->zoom_step));
+                }
+                if (mouse_event.get_type() == Mouse::Event::Type::WheelDown)
+                {
+                    camera->adjust_zoom(camera->zoom_step);
+                }
+
+                // capture initial middle press (might be another button future)
+                if (kbd->is_key(display, mv::keyboard::key::l_alt) && !start_drag)
+                {
+                    mouse_drag_startx = cur_mousex;
+                    mouse_drag_starty = cur_mousey;
+                    start_orbit = camera->orbit_angle;
+                    start_drag = true;
+                }
+                // if drag enabled check for release
+                if (start_drag)
+                {
+                    // if L alt released
+                    if (!kbd->is_key(display, mv::keyboard::key::l_alt))
+                    {
+                        // ensure 0-359.9f orbit bounds
+                        if (mouse_drag_startx != 0 && mouse_drag_starty != 0 &&
+                            start_orbit != 0)
+                        {
+                            camera->realign_orbit();
+                        }
+                        mouse_drag_startx = 0;
+                        mouse_drag_starty = 0;
+                        start_orbit = 0.0f;
+                        start_drag = false;
+                    }
+                    else // still holding, send orbit update
+                    {
+                        // send orbit updates with calculated delta
+                        int m_dx = cur_mousex - mouse_drag_startx;
+                        // int m_dy = cur_mousey - mouse_drag_starty;
+                        if (m_dx > 0)
+                        {
+                            camera->adjust_orbit(-abs(m_dx), start_orbit);
+                        }
+                        else
+                        {
+                            camera->adjust_orbit(abs(m_dx), start_orbit);
+                        }
+                    }
+                }
+
+                // debug -- add new objects to world with random position
+                if (kbd->is_key(display, mv::keyboard::key::space) && added == false)
+                {
+                    //added = true;
+                    int min = 0;
+                    int max = 90;
+                    int z_max = 60;
+
+                    std::random_device rd;
+                    std::default_random_engine eng(rd());
+                    std::uniform_int_distribution<int> xy_distr(min, max);
+                    std::uniform_int_distribution<int> z_distr(min, z_max);
+
+                    float x = xy_distr(eng);
+                    float y = xy_distr(eng);
+                    float z = z_distr(eng);
+                    collection_handler->create_object("models/_viking_room.fbx");
+                    collection_handler->models.at(0).objects.back()->position =
+                        glm::vec3(x, y, z);
+                }
+                if (kbd->is_key(display, mv::keyboard::key::w))
+                {
+                }
+                if (kbd->is_key(display, mv::keyboard::key::s))
+                {
+                }
+
+                if (kbd->is_key(display, mv::keyboard::key::d))
+                {
+                }
+                if (kbd->is_key(display, mv::keyboard::key::a))
+                {
                 }
             }
-        }
 
-        // First person
-        if (camera->get_type() == Camera::Type::first_person)
-        {
-            if (kbd.is_key_pressed(' ')) // space
-            {
-                camera->move_up(fpsdt);
-            }
-            if (kbd.is_key_pressed(65507)) // ctrl key
-            {
-                camera->move_down(fpsdt);
-            }
+            // update game objects
+            collection_handler->update();
 
-            // lateral movements
-            if (kbd.is_key_pressed('w'))
-            {
-                camera->move_forward(fpsdt);
-            }
-            if (kbd.is_key_pressed('a'))
-            {
-                camera->move_left(fpsdt);
-            }
-            if (kbd.is_key_pressed('s'))
-            {
-                camera->move_backward(fpsdt);
-            }
-            if (kbd.is_key_pressed('d'))
-            {
-                camera->move_right(fpsdt);
-            }
-        }
-        if (camera->get_type() == Camera::Type::third_person)
-        {
-            /*
-                For testing dynamic allocation of descriptor set
-            */
-            // if (kbdEvent.get_type() == Keyboard::Event::Type::Press && kbdEvent.get_code() == ' ' && added == false)
-            // {
-            //     //added = true;
-            //     uint32_t tc = 0;
-            //     add_new_model(descriptor_allocator->get(), "models/viking_room.obj");
-            //     for (const auto &model : models)
-            //     {
-            //         tc += model.objects.size();
-            //     }
-            //     std::cout << "\tNew Model Added, COUNT => " << tc + 2 << std::endl;
-            // }
-            /* ---------------------*/
-
-            if (kbd.is_key_pressed('i'))
-            {
-                camera->target->move_forward(fpsdt);
-            }
-            if (kbd.is_key_pressed('k'))
-            {
-                camera->target->move_backward(fpsdt);
-            }
-            if (kbd.is_key_pressed('j'))
-            {
-                camera->target->move_left(fpsdt);
-            }
-            if (kbd.is_key_pressed('l'))
-            {
-                camera->target->move_right(fpsdt);
-            }
-
-            if (kbd.is_key_pressed('w'))
-            {
-                camera->decrease_pitch(fpsdt);
-            }
-            if (kbd.is_key_pressed('s'))
-            {
-                camera->increase_pitch(fpsdt);
-            }
-            if (kbd.is_key_pressed('a'))
-            {
-                // change camera orbit angle
-                camera->decrease_orbit(fpsdt); // counter clockwise rotation
-            }
-            if (kbd.is_key_pressed('d'))
-            {
-                // change camera orbit angle
-                camera->increase_orbit(fpsdt); // clockwise rotation
-            }
-        }
-
-        /*
-            Do object/uniform updates
-        */
-        for (auto &model : models)
-        {
-            for (auto &obj : model.objects)
-            {
-                obj.update();
-            }
-        }
-        // updates view matrix & performs memcpy
-        camera->update();
-
-        // This will be reworked after uniform buffers are split
-        // There is no need to update the view & projection matrix for every single model
-        // Every object will share a projection matrix for the duration of a swap chains life
-        // The view matrix will be updated per frame
-        // the model matrix will be updated per object with push constants
-        Object::Matrices tm;
-
-        // memcpy for model ubos of each object
-        for (auto &model : models)
-        {
-            for (auto &obj : model.objects)
-            {
-                // TODO
-                // replace with push constants in the cmd buffer recreation
-                // local object model matrix is updated via calls to obj->update()
-                tm.model = obj.matrices.model;
-                memcpy(obj.uniform_buffer.mapped, &tm, sizeof(Object::Matrices));
-            }
+            // update view and projection matrices
+            camera->update();
         }
 
         // Render
-        draw(currentFrame, imageIndex);
-
-        fps_counter += 1;
-        if (fps.getElaspedMS() > 1000)
-        {
-            std::cout << "FPS => " << fps_counter << std::endl;
-            fps_counter = 0;
-            fps.restart();
-        }
+        draw(current_frame, image_index);
     }
-
-    // cleanup global uniforms
-    vkDeviceWaitIdle(m_device);
-    global_uniforms.ubo_projection.destroy();
-    global_uniforms.ubo_view.destroy();
+    int total_object_count = 0;
+    for (const auto &model : collection_handler->models)
+    {
+        total_object_count += model.objects.size();
+    }
+    std::cout << "Total objects => " << total_object_count << std::endl;
     return;
 }
 
-void mv::Engine::add_new_model(mv::Allocator::Container *pool, const char *filename)
-{
-    // resize models
-    models.push_back(mv::Model());
-    // add object to model
-    models[(models.size() - 1)].resize_object_container(1);
+// void mv::Engine::add_new_model(mv::Allocator::Container *pool, const char *filename)
+// {
+//     // resize models
+//     models.push_back(mv::Model());
+//     // add object to model
+//     models[(models.size() - 1)].resize_object_container(1);
 
-    // iterate models
-    for (size_t i = 0; i < models.size(); i++)
-    {
-        // iterate objects assign model indices
-        for (size_t j = 0; j < models[i].objects.size(); j++)
-        {
-            models[i].objects[j].model_index = i;
-        }
-    }
+//     // iterate models
+//     for (size_t i = 0; i < models.size(); i++)
+//     {
+//         // iterate objects assign model indices
+//         for (size_t j = 0; j < models[i].objects.size(); j++)
+//         {
+//             models[i].objects[j].model_index = i;
+//         }
+//     }
 
-    // hardcoded for testing purposes
-    int min = 0;
-    int max = 30;
-    int z_max = 30;
+//     // Generates random xyz values within supplied min&max below
+//     // hardcoded for testing purposes
+//     int min = 0;
+//     int max = 30;
+//     int z_max = 30;
 
-    std::random_device rd;
-    std::default_random_engine eng(rd());
-    std::uniform_int_distribution<int> xy_distr(min, max);
-    std::uniform_int_distribution<int> z_distr(min, z_max);
+//     std::random_device rd;
+//     std::default_random_engine eng(rd());
+//     std::uniform_int_distribution<int> xy_distr(min, max);
+//     std::uniform_int_distribution<int> z_distr(min, z_max);
 
-    float x = xy_distr(eng);
-    float y = xy_distr(eng);
-    float z = z_distr(eng);
-    models[(models.size() - 1)].objects[0].position = glm::vec3(x, y, -z);
-    models[(models.size() - 1)].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f);
+//     float x = xy_distr(eng);
+//     float y = xy_distr(eng);
+//     float z = z_distr(eng);
+//     models[(models.size() - 1)].objects[0].position = glm::vec3(x, y, -z);
+//     models[(models.size() - 1)].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f);
 
-    // prepare descriptor for model
-    device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                          &models[(models.size() - 1)].objects[0].uniform_buffer,
-                          sizeof(Object::Matrices));
-    if (models[(models.size() - 1)].objects[0].uniform_buffer.map() != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to allocate buffer for newly created model");
-    }
+//     // prepare descriptor for model
+//     device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+//                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+//                           &models[(models.size() - 1)].objects[0].uniform_buffer,
+//                           sizeof(Object::Matrices));
+//     if (models[(models.size() - 1)].objects[0].uniform_buffer.map() != VK_SUCCESS)
+//     {
+//         throw std::runtime_error("Failed to allocate buffer for newly created model");
+//     }
 
-    // Load model
-    models[(models.size() - 1)].load(device, filename);
+//     // Load model
+//     //models[(models.size() - 1)].load(device, filename);
 
-    // allocate descriptor set for object model matrix data
-    descriptor_allocator->allocate_set(pool, uniform_layout, models[(models.size() - 1)].objects[0].model_descriptor);
-    // allocate descriptor set for object texture data
-    descriptor_allocator->allocate_set(pool, sampler_layout, models[(models.size() - 1)].objects[0].texture_descriptor);
+//     // allocate descriptor set for object model matrix data
+//     descriptor_allocator->allocate_set(pool, uniform_layout, models[(models.size() - 1)].objects[0].model_descriptor);
+//     // allocate descriptor set for object texture data
+//     descriptor_allocator->allocate_set(pool, sampler_layout, models[(models.size() - 1)].objects[0].texture_descriptor);
 
-    // bind object matrix data buffer & its descriptor
-    descriptor_allocator->update_set(pool, models[(models.size() - 1)].objects[0].uniform_buffer.descriptor,
-                                     models[(models.size() - 1)].objects[0].model_descriptor,
-                                     0);
-    descriptor_allocator->update_set(pool, models[(models.size() - 1)].image.descriptor,
-                                     models[(models.size() - 1)].objects[0].texture_descriptor,
-                                     0);
+//     // bind object matrix data buffer & its descriptor
+//     descriptor_allocator->update_set(pool, models[(models.size() - 1)].objects[0].uniform_buffer.descriptor,
+//                                      models[(models.size() - 1)].objects[0].model_descriptor,
+//                                      0);
+//     descriptor_allocator->update_set(pool, models[(models.size() - 1)].image.descriptor,
+//                                      models[(models.size() - 1)].objects[0].texture_descriptor,
+//                                      0);
 
-    return;
-}
-
-void mv::Engine::prepare_uniforms(void)
-{
-    for (auto &model : models)
-    {
-        for (auto &obj : model.objects)
-        {
-            device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                  &obj.uniform_buffer,
-                                  sizeof(Object::Matrices));
-            if (obj.uniform_buffer.map() != VK_SUCCESS)
-            {
-                throw std::runtime_error("Failed to map object uniform buffer");
-            }
-        }
-    }
-    return;
-}
+//     return;
+// }
 
 void mv::Engine::create_descriptor_layout(VkDescriptorType type, uint32_t count, VkPipelineStageFlags stage_flags, uint32_t binding, VkDescriptorSetLayout &layout)
 {
@@ -493,80 +461,11 @@ void mv::Engine::create_descriptor_layout(VkDescriptorType type, uint32_t count,
     }
 }
 
-void mv::Engine::create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout)
-{
-    if (should_create_layout)
-    {
-        // single ubo layout
-        create_descriptor_layout(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                                 1,
-                                 VK_SHADER_STAGE_VERTEX_BIT,
-                                 0,
-                                 uniform_layout);
-        create_descriptor_layout(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                 1,
-                                 VK_SHADER_STAGE_FRAGMENT_BIT,
-                                 0,
-                                 sampler_layout);
-    }
-
-    // Create uniform buffer pool
-    mv::Allocator::Container *pool;
-    // default pool sizes are uniform buffer & combined image sampler
-    pool = descriptor_allocator->allocate_pool(2000);
-
-    // Allocate sets for view & matrix ubos
-    descriptor_allocator->allocate_set(pool, uniform_layout, global_uniforms.view_descriptor_set);
-    descriptor_allocator->update_set(pool, global_uniforms.ubo_view.descriptor, global_uniforms.view_descriptor_set, 0);
-
-    descriptor_allocator->allocate_set(pool, uniform_layout, global_uniforms.proj_descriptor_set);
-    descriptor_allocator->update_set(pool, global_uniforms.ubo_projection.descriptor, global_uniforms.proj_descriptor_set, 0);
-
-    // allocate for per model ubo
-    for (auto &model : models)
-    {
-        if (model.has_texture)
-        {
-            // create descriptor for each mesh sampler
-            for (auto &mesh : model._meshes)
-            {
-                for (auto &texture : mesh.textures)
-                {
-                    descriptor_allocator->allocate_set(pool, sampler_layout, texture.descriptor);
-                    descriptor_allocator->update_set(pool, texture.texture.descriptor, texture.descriptor, 0);
-                }
-            }
-        }
-
-        for (auto &obj : model.objects)
-        {
-            // allocate model matrix data descriptor
-            descriptor_allocator->allocate_set(pool, uniform_layout, obj.model_descriptor);
-            // bind model matrix descriptor with uniform buffer
-            descriptor_allocator->update_set(pool, obj.uniform_buffer.descriptor, obj.model_descriptor, 0);
-
-            // only if model has texture to avoid crashes
-            if (model.has_texture)
-            {
-                // // allocate model texture sampler descriptor
-                // descriptor_allocator->allocate_set(pool, sampler_layout, obj.texture_descriptor);
-                // // bind model texture descriptor with image sampler
-                // descriptor_allocator->update_set(pool, model.image.descriptor, obj.texture_descriptor, 0);
-            }
-        }
-    }
-    return;
-}
-
 void mv::Engine::prepare_pipeline(void)
 {
-    // layouts are as follows...
-    /*
-        model matrix data uniform
-        image sampler uniform
-        view matrix uniform
-        projection matrix uniform
-    */
+    VkDescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
+    VkDescriptorSetLayout sampler_layout = descriptor_allocator->get_layout("sampler_layout");
+
     std::vector<VkDescriptorSetLayout> layout_w_sampler = {uniform_layout, uniform_layout, uniform_layout, sampler_layout};
     std::vector<VkDescriptorSetLayout> layout_no_sampler = {uniform_layout, uniform_layout, uniform_layout};
     //std::vector<VkDescriptorSetLayout> layouts = {uniform_layout, uniform_layout, uniform_layout};
@@ -746,8 +645,8 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
     pass_info.pClearValues = cls.data();
 
     vkCmdBeginRenderPass(command_buffers[image_index], &pass_info, VK_SUBPASS_CONTENTS_INLINE);
-    
-    for (auto &model : models)
+
+    for (auto &model : collection_handler->models)
     {
         // for each model select the appropriate pipeline
         if (model.has_texture)
@@ -767,9 +666,9 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
             for (auto &mesh : model._meshes)
             {
                 std::vector<VkDescriptorSet> to_bind = {
-                    object.model_descriptor,
-                    global_uniforms.view_descriptor_set,
-                    global_uniforms.proj_descriptor_set};
+                    object->model_descriptor,
+                    collection_handler->view_uniform.descriptor,
+                    collection_handler->projection_uniform.descriptor};
                 if (model.has_texture)
                 {
                     to_bind.push_back(mesh.textures[0].descriptor);
@@ -795,9 +694,6 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
                 }
                 // Bind mesh buffers
                 mesh.bindBuffers(command_buffers[image_index]);
-                // VkDeviceSize offsets[] = {0};
-                // vkCmdBindIndexBuffer(command_buffers[image_index], mesh.index_buffer, 0, VK_INDEX_TYPE_UINT32);
-                // vkCmdBindVertexBuffers(command_buffers[image_index], 0, 1, &mesh.vertex_buffer, offsets);
 
                 // Indexed draw
                 vkCmdDrawIndexed(command_buffers[image_index],
@@ -820,8 +716,6 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
 void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
 {
     vkWaitForFences(device->device, 1, &in_flight_fences[cur_frame], VK_TRUE, UINT64_MAX);
-
-    cur_frame = (cur_frame + 1) & MAX_IN_FLIGHT;
 
     VkResult result;
     result = vkAcquireNextImageKHR(device->device, swapchain.swapchain, UINT64_MAX, semaphores.present_complete, VK_NULL_HANDLE, &cur_index);
@@ -910,4 +804,5 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
         throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
         break;
     }
+    cur_frame = (cur_frame + 1) % MAX_IN_FLIGHT;
 }

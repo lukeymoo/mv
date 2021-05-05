@@ -12,13 +12,15 @@
 
 #include "mvModel.h"
 #include "mvBuffer.h"
+#include "mvCollection.h"
 
 namespace mv
 {
-    typedef struct camera_init_struct
+    struct camera_init_struct
     {
         // ptr to view & projection matrices
-        GlobalUniforms *matrices = nullptr;
+        mv::Collection::uniform_object *view_uniform_object = nullptr;
+        mv::Collection::uniform_object *projection_uniform_object = nullptr;
 
         float fov = -1;
         float aspect = -1;
@@ -26,12 +28,16 @@ namespace mv
         float farz = -1;
 
         int camera_type = 0;
-        // if camera type is third person
-        // the camera initalizer must be given an object as a target
-        Object *target = nullptr;
+        mv::Object *target = nullptr;
 
         glm::vec3 position = glm::vec3(1.0);
-    } camera_init_struct;
+    };
+
+    /*
+        ------------------------------
+        --      camera class        --
+        ------------------------------
+    */
 
     class Camera
     {
@@ -46,7 +52,8 @@ namespace mv
         float nearz = 0.1f;
         float aspect = 0;
 
-        GlobalUniforms *matrices = nullptr;
+        mv::Collection::uniform_object *view_uniform_object = nullptr;
+        mv::Collection::uniform_object *projection_uniform_object = nullptr;
 
     public:
         const glm::vec3 DEFAULT_UP_VECTOR = {0.0f, 1.0f, 0.0f};
@@ -59,44 +66,66 @@ namespace mv
         /*
             Third person camera params
         */
-        Object *target = nullptr;
-        float pitch = 45.0f;
+        mv::Object *target = nullptr;
+        float pitch = 50.0f;
         float orbit_angle = 0.0f;
         float zoom_level = 10.0f;
+        bool has_init = false;
+        enum camera_type
+        {
+            free_look = 0,
+            first_person,
+            third_person
+        };
+        // default to free_look as first_person incomplete
+        // & third_person requires user specified target
+        camera_type type = free_look;
+
+        // should orbit steps be a multiple of some kind of window size ratio?
+        static constexpr float orbit_step = 0.125f;
+
+        static constexpr float min_orbit = 0.0f;
+        static constexpr float max_orbit = 359.9f;
+
+        // camera zoom
+        float zoom_accel = 0.0f;
+        static constexpr float zoom_step = 0.25f;
+        static constexpr float zoom_friction = zoom_step * 0.125f;
+
+        static constexpr float max_zoom_level = 20.0f;
+        static constexpr float min_zoom_level = 3.4f;
 
     public:
         // init object variables and configure the projection matrix & initial view matrix
-        Camera(camera_init_struct &init_params)
+        Camera(struct camera_init_struct &init_params)
         {
-            assert(fov != -1);
-            assert(aspect != -1);
-            assert(nearz != -1);
-            assert(farz != -1);
-
             fov = init_params.fov;
             aspect = init_params.aspect;
             nearz = init_params.nearz;
             farz = init_params.farz;
             position = init_params.position;
-            matrices = init_params.matrices;
+            view_uniform_object = init_params.view_uniform_object;
+            projection_uniform_object = init_params.projection_uniform_object;
 
-            camera_type = (Type)init_params.camera_type;
+            type = (camera_type)init_params.camera_type;
 
             // ensure matrices specified
-            if (init_params.matrices == nullptr)
+            if (init_params.view_uniform_object == nullptr)
             {
-                throw std::runtime_error("No view & projection matrices object specified in camera init struct");
+                throw std::runtime_error("No view matrix uniform object specified");
+            }
+            if (init_params.projection_uniform_object == nullptr)
+            {
+                throw std::runtime_error("No projection matrix uniform object specified");
             }
 
             // ensure target is given if type is third person
-            if (camera_type == Type::third_person)
+            if (type == camera_type::third_person)
             {
                 if (init_params.target == nullptr)
                 {
                     throw std::runtime_error("Camera type is specified as third person yet no target specified in initialization structure");
                 }
-
-                // set target
                 target = init_params.target;
             }
 
@@ -105,178 +134,249 @@ namespace mv
 
             update();
 
-            matrices->projection = glm::perspective(glm::radians(fov), aspect, nearz, farz);
-            matrices->projection[1][1] *= -1.0f;
+            projection_uniform_object->matrix = glm::perspective(glm::radians(fov), aspect, nearz, farz);
+            projection_uniform_object->matrix[1][1] *= -1.0f;
 
             // TODO
             // add non host visible/coherent update support
             // update projection matrix buffer
-            memcpy(matrices->ubo_projection.mapped, &matrices->projection, sizeof(matrices->projection));
+            memcpy(projection_uniform_object->mv_buffer.mapped,
+                   &projection_uniform_object->matrix,
+                   sizeof(projection_uniform_object->matrix));
         }
-        ~Camera()
-        {
-        }
+        ~Camera() {}
 
     private:
         Camera(const Camera &) = delete;
         Camera &operator=(const Camera &) = delete;
 
     public:
-        bool has_init = false;
-        enum Type
-        {
-            first_person,
-            free_look,
-            third_person
-        };
-        Type camera_type = third_person;
-
-        // MOVED
-        // these matrices are now stored in GlobalUniforms object passed
-        // to the camera object upon creation
-        // 
-        // struct
-        // {
-        //     glm::mat4 view = glm::mat4(1.0);
-        //     glm::mat4 perspective = glm::mat4(1.0);
-        // } local_matrices;
-
-        glm::mat4 look_at_object(mv::Object object)
-        {
-            glm::mat4 r = glm::lookAt(get_position(), object.position, get_default_up_direction());
-            return r;
-        }
-
-        Type get_type(void)
-        {
-            return camera_type;
-        }
-
         // Updates view matrix
-        void update(void)
+        inline void update(void)
         {
-            /*
-                ---------------------
-                Third person update
-                ---------------------
-            */
-            if (camera_type == Camera::Type::third_person)
+            // process camera zoom acceleration
+            if (zoom_accel != 0.0f)
             {
-                set_position(glm::vec3(target->position.x, target->position.y - 0.5f, target->position.z));
+                if (check_zoom(zoom_accel))
+                {
+                    zoom_level += zoom_accel;
+                }
+                else
+                {
+                    if (zoom_accel < 0)
+                    {
+                        zoom_level = min_zoom_level;
+                    }
+                    else
+                    {
+                        zoom_level = max_zoom_level;
+                    }
+                    zoom_accel = 0.0f;
+                }
+                // friction implementation
+                if (zoom_accel > 0.0f)
+                {
+                    zoom_accel -= zoom_friction;
+                }
+                else if (zoom_accel < 0.0f)
+                {
+                    zoom_accel += zoom_friction;
+                }
+            }
+
+            if (type == camera_type::free_look)
+            {
+                glm::mat4 rotation_matrix = glm::mat4(1.0f);
+                glm::mat4 translation_matrix = glm::mat4(1.0f);
+
+                // rotate about each axis
+                rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+                rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+                rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+                translation_matrix = glm::translate(glm::mat4(1.0), position);
+
+                view_uniform_object->matrix = rotation_matrix * translation_matrix;
+            }
+            else if (type == camera_type::first_person)
+            {
+                throw std::runtime_error("first person camera mode currently unsupported");
+            }
+            else if (type == camera_type::third_person)
+            {
+                // set camera origin to target's position
+                set_position(glm::vec3(target->position.x,
+                                       target->position.y - 0.5f,
+                                       target->position.z));
 
                 // angle around player
-                glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f), glm::radians(orbit_angle + target->rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-                // camera pitch angle(should point to target)
+                glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f),
+                                              glm::radians(orbit_angle + target->rotation.y),
+                                              glm::vec3(0.0f, 1.0f, 0.0f));
+
+                // camera pitch angle
                 glm::mat4 x_mat = glm::rotate(glm::mat4(1.0f), glm::radians(pitch), glm::vec3(1.0f, 0.0f, 0.0f));
 
                 glm::mat4 rotation_matrix = y_mat * x_mat;
-                
+
                 glm::mat4 target_mat = glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y, position.z));
                 glm::mat4 distance_mat = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, zoom_level));
 
-                // Move origin to TARGET
-                // THEN rotate about new origin
-                // then translate from new origin zoom_level distance
-                matrices->view = target_mat * rotation_matrix * distance_mat;
-                matrices->view = glm::inverse(matrices->view);
-
-                // TODO
-                // add non host visible/coherent buffer update support
-                // update gpu uniform for view
-                memcpy(matrices->ubo_view.mapped, &matrices->view, sizeof(matrices->view));
-                return;
+                view_uniform_object->matrix = target_mat * rotation_matrix * distance_mat;
+                view_uniform_object->matrix = glm::inverse(view_uniform_object->matrix);
             }
-            /*
-                --------------------------
-                End third person update
-                --------------------------
-            */
-            /*
-                --------------------------
-                First person update
-                --------------------------
-           */
 
-            glm::mat4 rotation_matrix = glm::mat4(1.0f);
-            glm::mat4 translation_matrix = glm::mat4(1.0f);
-
-            // rotate about each axis
-            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            rotation_matrix = glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-            translation_matrix = glm::translate(glm::mat4(1.0), position);
-
-            matrices->view = rotation_matrix * translation_matrix;
-            memcpy(matrices->ubo_view.mapped, &matrices->view, sizeof(matrices->view));
-
+            // TODO
+            // add support for non host coherent/host visible buffers
+            // end of update() copy to view matrix ubo
+            memcpy(view_uniform_object->mv_buffer.mapped, &view_uniform_object->matrix, sizeof(view_uniform_object->matrix));
+            return;
         }
 
-        /*
-            -----------------------------
-            Third person camera functions
-            -----------------------------
-        */
-        void increase_pitch(float frame_delta)
+        // third person methods
+        inline void adjust_zoom(float delta)
         {
-            float f_zoom = zoom_level - (0.01f * frame_delta);
+            zoom_accel += delta;
+            return;
+        }
+        inline void adjust_orbit(float delta, float start_orbit)
+        {
+            orbit_angle = start_orbit + (orbit_step * delta);
+            return;
+        }
+        inline void realign_orbit(void)
+        {
+            if (orbit_angle > 359.9f)
+            {
+                orbit_angle = abs(orbit_angle) - 359.9f;
+            }
+            else if (orbit_angle < 0.0f)
+            {
+                orbit_angle = 359.9f - abs(orbit_angle);
+            }
+            return;
+        }
+
+        inline bool check_zoom(float delta)
+        {
+            if (delta > 0) // zooming out
+            {
+                if ((zoom_level + delta) < max_zoom_level)
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else // zooming in
+            {
+                if ((zoom_level + delta) > min_zoom_level)
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+        }
+
+        inline void increase_pitch(void)
+        {
+            constexpr float speed = 0.35f;
+            float f_zoom = zoom_level + speed;
             if (f_zoom < 20.0f)
             {
-                zoom_level += 0.01f * frame_delta;
-                pitch += 0.01f * frame_delta;
+                zoom_level += speed;
+                pitch += speed;
+            }
+            return;
+        }
+        inline void increase_pitch(float delta)
+        {
+            constexpr float speed = 0.35f;
+            float f_zoom = zoom_level + (speed * delta);
+            if (f_zoom < 20.0f)
+            {
+                zoom_level += speed;
+                pitch += speed;
             }
             return;
         }
 
-        void decrease_pitch(float frame_delta)
+        inline void decrease_pitch(void)
         {
-            float f_zoom = zoom_level - (0.01f * frame_delta);
+            constexpr float speed = 0.35f;
+            float f_zoom = zoom_level - speed;
             if (f_zoom > 3.4f)
             {
-                zoom_level -= 0.01f * frame_delta;
-                pitch -= 0.01f * frame_delta;
+                zoom_level -= speed;
+                pitch -= speed;
             }
             return;
         }
-
-        void decrease_orbit(float frame_delta)
+        inline void decrease_pitch(float delta)
         {
-            // keep orbit value in range of 0.0f -> 359.9f
-            // larger floats lose accuracy
-            float f_orbit = orbit_angle - (0.1f * frame_delta);
-            if (f_orbit < 0.0f)
+            constexpr float speed = 0.35f;
+            float f_zoom = zoom_level - (speed * delta);
+            if (f_zoom > 3.4f)
             {
-                f_orbit = 359.9f;
+                zoom_level -= speed;
+                pitch -= speed;
             }
-            orbit_angle = f_orbit;
-            //orbit_angle -= 0.1f * frame_delta;
             return;
         }
 
-        void increase_orbit(float frame_delta)
+        inline void increase_orbit(void)
         {
-            // keep orbit value in range of 0.0f -> 359.9f
-            // larger floats lose accuracy
-            float f_orbit = orbit_angle + (0.1f * frame_delta);
+            constexpr float speed = 2.0f;
+            float f_orbit = orbit_angle + speed;
             if (f_orbit >= 360.0f)
             {
                 f_orbit = 0.0f;
             }
             orbit_angle = f_orbit;
-            //orbit_angle += 0.1f * frame_delta;
             return;
         }
-        /*
-            -----------------------
-            End third person camera
-            -----------------------
-        */
-        /*
-            -------------------
-            First person camera
-            -------------------
-        */
-        void get_front_face(void)
+        inline void increase_orbit(float mouse_delta)
+        {
+            constexpr float speed = 0.25f;
+            float f_orbit = orbit_angle + (speed * mouse_delta);
+            if (f_orbit > 359.9f)
+            {
+                f_orbit = 0.0f;
+            }
+            orbit_angle = f_orbit;
+            return;
+        }
+
+        inline void decrease_orbit(void)
+        {
+            constexpr float speed = 2.0f;
+            float f_orbit = orbit_angle - speed;
+            if (f_orbit < 0.0f)
+            {
+                f_orbit = 359.9f;
+            }
+            orbit_angle = f_orbit;
+            return;
+        }
+        inline void decrease_orbit(float mouse_delta)
+        {
+            constexpr float speed = 0.25f;
+            float f_orbit = orbit_angle - (speed * mouse_delta);
+            if (f_orbit < 0.0f)
+            {
+                f_orbit = 359.9f;
+            }
+            orbit_angle = f_orbit;
+            return;
+        }
+
+        // free look methods
+        inline void get_front_face(void)
         {
             glm::vec3 fr;
             fr.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
@@ -286,7 +386,7 @@ namespace mv
 
             camera_front = fr;
         }
-        void rotate(glm::vec3 delta, float frame_delta)
+        inline void rotate(glm::vec3 delta, float frame_delta)
         {
             float speed_limit = 0.10f;
             float to_apply_x = (delta.x * frame_delta * speed_limit);
@@ -315,74 +415,63 @@ namespace mv
             rotation.x = upcoming_x;
             rotation.y = upcoming_y;
             rotation.z = upcoming_z;
+            return;
         }
-        void move_up(float frame_delta)
+        inline void move_up(float frame_delta)
         {
             position.y += MOVESPEED * frame_delta;
             return;
         }
-        void move_down(float frame_delta)
+        inline void move_down(float frame_delta)
         {
             position.y -= MOVESPEED * frame_delta;
             return;
         }
-        void move_left(float frame_delta)
+        inline void move_left(float frame_delta)
         {
             get_front_face();
             position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
         }
-        void move_right(float frame_delta)
+        inline void move_right(float frame_delta)
         {
             get_front_face();
             position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
         }
-        void move_forward(float frame_delta)
+        inline void move_forward(float frame_delta)
         {
             get_front_face();
             position += camera_front * MOVESPEED * frame_delta;
         }
-        void move_backward(float frame_delta)
+        inline void move_backward(float frame_delta)
         {
             get_front_face();
             position -= camera_front * MOVESPEED * frame_delta;
         }
-        /*
-            -----------------------
-            End first person camera
-            -----------------------
-        */
 
-        glm::vec3 get_position(void)
+        inline glm::vec3 get_position(void)
         {
             return position;
         }
 
-        void set_position(glm::vec3 new_position)
+        inline void set_position(glm::vec3 new_position)
         {
             this->position = new_position;
             return;
         }
 
-        void set_projection(float fv, float aspect, float nz, float fz)
+        void set_projection(float fv, float aspct, float nz, float fz)
         {
-            fov = fv;
-            nearz = nz;
-            farz = fz;
-            matrices->projection = glm::perspective(glm::radians(fov), aspect, nearz, farz);
-            matrices->projection[1][1] *= -1.0f;
+            this->fov = fv;
+            this->nearz = nz;
+            this->farz = fz;
+            this->aspect = aspct;
+            projection_uniform_object->matrix = glm::perspective(glm::radians(fv), aspct, nz, fz);
+            projection_uniform_object->matrix[1][1] *= -1.0f;
 
-            memcpy(matrices->ubo_projection.mapped, &matrices->projection, sizeof(matrices->projection));
+            memcpy(projection_uniform_object->mv_buffer.mapped,
+                   &projection_uniform_object->matrix,
+                   sizeof(projection_uniform_object->matrix));
             return;
-        }
-
-        glm::mat4 get_view(void)
-        {
-            return matrices->view;
-        }
-
-        glm::mat4 get_projection(void)
-        {
-            return matrices->projection;
         }
 
         glm::vec3 get_default_up_direction(void)
