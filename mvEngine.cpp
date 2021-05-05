@@ -236,7 +236,6 @@ void mv::Engine::go(void)
         {
             accumulated -= timestep;
 
-            // get_mouse(display, window, &mouse, cur_mousex, cur_mousey, last_mousex, last_mousey);
             mouse->query_pointer();
 
             // Get input events
