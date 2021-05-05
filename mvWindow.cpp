@@ -15,7 +15,7 @@ mv::MWindow::Exception::~Exception(void)
 
 /* Create window and initialize Vulkan */
 mv::MWindow::MWindow(int w, int h, const char *title)
-    : window_width(w), window_height(h), mouse(w, h, Mouse::delta_style::from_last_pos)
+    : mouse(w, h, Mouse::delta_style::from_last_pos), window_width(w), window_height(h)
 {
     // Connect to x server
     display = XOpenDisplay(NULL);
@@ -78,18 +78,23 @@ mv::MWindow::MWindow(int w, int h, const char *title)
 
     XStoreName(display, window, title);
 
+    // initialize keyboard handler
+    kbd = std::make_unique<mv::keyboard>(display);
+    // TODO
+    // initialize mouse
+
     // Display window
     XMapWindow(display, window);
     XFlush(display);
 
     int rs;
-    bool detectableResult;
+    bool detectable_result;
 
     /* Request X11 does not send autorepeat signals */
     std::cout << "[+] Configuring keyboard input" << std::endl;
-    detectableResult = XkbSetDetectableAutoRepeat(display, true, &rs);
+    detectable_result = XkbSetDetectableAutoRepeat(display, true, &rs);
 
-    if (!detectableResult)
+    if (!detectable_result)
     {
         throw std::runtime_error("Could not disable auto repeat");
     }
@@ -837,6 +842,7 @@ void mv::MWindow::handle_x_event(void)
 {
     // count time for processing events
     XNextEvent(display, &event);
+    mv::keyboard::key mv_key = mv::keyboard::key::invalid;
     KeySym key;
     switch (event.type)
     {
@@ -891,17 +897,30 @@ void mv::MWindow::handle_x_event(void)
         }
         break;
     case KeyPress:
-        key = XLookupKeysym(&event.xkey, 0);
-        if (key == XK_Escape)
+        // try to convert to our mv::keyboard::key enum
+        mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
+        // check if escape
+        if (mv_key == mv::keyboard::key::escape)
         {
             XEvent q = create_event("WM_DELETE_WINDOW");
             XSendEvent(display, window, false, ExposureMask, &q);
         }
-        kbd.on_key_press(static_cast<uint16_t>(key));
+
+        if (mv_key)
+        {
+            // process if not already pressed
+            if (!kbd->is_keystate(mv_key))
+            {
+                kbd->on_key_press(mv_key);
+            }
+        }
         break;
     case KeyRelease:
-        key = XLookupKeysym(&event.xkey, 0);
-        kbd.on_key_release(static_cast<uint16_t>(key));
+        mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
+        if (mv_key)
+        {
+            kbd->on_key_release(mv_key);
+        }
         break;
     case Expose:
         break;

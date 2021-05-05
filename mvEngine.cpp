@@ -243,6 +243,7 @@ void mv::Engine::go(void)
     int mouse_drag_startx = 0;
     int mouse_drag_starty = 0;
     float start_orbit = 0.0f;
+    bool start_drag = false;
 
     while (running)
     {
@@ -267,10 +268,8 @@ void mv::Engine::go(void)
             get_mouse(display, window, &mouse, cur_mousex, cur_mousey, last_mousex, last_mousey);
 
             // Get input events
-            Keyboard::Event kbd_event = kbd.read_key();
+            mv::keyboard::event kbd_event = kbd->read();
             Mouse::Event mouse_event = mouse.read();
-            std::pair<int, int> mouse_delta = mouse.get_pos_delta();
-            std::cout << "key event code => " << kbd_event.get_code() << "\n";
 
             if (camera->type == Camera::camera_type::third_person)
             {
@@ -285,49 +284,48 @@ void mv::Engine::go(void)
                 }
 
                 // capture initial middle press (might be another button future)
-                if (kbd_event.get_type() == Keyboard::Event::Type::Press &&
-                    kbd_event.get_code() == 65513)
+                if (kbd->is_key(display, mv::keyboard::key::l_alt) && !start_drag)
                 {
-                    mouse_drag_startx = mouse_event.get_pos_x();
-                    mouse_drag_starty = mouse_event.get_pos_y();
+                    mouse_drag_startx = cur_mousex;
+                    mouse_drag_starty = cur_mousey;
                     start_orbit = camera->orbit_angle;
-                    std::cout << "press\n";
+                    start_drag = true;
                 }
-                // if (mouse_event.get_type() == Mouse::Event::Type::MDown)
-                // capture middle release
-                // if (mouse_event.get_type() == Mouse::Event::Type::MRelease)
-                if (kbd_event.get_type() == Keyboard::Event::Type::Release &&
-                    kbd_event.get_code() == 65513)
+                // if drag enabled check for release
+                if (start_drag)
                 {
-                    mouse_drag_startx = 0;
-                    mouse_drag_starty = 0;
-                    start_orbit = 0.0f;
-                    // ensure 0-359.9f orbit bounds
-                    if (mouse_drag_startx != 0 && mouse_drag_starty != 0 &&
-                        start_orbit != 0)
+                    // if L alt released
+                    if (!kbd->is_key(display, mv::keyboard::key::l_alt))
                     {
-                        camera->realign_orbit();
+                        // ensure 0-359.9f orbit bounds
+                        if (mouse_drag_startx != 0 && mouse_drag_starty != 0 &&
+                            start_orbit != 0)
+                        {
+                            camera->realign_orbit();
+                        }
+                        mouse_drag_startx = 0;
+                        mouse_drag_starty = 0;
+                        start_orbit = 0.0f;
+                        start_drag = false;
                     }
-                    std::cout << "release\n";
-                }
-
-                // send orbit updates with calculated delta
-                if (kbd.is_key_pressed(65513))
-                {
-                    int m_dx = cur_mousex - mouse_drag_startx;
-                    // int m_dy = cur_mousey - mouse_drag_starty;
-                    if (m_dx > 0)
+                    else // still holding, send orbit update
                     {
-                        camera->adjust_orbit(-abs(m_dx), start_orbit);
-                    }
-                    else
-                    {
-                        camera->adjust_orbit(abs(m_dx), start_orbit);
+                        // send orbit updates with calculated delta
+                        int m_dx = cur_mousex - mouse_drag_startx;
+                        // int m_dy = cur_mousey - mouse_drag_starty;
+                        if (m_dx > 0)
+                        {
+                            camera->adjust_orbit(-abs(m_dx), start_orbit);
+                        }
+                        else
+                        {
+                            camera->adjust_orbit(abs(m_dx), start_orbit);
+                        }
                     }
                 }
 
                 // debug -- add new objects to world with random position
-                if (kbd.is_key_pressed(' ') && added == false)
+                if (kbd->is_key(display, mv::keyboard::key::space) && added == false)
                 {
                     //added = true;
                     int min = 0;
@@ -346,22 +344,18 @@ void mv::Engine::go(void)
                     collection_handler->models.at(0).objects.back()->position =
                         glm::vec3(x, y, z);
                 }
-                if (kbd.is_key_pressed('w'))
+                if (kbd->is_key(display, mv::keyboard::key::w))
                 {
-                    camera->decrease_pitch();
                 }
-                if (kbd.is_key_pressed('s'))
+                if (kbd->is_key(display, mv::keyboard::key::s))
                 {
-                    camera->increase_pitch();
                 }
 
-                if (kbd.is_key_pressed('d'))
+                if (kbd->is_key(display, mv::keyboard::key::d))
                 {
-                    // camera->adjust_orbit(camera->orbit_step);
                 }
-                if (kbd.is_key_pressed('a'))
+                if (kbd->is_key(display, mv::keyboard::key::a))
                 {
-                    // camera->adjust_orbit(-(camera->orbit_step));
                 }
             }
 
