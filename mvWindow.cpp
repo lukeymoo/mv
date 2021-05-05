@@ -15,7 +15,7 @@ mv::MWindow::Exception::~Exception(void)
 
 /* Create window and initialize Vulkan */
 mv::MWindow::MWindow(int w, int h, const char *title)
-    : mouse(w, h, Mouse::delta_style::from_last_pos), window_width(w), window_height(h)
+    : window_width(w), window_height(h)
 {
     // Connect to x server
     display = XOpenDisplay(NULL);
@@ -80,8 +80,8 @@ mv::MWindow::MWindow(int w, int h, const char *title)
 
     // initialize keyboard handler
     kbd = std::make_unique<mv::keyboard>(display);
-    // TODO
-    // initialize mouse
+    // initialize mouse handler
+    mouse = std::make_unique<mv::mouse>(display, &window);
 
     // Display window
     XMapWindow(display, window);
@@ -197,7 +197,9 @@ void mv::MWindow::prepare(void)
     swapchain.init_surface(display, window);
     m_command_pool = device->create_command_pool(swapchain.queue_index);
     swapchain.create(&window_width, &window_height);
-    mouse.update_window_spec(window_width, window_height); // necessary for proper delta calculation
+    // call after swapchain creation!!!
+    // needed for mouse delta calc when using from_center method
+    mouse->set_window_properties(window_width, window_height);
     create_command_buffers();
     create_synchronization_primitives();
     setup_depth_stencil();
@@ -206,37 +208,6 @@ void mv::MWindow::prepare(void)
     setup_framebuffer();
     return;
 }
-
-// void mv::MWindow::go(void)
-// {
-//     // initialize vulkan
-//     if (!initVulkan())
-//     {
-//         throw std::runtime_error("Failed to initialize Vulkan");
-//     }
-
-//     swapChain.initSurface(connection, window);
-//     m_CommandPool = device->createCommandPool(swapChain.queueIndex);
-//     swapChain.create(&windowWidth, &windowHeight);
-//     createCommandBuffers();
-//     createSynchronizationPrimitives();
-//     setupDepthStencil();
-//     setupRenderPass();
-//     createPipelineCache();
-//     setupFramebuffer();
-
-//     while ((event = xcb_wait_for_event(connection))) // replace this as it is a blocking call
-//     {
-//         switch (event->response_type & ~0x80)
-//         {
-//         default:
-//             break;
-//         }
-
-//         free(event);
-//     }
-//     return;
-// }
 
 bool mv::MWindow::init_vulkan(void)
 {
@@ -843,17 +814,16 @@ void mv::MWindow::handle_x_event(void)
     // count time for processing events
     XNextEvent(display, &event);
     mv::keyboard::key mv_key = mv::keyboard::key::invalid;
-    KeySym key;
     switch (event.type)
     {
     case LeaveNotify:
     case FocusOut:
-        mouse.on_mouse_leave();
+        mouse->on_mouse_leave();
         //XUngrabPointer(display, CurrentTime);
         break;
     case MapNotify:
     case EnterNotify:
-        mouse.on_mouse_enter();
+        mouse->on_mouse_enter();
         // confine cursor to interior of window
         // mouse released on focus out or cursor leaving window
         //XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
@@ -861,45 +831,45 @@ void mv::MWindow::handle_x_event(void)
     case ButtonPress:
         if (event.xbutton.button == Button1)
         {
-            mouse.on_left_press(event.xbutton.x, event.xbutton.y);
+            mouse->on_left_press(event.xbutton.x, event.xbutton.y);
         }
         else if (event.xbutton.button == Button2)
         {
-            mouse.on_middle_press(event.xbutton.x, event.xbutton.y);
+            mouse->on_middle_press(event.xbutton.x, event.xbutton.y);
         }
         else if (event.xbutton.button == Button3)
         {
-            mouse.on_right_press(event.xbutton.x, event.xbutton.y);
+            mouse->on_right_press(event.xbutton.x, event.xbutton.y);
         }
         // Mouse wheel scroll up
         else if (event.xbutton.button == Button4)
         {
-            mouse.on_wheel_up(event.xbutton.x, event.xbutton.y);
+            mouse->on_wheel_up(event.xbutton.x, event.xbutton.y);
         }
         // Mouse wheel scroll down
         else if (event.xbutton.button == Button5)
         {
-            mouse.on_wheel_down(event.xbutton.x, event.xbutton.y);
+            mouse->on_wheel_down(event.xbutton.x, event.xbutton.y);
         }
         break;
     case ButtonRelease:
         if (event.xbutton.button == Button1)
         {
-            mouse.on_left_release(event.xbutton.x, event.xbutton.y);
+            mouse->on_left_release(event.xbutton.x, event.xbutton.y);
         }
         else if (event.xbutton.button == Button2)
         {
-            mouse.on_middle_release(event.xbutton.x, event.xbutton.y);
+            mouse->on_middle_release(event.xbutton.x, event.xbutton.y);
         }
         else if (event.xbutton.button == Button3)
         {
-            mouse.on_right_release(event.xbutton.x, event.xbutton.y);
+            mouse->on_right_release(event.xbutton.x, event.xbutton.y);
         }
         break;
     case KeyPress:
         // try to convert to our mv::keyboard::key enum
         mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
-        // check if escape
+        // check quit case
         if (mv_key == mv::keyboard::key::escape)
         {
             XEvent q = create_event("WM_DELETE_WINDOW");
@@ -908,7 +878,7 @@ void mv::MWindow::handle_x_event(void)
 
         if (mv_key)
         {
-            // process if not already pressed
+            // send event only if not already signaled in key_states bitset
             if (!kbd->is_keystate(mv_key))
             {
                 kbd->on_key_press(mv_key);
@@ -919,12 +889,13 @@ void mv::MWindow::handle_x_event(void)
         mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
         if (mv_key)
         {
+            // x11 configured to not send repeat releases with xkb method in constructor
+            // so just process it
             kbd->on_key_release(mv_key);
         }
         break;
     case Expose:
         break;
-        // configured to only capture WM_DELETE_WINDOW so we exit here
     case ClientMessage:
         std::cout << "[+] Exit requested" << std::endl;
         running = false;

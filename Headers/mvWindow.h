@@ -95,7 +95,7 @@ namespace mv
         bool good_init = true;
 
         std::unique_ptr<mv::keyboard> kbd;
-        Mouse mouse;
+        std::unique_ptr<mv::mouse> mouse;
 
         mv::Device *device;
 

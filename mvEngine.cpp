@@ -1,33 +1,5 @@
 #include "mvEngine.h"
 
-static inline void get_mouse(Display *display, Window &window, mv::Mouse *mouse, int &cur_x, int &cur_y, int &last_x, int &last_y)
-{
-    Window root, child;
-    int gx, gy;
-    unsigned int buttons;
-
-    int mx = 0;
-    int my = 0;
-    XQueryPointer(display, window, &root, &child, &gx, &gy, &mx, &my, &buttons);
-
-    last_x = cur_x;
-    last_y = cur_y;
-    cur_x = mx;
-    cur_y = my;
-
-    if (mouse->delta_style == mv::Mouse::delta_style::from_last_pos)
-    {
-        mouse->mouse_x_delta = cur_x - last_x;
-        mouse->mouse_y_delta = cur_y - last_y;
-    }
-    else
-    {
-        mouse->mouse_x_delta = cur_x - mouse->center_x;
-        mouse->mouse_y_delta = cur_y - mouse->center_y;
-    }
-    return;
-}
-
 mv::Engine::Engine(int w, int h, const char *title)
     : MWindow(w, h, title)
 {
@@ -123,10 +95,9 @@ void mv::Engine::recreate_swapchain(void)
     // create swapchain
     swapchain.create(&window_width, &window_height);
 
-    mouse.update_window_spec(window_width, window_height);
-
-    // create descriptor pool, dont recreate layout
-    //create_descriptor_sets(&global_uniforms);
+    // call after swapchain creation!!!
+    // needed for mouse delta calc when using from_center method
+    mouse->set_window_properties(window_width, window_height);
 
     // create render pass
     setup_render_pass();
@@ -204,11 +175,11 @@ void mv::Engine::go(void)
 
     if (camera->type == Camera::camera_type::first_person || Camera::camera_type::free_look)
     {
-        mouse.set_delta_style(Mouse::delta_style::from_center);
+        mouse->set_delta_style(mouse::delta_calc_style::from_center);
     }
     else
     {
-        mouse.set_delta_style(Mouse::delta_style::from_last_pos);
+        mouse->set_delta_style(mouse::delta_calc_style::from_last);
     }
 
     prepare_pipeline();
@@ -224,7 +195,7 @@ void mv::Engine::go(void)
     bool added = false;
 
     fps.startTimer();
-    int fps_counter = 0;
+    __attribute__((unused)) int fps_counter = 0;
 
     using chrono = std::chrono::high_resolution_clock;
 
@@ -233,17 +204,17 @@ void mv::Engine::go(void)
     std::chrono::nanoseconds accumulated(0ns);
     auto start_time = chrono::now();
 
-    // mouse tracking
-    int last_mousex = 0;
-    int last_mousey = 0;
-    int cur_mousex = 0;
-    int cur_mousey = 0;
+    // // mouse tracking
+    // int last_mousex = 0;
+    // int last_mousey = 0;
+    // int cur_mousex = 0;
+    // int cur_mousey = 0;
 
-    // x,y of initial mouse middle press
-    int mouse_drag_startx = 0;
-    int mouse_drag_starty = 0;
-    float start_orbit = 0.0f;
-    bool start_drag = false;
+    // // x,y of initial mouse middle press
+    // int mouse_drag_startx = 0;
+    // int mouse_drag_starty = 0;
+    // float start_orbit = 0.0f;
+    // bool start_drag = false;
 
     while (running)
     {
@@ -265,62 +236,52 @@ void mv::Engine::go(void)
         {
             accumulated -= timestep;
 
-            get_mouse(display, window, &mouse, cur_mousex, cur_mousey, last_mousex, last_mousey);
+            // get_mouse(display, window, &mouse, cur_mousex, cur_mousey, last_mousex, last_mousey);
+            mouse->query_pointer();
 
             // Get input events
             mv::keyboard::event kbd_event = kbd->read();
-            Mouse::Event mouse_event = mouse.read();
+            mv::mouse::event mouse_event = mouse->read();
 
             if (camera->type == Camera::camera_type::third_person)
             {
                 // handle mouse scroll wheel
-                if (mouse_event.get_type() == Mouse::Event::Type::WheelUp)
+                if (mouse_event.get_type() == mouse::event::etype::wheel_up)
                 {
                     camera->adjust_zoom(-(camera->zoom_step));
                 }
-                if (mouse_event.get_type() == Mouse::Event::Type::WheelDown)
+                if (mouse_event.get_type() == mouse::event::etype::wheel_down)
                 {
                     camera->adjust_zoom(camera->zoom_step);
                 }
 
-                // capture initial middle press (might be another button future)
-                if (kbd->is_key(display, mv::keyboard::key::l_alt) && !start_drag)
+                // start drag
+                if (kbd_event.get_type() == mv::keyboard::event::etype::press &&
+                    kbd_event.get_code() == mv::keyboard::key::l_alt &&
+                    !mouse->is_dragging())
                 {
-                    mouse_drag_startx = cur_mousex;
-                    mouse_drag_starty = cur_mousey;
-                    start_orbit = camera->orbit_angle;
-                    start_drag = true;
+                    mouse->start_drag(camera->orbit_angle);
                 }
-                // if drag enabled check for release
-                if (start_drag)
+                // end drag
+                if (kbd_event.get_type() == mv::keyboard::event::etype::release &&
+                    kbd_event.get_code() == mv::keyboard::key::l_alt &&
+                    mouse->is_dragging())
                 {
-                    // if L alt released
-                    if (!kbd->is_key(display, mv::keyboard::key::l_alt))
+                    camera->realign_orbit();
+                    mouse->end_drag();
+                }
+
+
+                // if drag enabled check for release
+                if (mouse->is_dragging())
+                {
+                    if (mouse->get_drag_delta_x() > 0)
                     {
-                        // ensure 0-359.9f orbit bounds
-                        if (mouse_drag_startx != 0 && mouse_drag_starty != 0 &&
-                            start_orbit != 0)
-                        {
-                            camera->realign_orbit();
-                        }
-                        mouse_drag_startx = 0;
-                        mouse_drag_starty = 0;
-                        start_orbit = 0.0f;
-                        start_drag = false;
+                        camera->adjust_orbit(-abs(mouse->get_drag_delta_x()), mouse->get_stored());
                     }
-                    else // still holding, send orbit update
+                    else if (mouse->get_drag_delta_x() < 0)
                     {
-                        // send orbit updates with calculated delta
-                        int m_dx = cur_mousex - mouse_drag_startx;
-                        // int m_dy = cur_mousey - mouse_drag_starty;
-                        if (m_dx > 0)
-                        {
-                            camera->adjust_orbit(-abs(m_dx), start_orbit);
-                        }
-                        else
-                        {
-                            camera->adjust_orbit(abs(m_dx), start_orbit);
-                        }
+                        camera->adjust_orbit(abs(mouse->get_drag_delta_x()), mouse->get_stored());
                     }
                 }
 

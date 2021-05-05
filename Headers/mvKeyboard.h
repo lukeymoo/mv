@@ -12,27 +12,24 @@
 // reworked keyboard handler
 namespace mv
 {
-    template <typename T>
-    static void trim_buffer(std::queue<T> buffer, uint32_t max_size)
-    {
-        while (buffer.size() > max_size)
-        {
-            buffer.pop();
-        }
-        return;
-    }
-
     struct keyboard
     {
-        keyboard(Display *display)
+        template <typename T>
+        static void trim_buffer(std::queue<T> buffer, uint32_t max_size)
+        {
+            while (buffer.size() > max_size)
+            {
+                buffer.pop();
+            }
+            return;
+        }
+        
+        keyboard(Display *display) noexcept
         {
             this->display = display;
         }
         ~keyboard() {}
-        static constexpr unsigned int max_key_count = 87;
-        static constexpr unsigned int max_buffer_size = 16;
-        // x11 pointer to display
-        Display *display = nullptr;
+
         enum key
         {
             invalid = 0,
@@ -133,14 +130,14 @@ namespace mv
                 release,
                 invalid
             };
-            event(etype type, key code)
+            event(etype type, key code) noexcept
             {
                 this->type = type;
                 this->code = code;
             }
             ~event() {}
-            etype type;
-            mv::keyboard::key code;
+            etype type = etype::invalid;
+            mv::keyboard::key code = key::invalid;
 
             inline etype get_type(void) const noexcept
             {
@@ -164,6 +161,7 @@ namespace mv
             }
         };
 
+    public:
         inline bool is_key(Display *display, mv::keyboard::key mv_key_code)
         {
             if (display == nullptr)
@@ -461,7 +459,7 @@ namespace mv
             return status;
         }
 
-        inline bool is_keystate(key mv_key_code)
+        inline bool is_keystate(key mv_key_code) const noexcept
         {
             // sanity check
             if (mv_key_code < 0 || mv_key_code > max_key_count)
@@ -471,7 +469,7 @@ namespace mv
             return key_states[mv_key_code];
         }
 
-        inline mv::keyboard::key x11_to_mvkey(Display *display, KeyCode x_key_code)
+        inline mv::keyboard::key x11_to_mvkey(Display *display, KeyCode x_key_code) const noexcept
         {
             // sanity check
             if (x_key_code == 0)
@@ -789,6 +787,11 @@ namespace mv
             return;
         }
 
+    private:
+        static constexpr unsigned int max_key_count = 87;
+        static constexpr unsigned int max_buffer_size = 16;
+        // x11 pointer to display
+        Display *display = nullptr;
         std::bitset<mv::keyboard::max_key_count> key_states;
         std::queue<keyboard::event> key_buffer;
     };
