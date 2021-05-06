@@ -203,19 +203,6 @@ void mv::Engine::go(void)
 
     std::chrono::nanoseconds accumulated(0ns);
     auto start_time = chrono::now();
-
-    // // mouse tracking
-    // int last_mousex = 0;
-    // int last_mousey = 0;
-    // int cur_mousex = 0;
-    // int cur_mousey = 0;
-
-    // // x,y of initial mouse middle press
-    // int mouse_drag_startx = 0;
-    // int mouse_drag_starty = 0;
-    // float start_orbit = 0.0f;
-    // bool start_drag = false;
-
     while (running)
     {
         auto delta_time = chrono::now() - start_time;
@@ -226,11 +213,11 @@ void mv::Engine::go(void)
         {
             handle_x_event();
         }
-        if (camera->type == Camera::camera_type::free_look || camera->type == Camera::camera_type::first_person)
-        {
-            XWarpPointer(display, None, window, 0, 0, 0, 0, (window_width / 2), (window_height / 2));
-            XFlush(display);
-        }
+        // if (camera->type == Camera::camera_type::free_look || camera->type == Camera::camera_type::first_person)
+        // {
+        //     XWarpPointer(display, None, window, 0, 0, 0, 0, (window_width / 2), (window_height / 2));
+        //     XFlush(display);
+        // }
 
         while (accumulated >= timestep)
         {
@@ -244,48 +231,67 @@ void mv::Engine::go(void)
 
             if (camera->type == Camera::camera_type::third_person)
             {
+                camera->get_front_face(camera->orbit_angle);
+                // player movement
+
                 // handle mouse scroll wheel
-                if (mouse_event.get_type() == mouse::event::etype::wheel_up)
+                if (mouse_event.type == mouse::event::etype::wheel_up)
                 {
                     camera->adjust_zoom(-(camera->zoom_step));
                 }
-                if (mouse_event.get_type() == mouse::event::etype::wheel_down)
+                if (mouse_event.type == mouse::event::etype::wheel_down)
                 {
                     camera->adjust_zoom(camera->zoom_step);
                 }
 
                 // start drag
-                if (kbd_event.get_type() == mv::keyboard::event::etype::press &&
-                    kbd_event.get_code() == mv::keyboard::key::l_alt &&
-                    !mouse->is_dragging())
+                if (kbd_event.type == mv::keyboard::event::etype::press &&
+                    kbd_event.code == mv::keyboard::key::l_alt &&
+                    !mouse->is_dragging)
                 {
                     mouse->start_drag(camera->orbit_angle);
                 }
                 // end drag
-                if (kbd_event.get_type() == mv::keyboard::event::etype::release &&
-                    kbd_event.get_code() == mv::keyboard::key::l_alt &&
-                    mouse->is_dragging())
+                if (kbd_event.type == mv::keyboard::event::etype::release &&
+                    kbd_event.code == mv::keyboard::key::l_alt &&
+                    mouse->is_dragging)
                 {
                     camera->realign_orbit();
                     mouse->end_drag();
                 }
 
-
                 // if drag enabled check for release
-                if (mouse->is_dragging())
+                if (mouse->is_dragging)
                 {
-                    if (mouse->get_drag_delta_x() > 0)
+                    if (mouse->drag_delta_x > 0)
                     {
-                        camera->adjust_orbit(-abs(mouse->get_drag_delta_x()), mouse->get_stored());
+                        camera->adjust_orbit(-abs(mouse->drag_delta_x), mouse->stored_value);
                     }
-                    else if (mouse->get_drag_delta_x() < 0)
+                    else if (mouse->drag_delta_x < 0)
                     {
-                        camera->adjust_orbit(abs(mouse->get_drag_delta_x()), mouse->get_stored());
+                        camera->adjust_orbit(abs(mouse->drag_delta_x), mouse->stored_value);
                     }
                 }
 
+                if (kbd->is_keystate(mv::keyboard::key::w))
+                {
+                    camera->target->move_forward(camera->orbit_angle);
+                }
+                if (kbd->is_keystate(mv::keyboard::key::a))
+                {
+                    camera->target->move_left(camera->orbit_angle);
+                }
+                if (kbd->is_keystate(mv::keyboard::key::s))
+                {
+                    camera->target->move_backward(camera->orbit_angle);
+                }
+                if (kbd->is_keystate(mv::keyboard::key::d))
+                {
+                    camera->target->move_right(camera->orbit_angle);
+                }
+
                 // debug -- add new objects to world with random position
-                if (kbd->is_key(display, mv::keyboard::key::space) && added == false)
+                if (kbd->is_keystate(mv::keyboard::key::space) && added == false)
                 {
                     //added = true;
                     int min = 0;
@@ -304,21 +310,7 @@ void mv::Engine::go(void)
                     collection_handler->models.at(0).objects.back()->position =
                         glm::vec3(x, y, z);
                 }
-                if (kbd->is_key(display, mv::keyboard::key::w))
-                {
-                }
-                if (kbd->is_key(display, mv::keyboard::key::s))
-                {
-                }
-
-                if (kbd->is_key(display, mv::keyboard::key::d))
-                {
-                }
-                if (kbd->is_key(display, mv::keyboard::key::a))
-                {
-                }
             }
-
             // update game objects
             collection_handler->update();
 
@@ -337,69 +329,6 @@ void mv::Engine::go(void)
     std::cout << "Total objects => " << total_object_count << std::endl;
     return;
 }
-
-// void mv::Engine::add_new_model(mv::Allocator::Container *pool, const char *filename)
-// {
-//     // resize models
-//     models.push_back(mv::Model());
-//     // add object to model
-//     models[(models.size() - 1)].resize_object_container(1);
-
-//     // iterate models
-//     for (size_t i = 0; i < models.size(); i++)
-//     {
-//         // iterate objects assign model indices
-//         for (size_t j = 0; j < models[i].objects.size(); j++)
-//         {
-//             models[i].objects[j].model_index = i;
-//         }
-//     }
-
-//     // Generates random xyz values within supplied min&max below
-//     // hardcoded for testing purposes
-//     int min = 0;
-//     int max = 30;
-//     int z_max = 30;
-
-//     std::random_device rd;
-//     std::default_random_engine eng(rd());
-//     std::uniform_int_distribution<int> xy_distr(min, max);
-//     std::uniform_int_distribution<int> z_distr(min, z_max);
-
-//     float x = xy_distr(eng);
-//     float y = xy_distr(eng);
-//     float z = z_distr(eng);
-//     models[(models.size() - 1)].objects[0].position = glm::vec3(x, y, -z);
-//     models[(models.size() - 1)].objects[0].rotation = glm::vec3(180.0f, 0.0f, 0.0f);
-
-//     // prepare descriptor for model
-//     device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-//                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-//                           &models[(models.size() - 1)].objects[0].uniform_buffer,
-//                           sizeof(Object::Matrices));
-//     if (models[(models.size() - 1)].objects[0].uniform_buffer.map() != VK_SUCCESS)
-//     {
-//         throw std::runtime_error("Failed to allocate buffer for newly created model");
-//     }
-
-//     // Load model
-//     //models[(models.size() - 1)].load(device, filename);
-
-//     // allocate descriptor set for object model matrix data
-//     descriptor_allocator->allocate_set(pool, uniform_layout, models[(models.size() - 1)].objects[0].model_descriptor);
-//     // allocate descriptor set for object texture data
-//     descriptor_allocator->allocate_set(pool, sampler_layout, models[(models.size() - 1)].objects[0].texture_descriptor);
-
-//     // bind object matrix data buffer & its descriptor
-//     descriptor_allocator->update_set(pool, models[(models.size() - 1)].objects[0].uniform_buffer.descriptor,
-//                                      models[(models.size() - 1)].objects[0].model_descriptor,
-//                                      0);
-//     descriptor_allocator->update_set(pool, models[(models.size() - 1)].image.descriptor,
-//                                      models[(models.size() - 1)].objects[0].texture_descriptor,
-//                                      0);
-
-//     return;
-// }
 
 void mv::Engine::create_descriptor_layout(VkDescriptorType type, uint32_t count, VkPipelineStageFlags stage_flags, uint32_t binding, VkDescriptorSetLayout &layout)
 {

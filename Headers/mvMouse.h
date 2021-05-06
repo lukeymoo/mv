@@ -73,27 +73,9 @@ namespace mv
             bool is_middle_pressed = false;
             bool is_right_pressed = false;
 
-            inline bool is_left_button(void) const noexcept
-            {
-                return is_left_pressed;
-            }
-            inline bool is_middle_button(void) const noexcept
-            {
-                return is_middle_pressed;
-            }
-            inline bool is_right_button(void) const noexcept
-            {
-                return is_right_pressed;
-            }
-
             inline bool is_valid(void) const noexcept
             {
                 return (type != etype::invalid);
-            }
-
-            inline etype get_type(void) const noexcept
-            {
-                return type;
             }
         };
 
@@ -117,7 +99,7 @@ namespace mv
 
         static constexpr int max_buffer_size = 16;
 
-    private:
+    public:
         Display *display = nullptr;
         Window *window = nullptr;
         int window_width = 0;
@@ -133,7 +115,7 @@ namespace mv
         int delta_x = 0;
         int delta_y = 0;
 
-        bool drag = false;
+        bool is_dragging = false;
         int drag_startx = 0;
         int drag_starty = 0;
         // delta from drag start x,y & current
@@ -148,7 +130,7 @@ namespace mv
 
         bool in_window = false;
 
-        float custom_value = 0.0f;
+        float stored_value = 0.0f;
 
         // how is delta_x/y calculated
         delta_calc_style delta_style = delta_calc_style::from_last;
@@ -213,88 +195,36 @@ namespace mv
             this->delta_style = style;
             return;
         }
-        inline int get_x(void) const noexcept
-        {
-            return current_x;
-        }
-        inline int get_y(void) const noexcept
-        {
-            return current_y;
-        }
-        inline int get_last_x(void) const noexcept
-        {
-            return last_x;
-        }
-        inline int get_last_y(void) const noexcept
-        {
-            return last_y;
-        }
-        inline int get_delta_x(void) const noexcept
-        {
-            return delta_x;
-        }
-        inline int get_delta_y(void) const noexcept
-        {
-            return delta_y;
-        }
-        inline int get_drag_delta_startx(void) const noexcept
-        {
-            return drag_startx;
-        }
-        inline int get_drag_delta_starty(void) const noexcept
-        {
-            return drag_starty;
-        }
-        inline int get_drag_delta_x(void) const noexcept
-        {
-            return drag_delta_x;
-        }
-        inline int get_drag_delta_y(void) const noexcept
-        {
-            return drag_delta_y;
-        }
-        inline bool is_empty(void) const noexcept
-        {
-            return mouse_buffer.empty();
-        }
         inline void start_drag(void) noexcept
         {
             drag_startx = current_x;
             drag_starty = current_y;
-            drag = true;
+            is_dragging = true;
             return;
         }
         inline void start_drag(float custom_val) noexcept
         {
-            custom_value = custom_val;
+            stored_value = custom_val;
             drag_startx = current_x;
             drag_starty = current_y;
-            drag = true;
+            is_dragging = true;
             return;
         }
         inline void end_drag(void) noexcept
         {
-            custom_value = 0.0f;
+            stored_value = 0.0f;
             drag_startx = 0;
             drag_starty = 0;
             drag_delta_x = 0;
             drag_delta_y = 0;
-            drag = false;
+            is_dragging = false;
             return;
-        }
-        inline float get_stored(void) const noexcept
-        {
-            return custom_value;
-        }
-        inline bool is_dragging(void) const noexcept
-        {
-            return drag;
         }
 
         inline void calculate_delta(void)
         {
             // if dragging calculate drag delta
-            if (drag)
+            if (is_dragging)
             {
                 drag_delta_x = current_x - drag_startx;
                 drag_delta_y = current_y - drag_starty;

@@ -144,10 +144,6 @@ namespace mv
             etype type = etype::invalid;
             mv::keyboard::key code = key::invalid;
 
-            inline etype get_type(void) const noexcept
-            {
-                return type;
-            }
             inline bool is_press(void) const noexcept
             {
                 return type == etype::press;
@@ -159,10 +155,6 @@ namespace mv
             inline bool is_valid(void) const noexcept
             {
                 return type != etype::invalid;
-            }
-            inline key get_code(void)
-            {
-                return code;
             }
         };
 

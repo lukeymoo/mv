@@ -22,7 +22,7 @@
 #include "mvImage.h"
 #include "mvAllocator.h"
 
-const float MOVESPEED = 0.005f;
+static constexpr float MOVESPEED = 0.025f;
 
 namespace mv
 {
@@ -80,27 +80,74 @@ namespace mv
             return;
         }
 
-        void move_left(float frame_delta)
+        void move_left(float orbit_angle)
         {
-            get_front_face();
-            position -= glm::normalize(glm::cross(front_face, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
+            // position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED;
+            position += rotate_vector(orbit_angle, glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f)) * MOVESPEED;
             return;
         }
-        void move_right(float frame_delta)
+        void move_right(float orbit_angle)
         {
-            get_front_face();
-            position += glm::normalize(glm::cross(front_face, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED * frame_delta;
+            // position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED;
+            position += rotate_vector(orbit_angle, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)) * MOVESPEED;
             return;
         }
-        void move_forward(float frame_delta)
+        void move_forward(float orbit_angle)
         {
-            get_front_face();
+            // position += camera_front * MOVESPEED;
+            position += rotate_vector(orbit_angle, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f)) * MOVESPEED;
             return;
         }
-        void move_backward(float frame_delta)
+        void move_backward(float orbit_angle)
         {
-            get_front_face();
+            position += rotate_vector(orbit_angle, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)) * MOVESPEED;
             return;
+        }
+
+        // w component should be 1.0f
+        inline glm::vec3 rotate_vector(float orbit_angle, glm::vec4 target_axis)
+        {
+            // target_axis is our default directional vector
+
+            // construct rotation matrix from orbit angle
+            glm::mat4 rot_mat = glm::mat4(1.0);
+            rot_mat = glm::rotate(rot_mat, glm::radians(orbit_angle), glm::vec3(0.0f, 1.0f, 0.0f));
+
+            // multiply our def vec
+
+            glm::vec4 x_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 y_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 z_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 w_col = {0.0f, 0.0f, 0.0f, 0.0f};
+
+            // x * x_column
+            x_col.x = target_axis.x * rot_mat[0][0];
+            x_col.y = target_axis.x * rot_mat[0][1];
+            x_col.z = target_axis.x * rot_mat[0][2];
+            x_col.w = target_axis.x * rot_mat[0][3];
+
+            // y * y_column
+            y_col.x = target_axis.y * rot_mat[1][0];
+            y_col.y = target_axis.y * rot_mat[1][1];
+            y_col.z = target_axis.y * rot_mat[1][2];
+            y_col.w = target_axis.y * rot_mat[1][3];
+
+            // z * z_column
+            z_col.x = target_axis.z * rot_mat[2][0];
+            z_col.y = target_axis.z * rot_mat[2][1];
+            z_col.z = target_axis.z * rot_mat[2][2];
+            z_col.w = target_axis.z * rot_mat[2][3];
+
+            // w * w_column
+            w_col.x = target_axis.w * rot_mat[3][0];
+            w_col.y = target_axis.w * rot_mat[3][1];
+            w_col.z = target_axis.w * rot_mat[3][2];
+            w_col.w = target_axis.w * rot_mat[3][3];
+
+            glm::vec4 f = x_col + y_col + z_col + w_col;
+
+            // extract relevant data & return
+            return {f.x, f.y, f.z};
         }
     };
 
