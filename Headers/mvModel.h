@@ -80,6 +80,12 @@ namespace mv
             return;
         }
 
+        inline void move(float orbit_angle, glm::vec4 axis)
+        {
+            position += rotate_vector(orbit_angle, axis) * MOVESPEED;
+            return;
+        }
+
         void move_left(float orbit_angle)
         {
             // position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED;

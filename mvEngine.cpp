@@ -273,21 +273,78 @@ void mv::Engine::go(void)
                     }
                 }
 
-                if (kbd->is_keystate(mv::keyboard::key::w))
+                // sort movement by key combination
+
+                // forward only
+                if (kbd->is_keystate(mv::keyboard::key::w) &&
+                    !kbd->is_keystate(mv::keyboard::key::d) &&
+                    !kbd->is_keystate(mv::keyboard::key::a) &&
+                    !kbd->is_keystate(mv::keyboard::key::s))
                 {
-                    camera->target->move_forward(camera->orbit_angle);
+                    camera->target->move(camera->orbit_angle, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
                 }
-                if (kbd->is_keystate(mv::keyboard::key::a))
+
+                // forward + right
+                if (kbd->is_keystate(mv::keyboard::key::w) &&
+                    kbd->is_keystate(mv::keyboard::key::d) &&
+                    !kbd->is_keystate(mv::keyboard::key::a) &&
+                    !kbd->is_keystate(mv::keyboard::key::s))
                 {
-                    camera->target->move_left(camera->orbit_angle);
+                    camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, -1.0f, 1.0f));
                 }
-                if (kbd->is_keystate(mv::keyboard::key::s))
+
+                // forward + left
+                if (kbd->is_keystate(mv::keyboard::key::w) &&
+                    !kbd->is_keystate(mv::keyboard::key::d) &&
+                    kbd->is_keystate(mv::keyboard::key::a) &&
+                    !kbd->is_keystate(mv::keyboard::key::s))
                 {
-                    camera->target->move_backward(camera->orbit_angle);
+                    camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, -1.0f, 1.0f));
                 }
-                if (kbd->is_keystate(mv::keyboard::key::d))
+
+                // backward only
+                if (!kbd->is_keystate(mv::keyboard::key::w) &&
+                    !kbd->is_keystate(mv::keyboard::key::d) &&
+                    !kbd->is_keystate(mv::keyboard::key::a) &&
+                    kbd->is_keystate(mv::keyboard::key::s))
                 {
-                    camera->target->move_right(camera->orbit_angle);
+                    camera->target->move(camera->orbit_angle, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+                }
+
+                // backward + left
+                if (!kbd->is_keystate(mv::keyboard::key::w) &&
+                    !kbd->is_keystate(mv::keyboard::key::d) &&
+                    kbd->is_keystate(mv::keyboard::key::a) &&
+                    kbd->is_keystate(mv::keyboard::key::s))
+                {
+                    camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, 1.0f, 1.0f));
+                }
+
+                // backward + right
+                if (!kbd->is_keystate(mv::keyboard::key::w) &&
+                    kbd->is_keystate(mv::keyboard::key::d) &&
+                    !kbd->is_keystate(mv::keyboard::key::a) &&
+                    kbd->is_keystate(mv::keyboard::key::s))
+                {
+                    camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                }
+
+                // left only
+                if (!kbd->is_keystate(mv::keyboard::key::w) &&
+                    !kbd->is_keystate(mv::keyboard::key::d) &&
+                    kbd->is_keystate(mv::keyboard::key::a) &&
+                    !kbd->is_keystate(mv::keyboard::key::s))
+                {
+                    camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f));
+                }
+
+                // right only
+                if (!kbd->is_keystate(mv::keyboard::key::w) &&
+                    kbd->is_keystate(mv::keyboard::key::d) &&
+                    !kbd->is_keystate(mv::keyboard::key::a) &&
+                    !kbd->is_keystate(mv::keyboard::key::s))
+                {
+                    camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
                 }
 
                 // debug -- add new objects to world with random position
