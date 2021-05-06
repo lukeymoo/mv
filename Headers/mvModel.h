@@ -22,7 +22,7 @@
 #include "mvImage.h"
 #include "mvAllocator.h"
 
-static constexpr float MOVESPEED = 0.025f;
+static constexpr float MOVESPEED = 0.05f;
 
 namespace mv
 {
@@ -66,6 +66,12 @@ namespace mv
 
             // update obj uniform
             memcpy(uniform_buffer.mapped, &matrices.model, sizeof(matrices));
+        }
+
+        inline void rotate_to_face(float angle)
+        {
+            rotation.y = angle;
+            return;
         }
 
         void get_front_face(void)

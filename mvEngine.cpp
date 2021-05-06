@@ -213,11 +213,6 @@ void mv::Engine::go(void)
         {
             handle_x_event();
         }
-        // if (camera->type == Camera::camera_type::free_look || camera->type == Camera::camera_type::first_person)
-        // {
-        //     XWarpPointer(display, None, window, 0, 0, 0, 0, (window_width / 2), (window_height / 2));
-        //     XFlush(display);
-        // }
 
         while (accumulated >= timestep)
         {
@@ -231,9 +226,6 @@ void mv::Engine::go(void)
 
             if (camera->type == Camera::camera_type::third_person)
             {
-                camera->get_front_face(camera->orbit_angle);
-                // player movement
-
                 // handle mouse scroll wheel
                 if (mouse_event.type == mouse::event::etype::wheel_up)
                 {
@@ -244,16 +236,14 @@ void mv::Engine::go(void)
                     camera->adjust_zoom(camera->zoom_step);
                 }
 
-                // start drag
-                if (kbd_event.type == mv::keyboard::event::etype::press &&
-                    kbd_event.code == mv::keyboard::key::l_alt &&
+                // start mouse drag
+                if (mouse_event.type == mv::mouse::event::etype::r_down &&
                     !mouse->is_dragging)
                 {
                     mouse->start_drag(camera->orbit_angle);
                 }
                 // end drag
-                if (kbd_event.type == mv::keyboard::event::etype::release &&
-                    kbd_event.code == mv::keyboard::key::l_alt &&
+                if (mouse_event.type == mv::mouse::event::etype::r_release &&
                     mouse->is_dragging)
                 {
                     camera->realign_orbit();
@@ -271,6 +261,12 @@ void mv::Engine::go(void)
                     {
                         camera->adjust_orbit(abs(mouse->drag_delta_x), mouse->stored_value);
                     }
+                    // fetch new orbit
+                    mouse->stored_value = camera->orbit_angle;
+                    // hide pointer & warp to drag start
+                    XWarpPointer(display, None, window, 0, 0, 0, 0, mouse->drag_startx, mouse->drag_starty);
+                    XFlush(display);
+                    camera->target->rotate_to_face(camera->orbit_angle);
                 }
 
                 // sort movement by key combination

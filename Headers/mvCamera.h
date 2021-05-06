@@ -101,7 +101,7 @@ namespace mv
             first_person,
             third_person
         };
-        float pitch = 50.0f;
+        float pitch = 40.0f;
         float orbit_angle = 0.0f;
         float zoom_level = 10.0f;
         mv::Object *target = nullptr;
