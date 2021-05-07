@@ -34,7 +34,7 @@ namespace mv
                  std::weak_ptr<vk::Device> device);
 
         // create vulkan swap chain, retrieve images & create views into them
-        void create(uint32_t *width, uint32_t *height);
+        void create(uint32_t& width, uint32_t& height);
 
         // destroy resources owned by this interface
         void cleanup(bool should_destroy_surface = true);

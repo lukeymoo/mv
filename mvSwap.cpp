@@ -6,9 +6,9 @@ void mv::Swap::init(std::weak_ptr<xcb_connection_t> xcb_conn, std::weak_ptr<xcb_
     std::shared_ptr<xcb_connection_t> tc = std::make_shared<xcb_connection_t>(xcb_conn);
     std::shared_ptr<xcb_window_t> tw = std::make_shared<xcb_window_t>(xcb_win);
 
-    if(!tc)
+    if (!tc)
         throw std::runtime_error("Invalid xcb connection handle passed to swap chain interface");
-    if(!tw || !*tw)
+    if (!tw || !*tw)
         throw std::runtime_error("Invalid window xid passed to swap chain interface");
 
     this->xcb_conn = xcb_conn;
@@ -118,7 +118,7 @@ void mv::Swap::init(std::weak_ptr<xcb_connection_t> xcb_conn, std::weak_ptr<xcb_
     return;
 }
 
-void mv::Swap::create(uint32_t *w, uint32_t *h)
+void mv::Swap::create(uint32_t &w, uint32_t &h)
 {
     std::shared_ptr<vk::PhysicalDevice> p_dvc = std::make_shared<vk::PhysicalDevice>(physical_device);
 
@@ -150,10 +150,10 @@ void mv::Swap::create(uint32_t *w, uint32_t *h)
 
     // get the surface width|height reported by vulkan
     // store in our interface member variables for future use
-    *w = capabilities.currentExtent.width;
-    *h = capabilities.currentExtent.height;
-    swap_extent.width = *w;
-    swap_extent.height = *h;
+    w = capabilities.currentExtent.width;
+    h = capabilities.currentExtent.height;
+    swap_extent.width = w;
+    swap_extent.height = h;
 
     // Window rw;
     // int rx, ry;           // returned x/y
