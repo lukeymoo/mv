@@ -35,7 +35,13 @@ namespace mv
         Engine(int w, int h, const char *title);
         ~Engine() // Cleanup
         {
-            vkDeviceWaitIdle(device->device);
+            if (device)
+            {
+                if (device->device)
+                {
+                    vkDeviceWaitIdle(device->device);
+                }
+            }
 
             // pipelines
             if (pipeline_w_sampler)

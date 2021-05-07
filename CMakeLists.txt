@@ -10,6 +10,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(HEADERS
+    Headers/mvWindow.h
     Headers/mvCollection.h
     Headers/mvImage.h
     Headers/mvAllocator.h
@@ -22,9 +23,7 @@ set(HEADERS
     Headers/mvSwap.h
     Headers/mvDevice.h
     Headers/mvKeyboard.h
-    Headers/mvMouse.h
-    Headers/mvException.h
-    Headers/mvWindow.h)
+    Headers/mvMouse.h)
 
 set(SOURCES
     mvImage.cpp
@@ -41,10 +40,10 @@ set(SOURCES
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -std=c++17 -m64 -g)
+add_compile_options(-Wall -std=c++20 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 
 target_include_directories(main PUBLIC Headers/)
 
-target_link_libraries(main gcc vulkan dl X11 Xxf86vm Xrandr Xi stdc++fs assimp)
+target_link_libraries(main gcc vulkan dl stdc++fs assimp xcb)

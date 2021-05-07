@@ -268,6 +268,19 @@ namespace mv
             zoom_accel += delta;
             return;
         }
+        inline void adjust_pitch(float delta, float start_pitch)
+        {
+            pitch = start_pitch + delta;
+            if (pitch > 89.9f)
+            {
+                pitch = 89.9f;
+            }
+            else if (pitch < -89.9f)
+            {
+                pitch = -89.9f;
+            }
+            return;
+        }
         inline void adjust_orbit(float delta, float start_orbit)
         {
             orbit_angle = start_orbit + (orbit_step * delta);
@@ -503,8 +516,6 @@ namespace mv
 
         inline void update_third_person(void)
         {
-            glm::mat4 tmp = glm::mat4(1.0);
-
             // set camera origin to target's position
             position = glm::vec3(target->position.x,
                                  target->position.y - 0.5f,

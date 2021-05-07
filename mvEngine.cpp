@@ -142,8 +142,25 @@ void mv::Engine::go(void)
                                         0);
 
     // initialize model/object container
-    // constructor by default creates `uniform_layout` for use with view & projection matrix buffers
+    // by default it contains uniform buffer for view & projection matrices
     collection_handler = std::make_unique<Collection>(device, descriptor_allocator);
+
+    // get uniform layout to create descriptors for view & projection matrix ubos
+    VkDescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
+
+    // allocate & update descriptor set for view uniform buffer
+    descriptor_allocator->allocate_set(uniform_layout,
+                                       collection_handler->view_uniform.descriptor);
+    descriptor_allocator->update_set(collection_handler->view_uniform.mv_buffer.descriptor,
+                                     collection_handler->view_uniform.descriptor,
+                                     0);
+
+    // allocate & update descriptor set for projection uniform buffer
+    descriptor_allocator->allocate_set(uniform_layout,
+                                       collection_handler->projection_uniform.descriptor);
+    descriptor_allocator->update_set(collection_handler->projection_uniform.mv_buffer.descriptor,
+                                     collection_handler->projection_uniform.descriptor,
+                                     0);
 
     // Load model
     collection_handler->load_model("models/_viking_room.fbx");
@@ -160,9 +177,9 @@ void mv::Engine::go(void)
 
     // configure camera before uniform buffer creation
     camera_init_struct camera_params;
-    camera_params.fov = 40.0f * ((float)swapchain.swap_extent.width / swapchain.swap_extent.height);
+    camera_params.fov = 45.0f * ((float)swapchain.swap_extent.width / swapchain.swap_extent.height);
     camera_params.aspect = static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
-    camera_params.nearz = 0.01f;
+    camera_params.nearz = 0.1f;
     camera_params.farz = 200.0f;
     camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
     camera_params.view_uniform_object = &collection_handler->view_uniform;
@@ -218,8 +235,6 @@ void mv::Engine::go(void)
         {
             accumulated -= timestep;
 
-            mouse->query_pointer();
-
             // Get input events
             mv::keyboard::event kbd_event = kbd->read();
             mv::mouse::event mouse_event = mouse->read();
@@ -240,12 +255,14 @@ void mv::Engine::go(void)
                 if (mouse_event.type == mv::mouse::event::etype::r_down &&
                     !mouse->is_dragging)
                 {
-                    mouse->start_drag(camera->orbit_angle);
+                    XDefineCursor(display, window, mouse->hidden_cursor);
+                    mouse->start_drag(camera->orbit_angle, camera->pitch);
                 }
                 // end drag
                 if (mouse_event.type == mv::mouse::event::etype::r_release &&
                     mouse->is_dragging)
                 {
+                    XUndefineCursor(display, window);
                     camera->realign_orbit();
                     mouse->end_drag();
                 }
@@ -253,19 +270,33 @@ void mv::Engine::go(void)
                 // if drag enabled check for release
                 if (mouse->is_dragging)
                 {
+                    // camera orbit
                     if (mouse->drag_delta_x > 0)
                     {
-                        camera->adjust_orbit(-abs(mouse->drag_delta_x), mouse->stored_value);
+                        camera->adjust_orbit(-abs(mouse->drag_delta_x), mouse->stored_orbit);
                     }
                     else if (mouse->drag_delta_x < 0)
                     {
-                        camera->adjust_orbit(abs(mouse->drag_delta_x), mouse->stored_value);
+                        camera->adjust_orbit(abs(mouse->drag_delta_x), mouse->stored_orbit);
                     }
-                    // fetch new orbit
-                    mouse->stored_value = camera->orbit_angle;
+
+                    // camera pitch
+                    if (mouse->drag_delta_y > 0)
+                    {
+                        camera->adjust_pitch(abs(mouse->drag_delta_y) * 0.25f, mouse->stored_pitch);
+                    }
+                    else if (mouse->drag_delta_y < 0)
+                    {
+                        camera->adjust_pitch(-abs(mouse->drag_delta_y) * 0.25f, mouse->stored_pitch);
+                    }
+
+                    // fetch new orbit & pitch
+                    mouse->stored_orbit = camera->orbit_angle;
+                    mouse->stored_pitch = camera->pitch;
                     // hide pointer & warp to drag start
-                    XWarpPointer(display, None, window, 0, 0, 0, 0, mouse->drag_startx, mouse->drag_starty);
+                    XIWarpPointer(display, mouse->deviceid, None, window, 0, 0, 0, 0, mouse->drag_startx, mouse->drag_starty);
                     XFlush(display);
+                    mouse->clear();
                     camera->target->rotate_to_face(camera->orbit_angle);
                 }
 

@@ -58,42 +58,6 @@ namespace mv
             {
                 throw std::runtime_error("Failed to map projection matrix buffer");
             }
-
-            // exceptions inside of constructor fail to call destructor
-            // request handle to active descriptor pool
-            try
-            {
-                mv::Allocator::Container *pool = descriptor_allocator->get(); // get descriptor pool
-
-                VkDescriptorSetLayoutBinding bind_info = {};
-                bind_info.binding = 0;
-                bind_info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                bind_info.descriptorCount = 1;
-                bind_info.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-                VkDescriptorSetLayoutCreateInfo layout_info = {};
-                layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-                layout_info.bindingCount = 1;
-                layout_info.pBindings = &bind_info;
-
-                // create uniform buffer layout
-                descriptor_allocator->create_layout("uniform_layout", layout_info);
-                VkDescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
-
-                // allocate & update descriptor set for view uniform buffer
-                descriptor_allocator->allocate_set(pool, uniform_layout, view_uniform.descriptor);
-                descriptor_allocator->update_set(pool, view_uniform.mv_buffer.descriptor, view_uniform.descriptor, 0);
-
-                // allocate & update descriptor set for projection uniform buffer
-                descriptor_allocator->allocate_set(pool, uniform_layout, projection_uniform.descriptor);
-                descriptor_allocator->update_set(pool, projection_uniform.mv_buffer.descriptor, projection_uniform.descriptor, 0);
-            }
-            catch (std::exception &e)
-            {
-                // cleanup buffers
-                cleanup();
-                throw std::runtime_error(e.what());
-            }
         }
         ~Collection(void) {}
 

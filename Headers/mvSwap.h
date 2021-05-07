@@ -1,9 +1,10 @@
 #ifndef HEADERS_MVSWAP_H_
 #define HEADERS_MVSWAP_H_
 
-#include <X11/Xlib.h>
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_xlib.h>
+#include <xcb/xcb.h>
+#define VK_USE_PLATFORM_XCB_KHR
+#include <vulkan/vulkan_xcb.h>
+#include <vulkan/vulkan.hpp>
 
 #include <iostream>
 #include <string.h>
@@ -13,48 +14,60 @@
 
 namespace mv
 {
-    typedef struct _swap_chain_buffers
+    // container for swap chain image
+    // contains swap image + a view into it
+    struct swapchain_buffer
     {
-        VkImage image;
-        VkImageView view;
-    } swap_chain_buffer;
+        vk::Image image;
+        vk::ImageView view;
+    };
 
-    class Swap
+    struct Swap
     {
+    public:
+        // creates vulkan surface & retreives basic info such as graphics queue index
+        void init(std::weak_ptr<xcb_connection_t> connection, std::weak_ptr<xcb_window_t> window);
+
+        // map our swapchain interface with main engine class
+        void map(std::weak_ptr<vk::Instance> instance,
+                 std::weak_ptr<vk::PhysicalDevice> physical_device,
+                 std::weak_ptr<vk::Device> device);
+
+        // create vulkan swap chain, retrieve images & create views into them
+        void create(uint32_t *width, uint32_t *height);
+
+        // destroy resources owned by this interface
+        void cleanup(bool should_destroy_surface = true);
+
     private:
-        VkInstance instance;
-        VkPhysicalDevice physical_device;
-        VkDevice device;
-        VkSurfaceKHR surface;
+        // owns
+        std::shared_ptr<vk::SurfaceKHR> surface;
 
-        /* Function pointers must be loaded */
-        PFN_vkGetPhysicalDeviceSurfaceSupportKHR fp_get_physical_device_surface_support_khr;
-        PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR fp_get_physical_device_surface_capabilities_khr;
-        PFN_vkGetPhysicalDeviceSurfaceFormatsKHR fp_get_physical_device_surface_formats_khr;
-        PFN_vkGetPhysicalDeviceSurfacePresentModesKHR fp_get_physical_device_surface_present_modes_khr;
-        PFN_vkCreateSwapchainKHR fp_create_swapchain_khr;
-        PFN_vkDestroySwapchainKHR fp_destroy_swapchain_khr;
-        PFN_vkGetSwapchainImagesKHR fp_get_swapchain_images_khr;
-        PFN_vkAcquireNextImageKHR fp_acquire_next_image_khr;
-        PFN_vkQueuePresentKHR fp_queue_present_khr;
+        // references
+        std::weak_ptr<vk::Instance> instance;
+        std::weak_ptr<vk::PhysicalDevice> physical_device;
+        std::weak_ptr<vk::Device> logical_device;
 
     public:
-        VkFormat color_format = {};
-        VkExtent2D swap_extent = {};
-        VkColorSpaceKHR color_space = {};
-        VkSwapchainKHR swapchain = nullptr;
+        // owns
+        std::shared_ptr<vk::SwapchainKHR> swapchain;
+        // swap chain image handles + view into them
+        std::unique_ptr<std::vector<swapchain_buffer>> buffers;
+        // swapchain image handles
+        std::unique_ptr<std::vector<vk::Image>> images;
+
+        // references
+        std::weak_ptr<xcb_connection_t> xcb_conn;
+        std::weak_ptr<xcb_window_t> xcb_win;
+
+        // surface info structures
+        vk::Format color_format;
+        vk::Extent2D swap_extent;
+        vk::ColorSpaceKHR color_space;
         uint32_t image_count = 0; // swap chain image count
-        Display* display;
-        Window window;
 
-        std::vector<VkImage> images; // swapchain image handles
-        std::vector<swap_chain_buffer> buffers;
-        uint32_t queue_index = UINT32_MAX; // graphics queue index
-
-        void init_surface(Display *disp, Window &window);
-        void create(uint32_t *width, uint32_t *height);
-        void connect(VkInstance instance, VkPhysicalDevice physical_device, VkDevice device);
-        void cleanup(bool should_destroy_surface = true);
+        // graphics queue index
+        uint32_t graphics_index = UINT32_MAX;
     };
 };
 

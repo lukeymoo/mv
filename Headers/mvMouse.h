@@ -5,7 +5,12 @@
 // #define WHEEL_DELTA 120
 #define WHEEL_DELTA 1
 
-#include <X11/Xlib.h>
+// #include <X11/Xlib.h>
+// #include <X11/extensions/XInput2.h>
+// #include <X11/Xcursor/Xcursor.h>
+
+#include <xcb/xcb.h>
+
 #include <queue>
 #include <stdexcept>
 
@@ -79,9 +84,7 @@ namespace mv
             }
         };
 
-        /*
-            End of mouse event structure
-        */
+        // End of mouse event structure
 
     public:
         enum delta_calc_style
@@ -90,37 +93,80 @@ namespace mv
             from_last
         };
 
-        mouse(Display *display, Window *window)
+        // delete copy operations
+        mouse(const mouse &) = delete;
+        mouse &operator=(const mouse &) = delete;
+
+        // default move operations
+        mouse(mouse &&) = default;
+        mouse &operator=(mouse &&) = default;
+
+        mouse(std::shared_ptr<xcb_connection_t> xcb_conn, std::weak_ptr<xcb_window_t> xcb_win)
         {
-            this->display = display;
-            this->window = window;
+            this->xcb_conn = xcb_conn;
+            this->xcb_win = xcb_win;
+            // this->deviceid = deviceid;
+            deviceid = 0;
+
+            if (deviceid < 0)
+            {
+                throw std::runtime_error("Invalid device id passed to mouse handler => id < 0");
+            }
+
+            // create hidden cursor image
+            // XcursorImage *cur = XcursorImageCreate(16, 16);
+            // if (!cur)
+            // {
+            //     throw std::runtime_error("Failed to create cursor");
+            // }
+            // cur->xhot = 0;
+            // cur->yhot = 0;
+            // unsigned char pixels[16 * 16 * 4] = {0}; // empty pixel array(hidden cursor duh)
+
+            // unsigned char *pixel_ptr = static_cast<unsigned char *>(pixels);
+            // XcursorPixel *target = cur->pixels; // our x11 cursor
+
+            // for (int i = 0; i < 16 * 16; i++, target++, pixel_ptr += 4)
+            // {
+            //     unsigned int alpha = pixel_ptr[3];
+            //     *target = (alpha << 24) |
+            //               ((unsigned char)((pixel_ptr[0] * alpha) / 255) << 16) |
+            //               ((unsigned char)((pixel_ptr[1] * alpha) / 255) << 8) |
+            //               ((unsigned char)((pixel_ptr[2] * alpha) / 255) << 0);
+            // }
+
+            // this->hidden_cursor = XcursorImageLoadCursor(display, cur);
+            // XcursorImageDestroy(cur);
         }
         ~mouse() {}
 
         static constexpr int max_buffer_size = 16;
 
-    public:
-        Display *display = nullptr;
-        Window *window = nullptr;
+    private:
+        std::weak_ptr<xcb_connection_t> xcb_conn;
+        std::weak_ptr<xcb_window_t> xcb_win;
         int window_width = 0;
         int window_height = 0;
         int center_x = 0;
         int center_y = 0;
 
+    public:
         int last_x = 0;
         int last_y = 0;
         int current_x = 0;
         int current_y = 0;
-        // delta from last x,y & current
+
+        // raw mouse delta
         int delta_x = 0;
         int delta_y = 0;
 
         bool is_dragging = false;
-        int drag_startx = 0;
-        int drag_starty = 0;
-        // delta from drag start x,y & current
+        // accumulated delta while is_dragging
         int drag_delta_x = 0;
         int drag_delta_y = 0;
+        // where to warp pointer
+        int drag_startx = 0;
+        int drag_starty = 0;
 
         bool is_left_pressed = false;
         bool is_middle_pressed = false;
@@ -130,40 +176,73 @@ namespace mv
 
         bool in_window = false;
 
-        float stored_value = 0.0f;
+        float stored_pitch = 0.0f;
+        float stored_orbit = 0.0f;
+
+        // don't change this unless you know what
+        // you're doing
+        int deviceid = -1;
+
+        // used when hiding cursor
+        // Cursor hidden_cursor;
 
         // how is delta_x/y calculated
         delta_calc_style delta_style = delta_calc_style::from_last;
         std::queue<mouse::event> mouse_buffer;
 
     public:
-        inline void query_pointer(void)
+        inline void clear(void)
         {
-            if (display == nullptr)
-            {
-                throw std::runtime_error("Attempted to query mouse pointer but no valid x11 display handle was given to mouse handler");
-            }
-            if (window == nullptr)
-            {
-                throw std::runtime_error("Attempted to query mouse pointer but no x11 window has been given to mouse handler");
-            }
-
-            Window root, child;
-            int gx, gy;
-            unsigned int buttons;
-
-            int mx = 0;
-            int my = 0;
-            XQueryPointer(display, (*window), &root, &child, &gx, &gy, &mx, &my, &buttons);
-
-            last_x = current_x;
-            last_y = current_y;
-            current_x = mx;
-            current_y = my;
-
-            calculate_delta();
+            // prevent accidental use of stale data by clearing
+            delta_x = 0;
+            delta_y = 0;
+            drag_delta_x = 0;
+            drag_delta_y = 0;
             return;
         }
+        // inline void process_device_event(XIDeviceEvent *event)
+        // {
+        //     // ignore mouse wheels -- normal deltas never get this high
+        //     if (event->event_x == 15 && event->event_y == 15)
+        //         return;
+        //     if (event->event_x == -15 && event->event_y == -15)
+        //         return;
+        //     delta_x = event->event_x;
+        //     delta_y = event->event_y;
+        //     if (is_dragging)
+        //     {
+        //         drag_delta_x += delta_x;
+        //         drag_delta_y += delta_y;
+        //     }
+        //     return;
+        // }
+        // inline void query_pointer(void)
+        // {
+        //     if (display == nullptr)
+        //     {
+        //         throw std::runtime_error("Attempted to query mouse pointer but no valid x11 display handle was given to mouse handler");
+        //     }
+        //     if (window == nullptr)
+        //     {
+        //         throw std::runtime_error("Attempted to query mouse pointer but no x11 window has been given to mouse handler");
+        //     }
+
+        //     Window root, child;
+        //     int gx, gy;
+        //     unsigned int buttons;
+
+        //     int mx = 0;
+        //     int my = 0;
+        //     XQueryPointer(display, (*window), &root, &child, &gx, &gy, &mx, &my, &buttons);
+
+        //     last_x = current_x;
+        //     last_y = current_y;
+        //     current_x = mx;
+        //     current_y = my;
+
+        //     calculate_delta();
+        //     return;
+        // }
         inline mouse::event read(void) noexcept
         {
             event e(mouse::event::etype::invalid, 0, 0, false, false, false);
@@ -202,9 +281,10 @@ namespace mv
             is_dragging = true;
             return;
         }
-        inline void start_drag(float custom_val) noexcept
+        inline void start_drag(float orbit, float pitch) noexcept
         {
-            stored_value = custom_val;
+            stored_orbit = orbit;
+            stored_pitch = pitch;
             drag_startx = current_x;
             drag_starty = current_y;
             is_dragging = true;
@@ -212,7 +292,8 @@ namespace mv
         }
         inline void end_drag(void) noexcept
         {
-            stored_value = 0.0f;
+            stored_orbit = 0.0f;
+            stored_pitch = 0.0f;
             drag_startx = 0;
             drag_starty = 0;
             drag_delta_x = 0;
@@ -224,21 +305,21 @@ namespace mv
         inline void calculate_delta(void)
         {
             // if dragging calculate drag delta
-            if (is_dragging)
-            {
-                drag_delta_x = current_x - drag_startx;
-                drag_delta_y = current_y - drag_starty;
-            }
-            if (delta_style == delta_calc_style::from_center)
-            {
-                delta_x = current_x - center_x;
-                delta_y = current_y - center_y;
-            }
-            else if (delta_style == delta_calc_style::from_last)
-            {
-                delta_x = current_x - last_x;
-                delta_y = current_y - last_y;
-            }
+            // if (is_dragging)
+            // {
+            //     drag_delta_x = current_x - drag_startx;
+            //     drag_delta_y = current_y - drag_starty;
+            // }
+            // if (delta_style == delta_calc_style::from_center)
+            // {
+            //     delta_x = current_x - center_x;
+            //     delta_y = current_y - center_y;
+            // }
+            // else if (delta_style == delta_calc_style::from_last)
+            // {
+            //     delta_x = current_x - last_x;
+            //     delta_y = current_y - last_y;
+            // }
             return;
         }
 

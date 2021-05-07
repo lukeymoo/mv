@@ -1,191 +1,5 @@
 #include "mvWindow.h"
 
-mv::MWindow::Exception::Exception(int l, std::string f, std::string description)
-    : BException(l, f, description)
-{
-    type = "Window Handler Exception";
-    error_description = description;
-    return;
-}
-
-mv::MWindow::Exception::~Exception(void)
-{
-    return;
-}
-
-/* Create window and initialize Vulkan */
-mv::MWindow::MWindow(int w, int h, const char *title)
-    : window_width(w), window_height(h)
-{
-    // Connect to x server
-    display = XOpenDisplay(NULL);
-    if (display == NULL)
-    {
-        throw std::runtime_error("Failed to open x server connection");
-    }
-
-    // get first screen
-    screen = DefaultScreen(display);
-
-    // Create window
-    window = XCreateSimpleWindow(display,
-                                 RootWindow(display, screen),
-                                 10, 10,
-                                 window_width, window_height,
-                                 1,
-                                 WhitePixel(display, screen),
-                                 BlackPixel(display, screen));
-
-    typedef struct Hints
-    {
-        unsigned long flags = 0;
-        unsigned long functions = 0;
-        unsigned long decorations = 0;
-        long input_mode = 0;
-        unsigned long status = 0;
-    } Hints;
-
-    Hints hints;
-    hints.flags = 2;
-    hints.decorations = 0;
-
-    Atom borders_atom = XInternAtom(display, "_MOTIF_WM_HINTS", 1);
-    // ensure we got the atom
-    if (!borders_atom)
-    {
-        throw std::runtime_error("Failed to fetch motif window manager hints atom");
-    }
-
-    Atom del_window = XInternAtom(display, "WM_DELETE_WINDOW", 0);
-    XSetWMProtocols(display, window, &del_window, 1);
-
-    // remove decorations
-    XChangeProperty(display, window, borders_atom, borders_atom, 32, PropModeReplace, (unsigned char *)&hints, 5);
-
-    // Configure event masks
-    XSelectInput(display,
-                 window,
-                 EnterWindowMask |
-                     LeaveWindowMask |
-                     FocusChangeMask |
-                     ButtonPressMask |
-                     ButtonReleaseMask |
-                     ExposureMask |
-                     KeyPressMask |
-                     KeyReleaseMask |
-                     NoExpose |
-                     SubstructureNotifyMask);
-
-    XStoreName(display, window, title);
-
-    // initialize keyboard handler
-    kbd = std::make_unique<mv::keyboard>(display);
-    // initialize mouse handler
-    mouse = std::make_unique<mv::mouse>(display, &window);
-
-    // Display window
-    XMapWindow(display, window);
-    XFlush(display);
-
-    int rs;
-    bool detectable_result;
-
-    /* Request X11 does not send autorepeat signals */
-    std::cout << "[+] Configuring keyboard input" << std::endl;
-    detectable_result = XkbSetDetectableAutoRepeat(display, true, &rs);
-
-    if (!detectable_result)
-    {
-        throw std::runtime_error("Could not disable auto repeat");
-    }
-
-    return;
-}
-
-mv::MWindow::~MWindow(void)
-{
-    vkDeviceWaitIdle(m_device);
-    swapchain.cleanup();
-    destroy_command_buffers();
-
-    for (auto &fence : in_flight_fences)
-    {
-        if (fence != nullptr)
-        {
-            vkDestroyFence(m_device, fence, nullptr);
-            fence = nullptr;
-        }
-    }
-
-    if (m_render_pass)
-    {
-        vkDestroyRenderPass(m_device, m_render_pass, nullptr);
-    }
-    if (!frame_buffers.empty())
-    {
-        for (size_t i = 0; i < frame_buffers.size(); i++)
-        {
-            if (frame_buffers[i])
-            {
-                vkDestroyFramebuffer(m_device, frame_buffers[i], nullptr);
-                frame_buffers[i] = nullptr;
-            }
-        }
-    }
-
-    cleanup_depth_stencil();
-
-    if (m_pipeline_cache)
-    {
-        vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
-        m_pipeline_cache = nullptr;
-    }
-
-    destroy_command_pool();
-    vkDestroySemaphore(m_device, semaphores.render_complete, nullptr);
-    vkDestroySemaphore(m_device, semaphores.present_complete, nullptr);
-    semaphores.present_complete = nullptr;
-    semaphores.render_complete = nullptr;
-
-    if (device)
-    {
-        delete device;
-    }
-
-    if (m_instance)
-    {
-        vkDestroyInstance(m_instance, nullptr);
-        m_instance = nullptr;
-    }
-
-    if (display && window)
-    {
-        XDestroyWindow(display, window);
-        XCloseDisplay(display);
-    }
-    return;
-}
-
-void mv::MWindow::cleanup_depth_stencil(void)
-{
-    if (depth_stencil.image)
-    {
-        vkDestroyImage(m_device, depth_stencil.image, nullptr);
-        depth_stencil.image = nullptr;
-    }
-    if (depth_stencil.view)
-    {
-        vkDestroyImageView(m_device, depth_stencil.view, nullptr);
-        depth_stencil.view = nullptr;
-    }
-    if (depth_stencil.mem)
-    {
-        vkFreeMemory(m_device, depth_stencil.mem, nullptr);
-        depth_stencil.mem = nullptr;
-    }
-    return;
-}
-
 void mv::MWindow::prepare(void)
 {
     // initialize vulkan
@@ -194,12 +8,10 @@ void mv::MWindow::prepare(void)
         throw std::runtime_error("Failed to initialize Vulkan");
     }
 
-    swapchain.init_surface(display, window);
-    m_command_pool = device->create_command_pool(swapchain.queue_index);
-    swapchain.create(&window_width, &window_height);
-    // call after swapchain creation!!!
-    // needed for mouse delta calc when using from_center method
-    mouse->set_window_properties(window_width, window_height);
+    swapchain->init(std::weak_ptr<xcb_connection_t>(xcb_conn),
+                           std::weak_ptr<xcb_window_t>(xcb_win));
+    command_pool = std::make_shared<vk::CommandPool>(mv_device->create_command_pool(swapchain->graphics_index));
+    swapchain->create(&window_width, &window_height);
     create_command_buffers();
     create_synchronization_primitives();
     setup_depth_stencil();
@@ -596,22 +408,6 @@ void mv::MWindow::check_validation_support(void)
     return;
 }
 
-void mv::MWindow::destroy_command_buffers(void)
-{
-    if (!command_buffers.empty())
-    {
-        vkFreeCommandBuffers(m_device, m_command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
-        for (auto &buf : command_buffers)
-        {
-            if (buf)
-            {
-                buf = nullptr;
-            }
-        }
-    }
-    return;
-}
-
 void mv::MWindow::destroy_command_pool(void)
 {
     if (m_command_pool != nullptr)
@@ -814,19 +610,36 @@ void mv::MWindow::handle_x_event(void)
     // count time for processing events
     XNextEvent(display, &event);
     mv::keyboard::key mv_key = mv::keyboard::key::invalid;
+
+    // query if xinput
+    if (event.xcookie.type == GenericEvent && event.xcookie.extension == xinput_opcode)
+    {
+        // if raw motion, query pointer
+        XGetEventData(display, &event.xcookie);
+
+        XGenericEventCookie *gen_cookie = &event.xcookie;
+        XIDeviceEvent *xi_device_evt = static_cast<XIDeviceEvent *>(gen_cookie->data);
+        // retrieve mouse deltas
+        if (event.xcookie.evtype == XI_RawMotion)
+        {
+            std::cout << "Delta x,y => " << xi_device_evt->event_x << ", " << xi_device_evt->event_y << "\n";
+            mouse->process_device_event(xi_device_evt);
+        }
+        XFreeEventData(display, &event.xcookie);
+    }
     switch (event.type)
     {
     case LeaveNotify:
     case FocusOut:
         mouse->on_mouse_leave();
-        //XUngrabPointer(display, CurrentTime);
+        XUngrabPointer(display, CurrentTime);
         break;
     case MapNotify:
     case EnterNotify:
         mouse->on_mouse_enter();
         // confine cursor to interior of window
         // mouse released on focus out or cursor leaving window
-        //XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
+        XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
         break;
     case ButtonPress:
         if (event.xbutton.button == Button1)

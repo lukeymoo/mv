@@ -145,6 +145,58 @@ namespace mv
             throw std::runtime_error("Failed to find layout with specified name => " + layout_name);
         }
 
+        // auto retrieve currently in use pool
+        void allocate_set(VkDescriptorSetLayout &layout, VkDescriptorSet &set)
+        {
+            Container *container = containers.at(current_pool).get();
+
+            std::cout << "[-] Allocating descriptor set" << std::endl;
+            if (layout == nullptr)
+            {
+                std::ostringstream oss;
+                oss << "Descriptor allocated was requested to allocate a set however the user provided nullptr for layout\n";
+                oss << "File => " << __FILE__ << "Line => " << __LINE__ << std::endl;
+                throw std::runtime_error(oss.str().c_str());
+            }
+
+            VkResult result;
+            VkDescriptorSetAllocateInfo alloc_info = {};
+            alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            alloc_info.descriptorPool = container->pool;
+            alloc_info.descriptorSetCount = 1;
+            alloc_info.pSetLayouts = &layout;
+
+            result = vkAllocateDescriptorSets(device->device, &alloc_info, &set);
+            if (result == VK_SUCCESS)
+            {
+                // ensure allocator index is up to date
+                current_pool = container->index;
+            }
+            else if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
+            {
+                if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
+                {
+                    container->status = Status::Full;
+                }
+                else
+                {
+                    container->status = Status::Fragmented;
+                }
+                // allocate new pool
+                auto new_pool = allocate_pool(container->count);
+                // use new pool to allocate set
+                allocate_set(new_pool, layout, set);
+                // change passed container to new one
+                container = new_pool;
+            }
+            else
+            {
+                throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
+            }
+            return;
+        }
+
+        // allocate descriptor set from a specified pool
         void allocate_set(Container *container, VkDescriptorSetLayout &layout, VkDescriptorSet &set)
         {
             std::cout << "[-] Allocating descriptor set" << std::endl;
@@ -192,6 +244,25 @@ namespace mv
             }
         }
 
+        // update set from auto retreived currently in use pool
+        void update_set(VkDescriptorBufferInfo &buffer_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
+        {
+            Container *container = containers.at(current_pool).get();
+            
+            VkWriteDescriptorSet update_info = {};
+            update_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            update_info.dstBinding = dst_binding;
+            update_info.dstSet = dst_set;
+            update_info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            update_info.descriptorCount = 1;
+            update_info.pBufferInfo = &buffer_info;
+
+            vkUpdateDescriptorSets(device->device, 1, &update_info, 0, nullptr);
+            current_pool = container->index;
+            return;
+        }
+
+        // update set from specified descriptor pool
         void update_set(Container *container, VkDescriptorBufferInfo &buffer_info, VkDescriptorSet &dst_set, uint32_t dst_binding)
         {
             VkWriteDescriptorSet update_info = {};
