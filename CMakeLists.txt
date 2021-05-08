@@ -19,7 +19,6 @@ set(HEADERS
     Headers/mvModel.h
     Headers/mvBuffer.h
     Headers/mvEngine.h
-    Headers/mvInit.h
     Headers/mvSwap.h
     Headers/mvDevice.h
     Headers/mvKeyboard.h
@@ -40,7 +39,7 @@ set(SOURCES
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -std=c++20 -m64 -g)
+add_compile_options(-Wall -Wextra -std=c++20 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 

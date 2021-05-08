@@ -256,8 +256,8 @@ void mv::Swap::create(uint32_t &w, uint32_t &h)
         throw std::runtime_error("Failed to retreive any swap chain images");
 
     // create our swapchain buffer objs representing swap image & swap image view
-    buffers->resize(image_count);
-    for (uint32_t i = 0; i < image_count; i++)
+    buffers->resize(images->size());
+    for (size_t i = 0; i < images->size(); i++)
     {
         vk::ImageViewCreateInfo view_ci;
         view_ci.format = color_format;

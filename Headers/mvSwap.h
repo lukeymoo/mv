@@ -64,7 +64,6 @@ namespace mv
         vk::Format color_format;
         vk::Extent2D swap_extent;
         vk::ColorSpaceKHR color_space;
-        uint32_t image_count = 0; // swap chain image count
 
         // graphics queue index
         uint32_t graphics_index = UINT32_MAX;

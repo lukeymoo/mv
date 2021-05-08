@@ -1,9 +1,14 @@
 #include "mvBuffer.h"
 
 // Maps vulkan buffer/memory to member variable void* mapped
-VkResult mv::Buffer::map(VkDeviceSize psize, VkDeviceSize poffset)
+void mv::Buffer::map(vk::DeviceSize psize, vk::DeviceSize poffset)
 {
-    return vkMapMemory(device, memory, poffset, psize, 0, &mapped);
+    std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+
+    mapped = l_dvc->mapMemory(*memory, poffset, psize);
+    if (!mapped)
+        throw std::runtime_error("Failed to map memory :: buffer handler");
+    return;
 }
 
 // Unmaps void* mapped from vulkan buffer/memory
@@ -11,45 +16,57 @@ void mv::Buffer::unmap(void)
 {
     if (mapped)
     {
-        vkUnmapMemory(device, memory);
+        std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+        l_dvc->unmapMemory(*memory);
         mapped = nullptr;
     }
 }
 
 // Bind allocated memory to buffer
-VkResult mv::Buffer::bind(VkDeviceSize poffset)
+void mv::Buffer::bind(vk::DeviceSize poffset)
 {
-   return vkBindBufferMemory(device, buffer, memory, poffset);
+    std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+
+    l_dvc->bindBufferMemory(*buffer, *memory, poffset);
+
+    return;
 }
 
 // Configure default descriptor values
-void mv::Buffer::setup_descriptor(VkDeviceSize psize, VkDeviceSize poffset)
+void mv::Buffer::setup_descriptor(vk::DeviceSize psize, vk::DeviceSize poffset)
 {
-    descriptor.buffer = buffer;
+    descriptor.buffer = *buffer;
     descriptor.range = psize;
     descriptor.offset = poffset;
+    return;
 }
 
 // Copy buffer to another mapped buffer pointed to via function param void* data
-void mv::Buffer::copy_to(void *data, VkDeviceSize size)
+void mv::Buffer::copy_from(void *data, vk::DeviceSize size)
 {
-    assert(mapped);
+    if (!mapped)
+        throw std::runtime_error("Requested to copy data to buffer but the buffer was never mapped :: buffer handler");
+
     memcpy(mapped, data, size);
+
+    return;
 }
 
 // Unmaps void* mapped if it was previously mapped to vulkan buffer/memory
 // Destroys buffer and frees allocated memory
 void mv::Buffer::destroy(void)
 {
+    std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+
     unmap();
     if (buffer)
     {
-        vkDestroyBuffer(device, buffer, nullptr);
-        buffer = nullptr;
+        l_dvc->destroyBuffer(*buffer);
+        buffer.reset();
     }
     if (memory)
     {
-        vkFreeMemory(device, memory, nullptr);
-        memory = nullptr;
+        l_dvc->freeMemory(*memory);
+        memory.reset();
     }
 }

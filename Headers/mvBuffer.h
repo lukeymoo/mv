@@ -1,7 +1,7 @@
 #ifndef HEADERS_MVBUFFER_H_
 #define HEADERS_MVBUFFER_H_
 
-#include <vulkan/vulkan.h>
+#include <vulkan/vulkan.hpp>
 #include <cassert>
 #include <cstring>
 
@@ -10,27 +10,30 @@ namespace mv
 
     struct Buffer
     {
-        VkDevice device = nullptr;
-        VkBuffer buffer = nullptr;
-        VkDeviceMemory memory = nullptr;
-        VkDescriptorBufferInfo descriptor = {};
+        // owns
+        std::shared_ptr<vk::Buffer> buffer;
+        std::shared_ptr<vk::DeviceMemory> memory;
 
-        VkDeviceSize size = 0;
-        VkDeviceSize alignment = 0;
+        // references
+        std::weak_ptr<vk::Device> logical_device;
+
+        // info structures
+        vk::DeviceSize size;
+        vk::DeviceSize alignment;
+        vk::DescriptorBufferInfo descriptor;
+
+        vk::BufferUsageFlags usage_flags;
+        vk::MemoryPropertyFlags memory_property_flags;
         
+        void map(vk::DeviceSize size = VK_WHOLE_SIZE, vk::DeviceSize offset = 0);
+        void unmap(void);
         void* mapped = nullptr;
 
-        VkBufferUsageFlags usage_flags = 0;
-        VkMemoryPropertyFlags memory_property_flags = 0;
+        void bind(vk::DeviceSize offset = 0);
 
-        VkResult map(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
-        void unmap(void);
+        void setup_descriptor(vk::DeviceSize size = VK_WHOLE_SIZE, vk::DeviceSize offset = 0);
 
-        VkResult bind(VkDeviceSize offset = 0);
-
-        void setup_descriptor(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
-
-        void copy_to(void* data, VkDeviceSize size);
+        void copy_from(void* data, vk::DeviceSize size);
 
         // TODO
         // flush buffer

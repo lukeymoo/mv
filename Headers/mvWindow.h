@@ -35,15 +35,15 @@ const size_t MAX_IN_FLIGHT = 3;
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
-const std::vector<const char *> requested_validation_layers = {
+constexpr std::vector<std::string> requested_validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
 
-const std::vector<const char *> requested_instance_extensions = {
+constexpr std::vector<std::string> requested_instance_extensions = {
     "VK_EXT_debug_utils",
     "VK_KHR_surface",
     "VK_KHR_xcb_surface"};
 
-const std::vector<const char *> requested_device_extensions = {
+constexpr std::vector<std::string> requested_device_extensions = {
     "VK_KHR_swapchain",
     "VK_KHR_maintenance1"};
 
@@ -109,6 +109,7 @@ namespace mv
             // show window
             xcb_map_window(xcb_conn.get(), *xcb_win);
             xcb_flush(xcb_conn.get());
+            return;
         }
         ~MWindow()
         {
@@ -210,7 +211,7 @@ namespace mv
             if (xcb_conn)
                 xcb_disconnect(xcb_conn.get());
             return;
-        }
+        } // end destructor
 
         // delete copy operations
         MWindow &operator=(const MWindow &) = delete;
@@ -219,14 +220,17 @@ namespace mv
         MWindow &operator=(MWindow &&) = delete;
         MWindow(MWindow &&) = delete;
 
-        VkResult create_instance(void);
+        void create_instance(void);
 
+        // calls all other initialization functions
         void prepare(void);
 
+        // produces mouse/keyboard handler events
+        // based on xcb events
         void handle_x_event(void);
 
     protected:
-        bool init_vulkan(void);
+        void init_vulkan(void);
         void check_validation_support(void);
         void check_instance_ext(void);
         void create_command_buffers(void);
@@ -246,21 +250,16 @@ namespace mv
         bool good_init = true;
         vk::ClearColorValue default_clear_color = std::array<float, 4>({{0.0f, 0.0f, 0.0f, 1.0f}});
 
-        // mouse handler
-        std::unique_ptr<mv::mouse>
-            mouse;
-        // keyboard handler
-        std::unique_ptr<mv::keyboard> kbd;
-        // our logical device handler
+        // handlers
+        // logical device
         std::unique_ptr<mv::Device> mv_device;
+        std::unique_ptr<mv::mouse> mouse;
+        std::unique_ptr<mv::keyboard> kbd;
 
     protected:
         std::shared_ptr<xcb_connection_t> xcb_conn;
         std::shared_ptr<xcb_window_t> xcb_win;
 
-        int xinput_opcode = 0;
-
-        int screen;
         bool running = true;
 
         std::string title;
@@ -269,12 +268,12 @@ namespace mv
 
         std::shared_ptr<vk::Instance> instance;
         std::shared_ptr<vk::PhysicalDevice> physical_device;
-        std::shared_ptr<vk::Device> logical_device;
-        std::shared_ptr<vk::Queue> graphics_queue;
+        // contains logical device & graphics queue
+        std::shared_ptr<mv::Device> mv_device;
         std::shared_ptr<vk::CommandPool> command_pool;
         std::shared_ptr<vk::RenderPass> render_pass;
 
-        std::unique_ptr<Swap> swapchain;
+        std::unique_ptr<mv::Swap> swapchain;
 
         std::unique_ptr<std::vector<vk::CommandBuffer>> command_buffers;
         std::unique_ptr<std::vector<vk::Framebuffer>> frame_buffers;
