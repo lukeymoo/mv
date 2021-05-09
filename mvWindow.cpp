@@ -17,7 +17,7 @@ void mv::MWindow::prepare(void)
     create_synchronization_primitives();
     setup_depth_stencil();
     setup_render_pass();
-    create_pipeline_cache();
+    // create_pipeline_cache();
     setup_framebuffer();
     return;
 }
@@ -225,37 +225,37 @@ void mv::MWindow::setup_depth_stencil(void)
 
 void mv::MWindow::setup_render_pass(void)
 {
-    std::array<VkAttachmentDescription, 2> attachments = {};
+    std::array<vk::AttachmentDescription, 2> attachments;
     // Color attachment
-    attachments[0].format = swapchain.color_format;
-    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    attachments[0].format = swapchain->color_format;
+    attachments[0].samples = vk::SampleCountFlagBits::e1;
+    attachments[0].loadOp = vk::AttachmentLoadOp::eClear;
+    attachments[0].storeOp = vk::AttachmentStoreOp::eStore;
+    attachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    attachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    attachments[0].initialLayout = vk::ImageLayout::eUndefined;
+    attachments[0].finalLayout = vk::ImageLayout::ePresentSrcKHR;
 
     // Depth attachment
     attachments[1].format = depth_format;
-    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    attachments[1].samples = vk::SampleCountFlagBits::e1;
+    attachments[1].loadOp = vk::AttachmentLoadOp::eClear;
+    attachments[1].storeOp = vk::AttachmentStoreOp::eDontCare;
+    attachments[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    attachments[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    attachments[1].initialLayout = vk::ImageLayout::eUndefined;
+    attachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
-    VkAttachmentReference color_ref = {};
+    vk::AttachmentReference color_ref;
     color_ref.attachment = 0;
-    color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_ref.layout = vk::ImageLayout::eColorAttachmentOptimal;
 
-    VkAttachmentReference depth_ref = {};
+    vk::AttachmentReference depth_ref;
     depth_ref.attachment = 1;
-    depth_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depth_ref.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
-    VkSubpassDescription subpass_desc = {};
-    subpass_desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    vk::SubpassDescription subpass_desc;
+    subpass_desc.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
     subpass_desc.colorAttachmentCount = 1;
     subpass_desc.pColorAttachments = &color_ref;
     subpass_desc.pDepthStencilAttachment = &depth_ref;
@@ -265,25 +265,24 @@ void mv::MWindow::setup_render_pass(void)
     subpass_desc.pPreserveAttachments = nullptr;
     subpass_desc.pResolveAttachments = nullptr;
 
-    std::array<VkSubpassDependency, 2> dependencies = {};
+    std::array<vk::SubpassDependency, 2> dependencies;
     dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
     dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dependencies[0].srcStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
+    dependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    dependencies[0].srcAccessMask = vk::AccessFlagBits::eMemoryRead;
+    dependencies[0].dstAccessMask = vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
+    dependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
     dependencies[1].srcSubpass = 0;
     dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dependencies[1].srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    dependencies[1].dstStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
+    dependencies[1].srcAccessMask = vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
+    dependencies[1].dstAccessMask = vk::AccessFlagBits::eMemoryRead;
+    dependencies[1].dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
-    VkRenderPassCreateInfo render_pass_info = {};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    vk::RenderPassCreateInfo render_pass_info;
     render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());
     render_pass_info.pAttachments = attachments.data();
     render_pass_info.subpassCount = 1;
@@ -291,48 +290,41 @@ void mv::MWindow::setup_render_pass(void)
     render_pass_info.dependencyCount = static_cast<uint32_t>(dependencies.size());
     render_pass_info.pDependencies = dependencies.data();
 
-    if (vkCreateRenderPass(m_device, &render_pass_info, nullptr, &m_render_pass) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create render pass");
-    }
+    render_pass = std::make_shared<vk::RenderPass>(mv_device->logical_device->createRenderPass(render_pass_info));
     return;
 }
 
-void mv::MWindow::create_pipeline_cache(void)
-{
-    VkPipelineCacheCreateInfo pcinfo = {};
-    pcinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-    if (vkCreatePipelineCache(m_device, &pcinfo, nullptr, &m_pipeline_cache) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create pipeline cache");
-    }
-    return;
-}
+// TODO
+// Re add call to this method
+// void mv::MWindow::create_pipeline_cache(void)
+// {
+//     vk::PipelineCacheCreateInfo pcinfo;
+//     pipeline_cache = std::make_shared<vk::PipelineCache>(mv_device->logical_device->createPipelineCache(pcinfo));
+//     return;
+// }
 
 void mv::MWindow::setup_framebuffer(void)
 {
-    VkImageView attachments[2];
+    std::array<vk::ImageView, 2> attachments;
 
-    attachments[1] = depth_stencil.view;
+    // each frame buffer uses same depth image
+    attachments[1] = depth_stencil->view;
 
-    VkFramebufferCreateInfo framebuffer_info = {};
-    framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebuffer_info.renderPass = m_render_pass;
-    framebuffer_info.attachmentCount = 2;
-    framebuffer_info.pAttachments = attachments;
-    framebuffer_info.width = swapchain.swap_extent.width;
-    framebuffer_info.height = swapchain.swap_extent.height;
+    vk::FramebufferCreateInfo framebuffer_info;
+    framebuffer_info.renderPass = *render_pass;
+    framebuffer_info.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebuffer_info.pAttachments = attachments.data();
+    framebuffer_info.width = swapchain->swap_extent.width;
+    framebuffer_info.height = swapchain->swap_extent.height;
     framebuffer_info.layers = 1;
 
     // Framebuffer per swap image
-    frame_buffers.resize(swapchain.image_count);
-    for (size_t i = 0; i < frame_buffers.size(); i++)
+    frame_buffers->resize(static_cast<uint32_t>(swapchain->images->size()));
+    for (size_t i = 0; i < frame_buffers->size(); i++)
     {
-        attachments[0] = swapchain.buffers[i].view;
-        if (vkCreateFramebuffer(m_device, &framebuffer_info, nullptr, &frame_buffers[i]) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create frame buffer");
-        }
+        // different image views for each frame buffer
+        attachments[0] = swapchain->buffers->at(i).view;
+        frame_buffers->at(i) = mv_device->logical_device->createFramebuffer(framebuffer_info);
     }
     return;
 }
@@ -379,10 +371,10 @@ void mv::MWindow::check_validation_support(void)
 
 void mv::MWindow::destroy_command_pool(void)
 {
-    if (m_command_pool != nullptr)
+    if (command_pool)
     {
-        vkDestroyCommandPool(m_device, m_command_pool, nullptr);
-        m_command_pool = nullptr;
+        mv_device->logical_device->destroyCommandPool(*command_pool);
+        command_pool.reset();
     }
     return;
 }
@@ -422,12 +414,12 @@ void mv::MWindow::check_instance_ext(void)
     return;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                                                       VkDebugUtilsMessageTypeFlagsEXT message_type,
-                                                       const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-                                                       void *user_data)
+VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_message_processor(vk::DebugUtilsMessageSeverityFlagBitsEXT message_severity,
+                                                         vk::DebugUtilsMessageTypeFlagsEXT message_type,
+                                                         const vk::DebugUtilsMessengerCallbackDataEXT *callback_data,
+                                                         void *user_data)
 {
-    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    if (message_severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning)
     {
         std::ostringstream oss;
         oss << std::endl
@@ -437,7 +429,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << std::endl;
         std::cout << oss.str();
     }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT && 1 == 2)
+    else if (message_severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose && (1 == 2)) // skip verbose messages
     {
         // Disabled by the impossible statement
         std::ostringstream oss;
@@ -448,7 +440,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << std::endl;
         std::cout << oss.str();
     }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    else if (message_severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
     {
         std::ostringstream oss;
         oss << std::endl
@@ -458,7 +450,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << std::endl;
         std::cout << oss.str();
     }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+    else if (message_severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)
     {
         std::ostringstream oss;
         oss << std::endl
@@ -467,7 +459,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << callback_data->pMessage << std::endl
             << std::endl;
     }
-    return VK_FALSE;
+    return false;
 }
 
 std::vector<char> mv::MWindow::read_file(std::string filename)
@@ -525,147 +517,139 @@ std::vector<char> mv::MWindow::read_file(std::string filename)
 
 VkShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code)
 {
-    VkShaderModule module;
-
-    VkShaderModuleCreateInfo module_info{};
-    module_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    module_info.pNext = nullptr;
-    module_info.flags = 0;
+    vk::ShaderModuleCreateInfo module_info;
     module_info.codeSize = code.size();
     module_info.pCode = reinterpret_cast<const uint32_t *>(code.data());
 
-    if (vkCreateShaderModule(m_device, &module_info, nullptr, &module) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create shader module!");
-    }
+    vk::ShaderModule module = mv_device->logical_device->createShaderModule(module_info);
 
     return module;
 }
 
-inline XEvent mv::MWindow::create_event(const char *event_type)
-{
-    XEvent cev;
+// inline XEvent mv::MWindow::create_event(const char *event_type)
+// {
+//     XEvent cev;
 
-    cev.xclient.type = ClientMessage;
-    cev.xclient.window = window;
-    cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
-    cev.xclient.format = 32;
-    cev.xclient.data.l[0] = XInternAtom(display, event_type, false);
-    cev.xclient.data.l[1] = CurrentTime;
+//     cev.xclient.type = ClientMessage;
+//     cev.xclient.window = window;
+//     cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
+//     cev.xclient.format = 32;
+//     cev.xclient.data.l[0] = XInternAtom(display, event_type, false);
+//     cev.xclient.data.l[1] = CurrentTime;
 
-    return cev;
-}
+//     return cev;
+// }
 
-void mv::MWindow::handle_x_event(void)
+void mv::MWindow::handle_x_event(xcb_generic_event_t *event)
 {
     // count time for processing events
-    XNextEvent(display, &event);
-    mv::keyboard::key mv_key = mv::keyboard::key::invalid;
+    // XNextEvent(display, &event);
+    // mv::keyboard::key mv_key = mv::keyboard::key::invalid;
 
-    // query if xinput
-    if (event.xcookie.type == GenericEvent && event.xcookie.extension == xinput_opcode)
-    {
-        // if raw motion, query pointer
-        XGetEventData(display, &event.xcookie);
+    // // query if xinput
+    // if (event.xcookie.type == GenericEvent && event.xcookie.extension == xinput_opcode)
+    // {
+    //     // if raw motion, query pointer
+    //     XGetEventData(display, &event.xcookie);
 
-        XGenericEventCookie *gen_cookie = &event.xcookie;
-        XIDeviceEvent *xi_device_evt = static_cast<XIDeviceEvent *>(gen_cookie->data);
-        // retrieve mouse deltas
-        if (event.xcookie.evtype == XI_RawMotion)
-        {
-            std::cout << "Delta x,y => " << xi_device_evt->event_x << ", " << xi_device_evt->event_y << "\n";
-            mouse->process_device_event(xi_device_evt);
-        }
-        XFreeEventData(display, &event.xcookie);
-    }
-    switch (event.type)
-    {
-    case LeaveNotify:
-    case FocusOut:
-        mouse->on_mouse_leave();
-        XUngrabPointer(display, CurrentTime);
-        break;
-    case MapNotify:
-    case EnterNotify:
-        mouse->on_mouse_enter();
-        // confine cursor to interior of window
-        // mouse released on focus out or cursor leaving window
-        XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
-        break;
-    case ButtonPress:
-        if (event.xbutton.button == Button1)
-        {
-            mouse->on_left_press(event.xbutton.x, event.xbutton.y);
-        }
-        else if (event.xbutton.button == Button2)
-        {
-            mouse->on_middle_press(event.xbutton.x, event.xbutton.y);
-        }
-        else if (event.xbutton.button == Button3)
-        {
-            mouse->on_right_press(event.xbutton.x, event.xbutton.y);
-        }
-        // Mouse wheel scroll up
-        else if (event.xbutton.button == Button4)
-        {
-            mouse->on_wheel_up(event.xbutton.x, event.xbutton.y);
-        }
-        // Mouse wheel scroll down
-        else if (event.xbutton.button == Button5)
-        {
-            mouse->on_wheel_down(event.xbutton.x, event.xbutton.y);
-        }
-        break;
-    case ButtonRelease:
-        if (event.xbutton.button == Button1)
-        {
-            mouse->on_left_release(event.xbutton.x, event.xbutton.y);
-        }
-        else if (event.xbutton.button == Button2)
-        {
-            mouse->on_middle_release(event.xbutton.x, event.xbutton.y);
-        }
-        else if (event.xbutton.button == Button3)
-        {
-            mouse->on_right_release(event.xbutton.x, event.xbutton.y);
-        }
-        break;
-    case KeyPress:
-        // try to convert to our mv::keyboard::key enum
-        mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
-        // check quit case
-        if (mv_key == mv::keyboard::key::escape)
-        {
-            XEvent q = create_event("WM_DELETE_WINDOW");
-            XSendEvent(display, window, false, ExposureMask, &q);
-        }
+    //     XGenericEventCookie *gen_cookie = &event.xcookie;
+    //     XIDeviceEvent *xi_device_evt = static_cast<XIDeviceEvent *>(gen_cookie->data);
+    //     // retrieve mouse deltas
+    //     if (event.xcookie.evtype == XI_RawMotion)
+    //     {
+    //         std::cout << "Delta x,y => " << xi_device_evt->event_x << ", " << xi_device_evt->event_y << "\n";
+    //         mouse->process_device_event(xi_device_evt);
+    //     }
+    //     XFreeEventData(display, &event.xcookie);
+    // }
+    // switch (event.type)
+    // {
+    // case LeaveNotify:
+    // case FocusOut:
+    //     mouse->on_mouse_leave();
+    //     XUngrabPointer(display, CurrentTime);
+    //     break;
+    // case MapNotify:
+    // case EnterNotify:
+    //     mouse->on_mouse_enter();
+    //     // confine cursor to interior of window
+    //     // mouse released on focus out or cursor leaving window
+    //     XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
+    //     break;
+    // case ButtonPress:
+    //     if (event.xbutton.button == Button1)
+    //     {
+    //         mouse->on_left_press(event.xbutton.x, event.xbutton.y);
+    //     }
+    //     else if (event.xbutton.button == Button2)
+    //     {
+    //         mouse->on_middle_press(event.xbutton.x, event.xbutton.y);
+    //     }
+    //     else if (event.xbutton.button == Button3)
+    //     {
+    //         mouse->on_right_press(event.xbutton.x, event.xbutton.y);
+    //     }
+    //     // Mouse wheel scroll up
+    //     else if (event.xbutton.button == Button4)
+    //     {
+    //         mouse->on_wheel_up(event.xbutton.x, event.xbutton.y);
+    //     }
+    //     // Mouse wheel scroll down
+    //     else if (event.xbutton.button == Button5)
+    //     {
+    //         mouse->on_wheel_down(event.xbutton.x, event.xbutton.y);
+    //     }
+    //     break;
+    // case ButtonRelease:
+    //     if (event.xbutton.button == Button1)
+    //     {
+    //         mouse->on_left_release(event.xbutton.x, event.xbutton.y);
+    //     }
+    //     else if (event.xbutton.button == Button2)
+    //     {
+    //         mouse->on_middle_release(event.xbutton.x, event.xbutton.y);
+    //     }
+    //     else if (event.xbutton.button == Button3)
+    //     {
+    //         mouse->on_right_release(event.xbutton.x, event.xbutton.y);
+    //     }
+    //     break;
+    // case KeyPress:
+    //     // try to convert to our mv::keyboard::key enum
+    //     mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
+    //     // check quit case
+    //     if (mv_key == mv::keyboard::key::escape)
+    //     {
+    //         XEvent q = create_event("WM_DELETE_WINDOW");
+    //         XSendEvent(display, window, false, ExposureMask, &q);
+    //     }
 
-        if (mv_key)
-        {
-            // send event only if not already signaled in key_states bitset
-            if (!kbd->is_keystate(mv_key))
-            {
-                kbd->on_key_press(mv_key);
-            }
-        }
-        break;
-    case KeyRelease:
-        mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
-        if (mv_key)
-        {
-            // x11 configured to not send repeat releases with xkb method in constructor
-            // so just process it
-            kbd->on_key_release(mv_key);
-        }
-        break;
-    case Expose:
-        break;
-    case ClientMessage:
-        std::cout << "[+] Exit requested" << std::endl;
-        running = false;
-        break;
-    default: // Unhandled events do nothing
-        break;
-    } // End of switch
+    //     if (mv_key)
+    //     {
+    //         // send event only if not already signaled in key_states bitset
+    //         if (!kbd->is_keystate(mv_key))
+    //         {
+    //             kbd->on_key_press(mv_key);
+    //         }
+    //     }
+    //     break;
+    // case KeyRelease:
+    //     mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
+    //     if (mv_key)
+    //     {
+    //         // x11 configured to not send repeat releases with xkb method in constructor
+    //         // so just process it
+    //         kbd->on_key_release(mv_key);
+    //     }
+    //     break;
+    // case Expose:
+    //     break;
+    // case ClientMessage:
+    //     std::cout << "[+] Exit requested" << std::endl;
+    //     running = false;
+    //     break;
+    // default: // Unhandled events do nothing
+    //     break;
+    // } // End of switch
     return;
 }

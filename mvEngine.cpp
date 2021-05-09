@@ -1,120 +1,114 @@
 #include "mvEngine.h"
 
-mv::Engine::Engine(int w, int h, const char *title)
-    : MWindow(w, h, title)
-{
-    return;
-}
+// void mv::Engine::cleanup_swapchain(void)
+// {
+//     // destroy command buffers
+//     destroy_command_buffers();
+//     // destroy framebuffers
+//     if (!frame_buffers.empty())
+//     {
+//         for (size_t i = 0; i < frame_buffers.size(); i++)
+//         {
+//             if (frame_buffers[i])
+//             {
+//                 vkDestroyFramebuffer(m_device, frame_buffers[i], nullptr);
+//                 frame_buffers[i] = nullptr;
+//             }
+//         }
+//     }
 
-void mv::Engine::cleanup_swapchain(void)
-{
-    // destroy command buffers
-    destroy_command_buffers();
-    // destroy framebuffers
-    if (!frame_buffers.empty())
-    {
-        for (size_t i = 0; i < frame_buffers.size(); i++)
-        {
-            if (frame_buffers[i])
-            {
-                vkDestroyFramebuffer(m_device, frame_buffers[i], nullptr);
-                frame_buffers[i] = nullptr;
-            }
-        }
-    }
+//     cleanup_depth_stencil();
 
-    cleanup_depth_stencil();
+//     // destroy pipelines
+//     if (pipeline_w_sampler)
+//     {
+//         vkDestroyPipeline(m_device, pipeline_w_sampler, nullptr);
+//         pipeline_w_sampler = nullptr;
+//     }
+//     if (pipeline_no_sampler)
+//     {
+//         vkDestroyPipeline(m_device, pipeline_no_sampler, nullptr);
+//         pipeline_no_sampler = nullptr;
+//     }
 
-    // destroy pipelines
-    if (pipeline_w_sampler)
-    {
-        vkDestroyPipeline(m_device, pipeline_w_sampler, nullptr);
-        pipeline_w_sampler = nullptr;
-    }
-    if (pipeline_no_sampler)
-    {
-        vkDestroyPipeline(m_device, pipeline_no_sampler, nullptr);
-        pipeline_no_sampler = nullptr;
-    }
+//     // pipeline cache
+//     if (m_pipeline_cache)
+//     {
+//         vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
+//         m_pipeline_cache = nullptr;
+//     }
 
-    // pipeline cache
-    if (m_pipeline_cache)
-    {
-        vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
-        m_pipeline_cache = nullptr;
-    }
+//     // pipeline layouts
+//     if (pipeline_layout_w_sampler)
+//     {
+//         vkDestroyPipelineLayout(m_device, pipeline_layout_w_sampler, nullptr);
+//         pipeline_layout_w_sampler = nullptr;
+//     }
+//     if (pipeline_layout_no_sampler)
+//     {
+//         vkDestroyPipelineLayout(m_device, pipeline_layout_no_sampler, nullptr);
+//         pipeline_layout_no_sampler = nullptr;
+//     }
 
-    // pipeline layouts
-    if (pipeline_layout_w_sampler)
-    {
-        vkDestroyPipelineLayout(m_device, pipeline_layout_w_sampler, nullptr);
-        pipeline_layout_w_sampler = nullptr;
-    }
-    if (pipeline_layout_no_sampler)
-    {
-        vkDestroyPipelineLayout(m_device, pipeline_layout_no_sampler, nullptr);
-        pipeline_layout_no_sampler = nullptr;
-    }
+//     // destroy render pass
+//     if (m_render_pass)
+//     {
+//         vkDestroyRenderPass(m_device, m_render_pass, nullptr);
+//         m_render_pass = nullptr;
+//     }
+//     // descriptors pool
+//     // if (descriptor_pool)
+//     // {
+//     //     vkDestroyDescriptorPool(m_device, descriptor_pool, nullptr);
+//     //     descriptor_pool = nullptr;
+//     // }
+//     // cleanup command pool
+//     if (m_command_pool)
+//     {
+//         vkDestroyCommandPool(m_device, m_command_pool, nullptr);
+//         m_command_pool = nullptr;
+//     }
 
-    // destroy render pass
-    if (m_render_pass)
-    {
-        vkDestroyRenderPass(m_device, m_render_pass, nullptr);
-        m_render_pass = nullptr;
-    }
-    // descriptors pool
-    // if (descriptor_pool)
-    // {
-    //     vkDestroyDescriptorPool(m_device, descriptor_pool, nullptr);
-    //     descriptor_pool = nullptr;
-    // }
-    // cleanup command pool
-    if (m_command_pool)
-    {
-        vkDestroyCommandPool(m_device, m_command_pool, nullptr);
-        m_command_pool = nullptr;
-    }
+//     // cleanup swapchain
+//     swapchain.cleanup(false);
 
-    // cleanup swapchain
-    swapchain.cleanup(false);
-
-    return;
-}
+//     return;
+// }
 
 // Allows swapchain to keep up with window resize
-void mv::Engine::recreate_swapchain(void)
-{
-    std::cout << "[+] recreating swapchain" << std::endl;
-    vkDeviceWaitIdle(m_device);
+// void mv::Engine::recreate_swapchain(void)
+// {
+//     std::cout << "[+] recreating swapchain" << std::endl;
+//     vkDeviceWaitIdle(m_device);
 
-    // Cleanup
-    cleanup_swapchain();
+//     // Cleanup
+//     cleanup_swapchain();
 
-    m_command_pool = device->create_command_pool(swapchain.queue_index);
+//     m_command_pool = device->create_command_pool(swapchain.queue_index);
 
-    // create swapchain
-    swapchain.create(&window_width, &window_height);
+//     // create swapchain
+//     swapchain.create(&window_width, &window_height);
 
-    // call after swapchain creation!!!
-    // needed for mouse delta calc when using from_center method
-    mouse->set_window_properties(window_width, window_height);
+//     // call after swapchain creation!!!
+//     // needed for mouse delta calc when using from_center method
+//     mouse->set_window_properties(window_width, window_height);
 
-    // create render pass
-    setup_render_pass();
+//     // create render pass
+//     setup_render_pass();
 
-    // create pipeline cache
-    create_pipeline_cache();
+//     // create pipeline cache
+//     create_pipeline_cache();
 
-    setup_depth_stencil();
+//     setup_depth_stencil();
 
-    // create pipeline layout
-    // create pipeline
-    prepare_pipeline();
-    // create framebuffers
-    setup_framebuffer();
-    // create command buffers
-    create_command_buffers();
-}
+//     // create pipeline layout
+//     // create pipeline
+//     prepare_pipeline();
+//     // create framebuffers
+//     setup_framebuffer();
+//     // create command buffers
+//     create_command_buffers();
+// }
 
 void mv::Engine::go(void)
 {
@@ -122,31 +116,32 @@ void mv::Engine::go(void)
     prepare();
 
     // Create descriptor pool allocator
-    descriptor_allocator = std::make_shared<Allocator>(device);
+    descriptor_allocator = std::make_shared<Allocator>(std::weak_ptr<mv::Device>(mv_device));
 
     // allocate pool
     descriptor_allocator->allocate_pool(2000);
 
     // create uniform buffer layout ( single mat4 object )
     descriptor_allocator->create_layout("uniform_layout",
-                                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                        vk::DescriptorType::eUniformBuffer,
                                         1,
-                                        VK_SHADER_STAGE_VERTEX_BIT,
+                                        vk::ShaderStageFlagBits::eVertex,
                                         0);
 
     // create texture sampler layout
     descriptor_allocator->create_layout("sampler_layout",
-                                        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                        vk::DescriptorType::eCombinedImageSampler,
                                         1,
-                                        VK_SHADER_STAGE_FRAGMENT_BIT,
+                                        vk::ShaderStageFlagBits::eFragment,
                                         0);
 
     // initialize model/object container
     // by default it contains uniform buffer for view & projection matrices
-    collection_handler = std::make_unique<Collection>(device, descriptor_allocator);
+    collection_handler = std::make_unique<Collection>(std::weak_ptr<mv::Device>(mv_device),
+                                                      std::weak_ptr<mv::Allocator>(descriptor_allocator));
 
     // get uniform layout to create descriptors for view & projection matrix ubos
-    VkDescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
+    vk::DescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
 
     // allocate & update descriptor set for view uniform buffer
     descriptor_allocator->allocate_set(uniform_layout,
@@ -212,7 +207,7 @@ void mv::Engine::go(void)
     bool added = false;
 
     fps.startTimer();
-    __attribute__((unused)) int fps_counter = 0;
+    [[maybe_unused]] int fps_counter = 0;
 
     using chrono = std::chrono::high_resolution_clock;
 
@@ -226,9 +221,9 @@ void mv::Engine::go(void)
         start_time = chrono::now();
         accumulated += std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time);
 
-        while (XPending(display))
+        while (xcb_generic_event_t *evt = xcb_poll_for_event(xcb_conn.get()))
         {
-            handle_x_event();
+            handle_x_event(evt);
         }
 
         while (accumulated >= timestep)
@@ -255,14 +250,14 @@ void mv::Engine::go(void)
                 if (mouse_event.type == mv::mouse::event::etype::r_down &&
                     !mouse->is_dragging)
                 {
-                    XDefineCursor(display, window, mouse->hidden_cursor);
+                    // XDefineCursor(display, window, mouse->hidden_cursor);
                     mouse->start_drag(camera->orbit_angle, camera->pitch);
                 }
                 // end drag
                 if (mouse_event.type == mv::mouse::event::etype::r_release &&
                     mouse->is_dragging)
                 {
-                    XUndefineCursor(display, window);
+                    // XUndefineCursor(display, window);
                     camera->realign_orbit();
                     mouse->end_drag();
                 }
@@ -294,8 +289,8 @@ void mv::Engine::go(void)
                     mouse->stored_orbit = camera->orbit_angle;
                     mouse->stored_pitch = camera->pitch;
                     // hide pointer & warp to drag start
-                    XIWarpPointer(display, mouse->deviceid, None, window, 0, 0, 0, 0, mouse->drag_startx, mouse->drag_starty);
-                    XFlush(display);
+                    // XIWarpPointer(display, mouse->deviceid, None, window, 0, 0, 0, 0, mouse->drag_startx, mouse->drag_starty);
+                    // XFlush(display);
                     mouse->clear();
                     camera->target->rotate_to_face(camera->orbit_angle);
                 }
@@ -414,63 +409,41 @@ void mv::Engine::go(void)
     return;
 }
 
-void mv::Engine::create_descriptor_layout(VkDescriptorType type, uint32_t count, VkPipelineStageFlags stage_flags, uint32_t binding, VkDescriptorSetLayout &layout)
-{
-    VkDescriptorSetLayoutBinding bind_info = {};
-    bind_info.binding = binding;
-    bind_info.descriptorType = type;
-    bind_info.descriptorCount = count;
-    bind_info.stageFlags = stage_flags;
-
-    VkDescriptorSetLayoutCreateInfo layout_info = {};
-    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layout_info.bindingCount = 1;
-    layout_info.pBindings = &bind_info;
-
-    // layout for model matrix
-    if (vkCreateDescriptorSetLayout(device->device, &layout_info, nullptr, &layout) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create descriptor set layout");
-    }
-}
-
 void mv::Engine::prepare_pipeline(void)
 {
-    VkDescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
-    VkDescriptorSetLayout sampler_layout = descriptor_allocator->get_layout("sampler_layout");
+    vk::DescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
+    vk::DescriptorSetLayout sampler_layout = descriptor_allocator->get_layout("sampler_layout");
 
-    std::vector<VkDescriptorSetLayout> layout_w_sampler = {uniform_layout, uniform_layout, uniform_layout, sampler_layout};
-    std::vector<VkDescriptorSetLayout> layout_no_sampler = {uniform_layout, uniform_layout, uniform_layout};
-    //std::vector<VkDescriptorSetLayout> layouts = {uniform_layout, uniform_layout, uniform_layout};
-    VkPipelineLayoutCreateInfo w_sampler_info = {};
-    w_sampler_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    w_sampler_info.pNext = nullptr;
-    w_sampler_info.flags = 0;
+    std::vector<vk::DescriptorSetLayout> layout_w_sampler = {uniform_layout,
+                                                             uniform_layout,
+                                                             uniform_layout,
+                                                             sampler_layout};
+    std::vector<vk::DescriptorSetLayout> layout_no_sampler = {uniform_layout,
+                                                              uniform_layout,
+                                                              uniform_layout};
+
+    // Pipeline for models with textures
+    vk::PipelineLayoutCreateInfo w_sampler_info;
     w_sampler_info.setLayoutCount = static_cast<uint32_t>(layout_w_sampler.size());
     w_sampler_info.pSetLayouts = layout_w_sampler.data();
 
-    if (vkCreatePipelineLayout(device->device, &w_sampler_info, nullptr, &pipeline_layout_w_sampler) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create pipeline layout with sampler");
-    }
-
-    VkPipelineLayoutCreateInfo no_sampler_info = {};
-    no_sampler_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    no_sampler_info.pNext = nullptr;
-    no_sampler_info.flags = 0;
+    // Pipeline with no textures
+    vk::PipelineLayoutCreateInfo no_sampler_info;
     no_sampler_info.setLayoutCount = static_cast<uint32_t>(layout_no_sampler.size());
     no_sampler_info.pSetLayouts = layout_no_sampler.data();
 
-    if (vkCreatePipelineLayout(device->device, &no_sampler_info, nullptr, &pipeline_layout_no_sampler) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create pipeline layout with no sampler");
-    }
+    pipeline_layouts->insert(
+        std::pair<std::string, vk::PipelineLayout>("sampler",
+                                                   mv_device->logical_device->createPipelineLayout(w_sampler_info)));
+
+    pipeline_layouts->insert(
+        std::pair<std::string, vk::PipelineLayout>("no_sampler",
+                                                   mv_device->logical_device->createPipelineLayout(no_sampler_info)));
 
     auto binding_description = Vertex::get_binding_description();
     auto attribute_description = Vertex::get_attribute_descriptions();
 
-    VkPipelineVertexInputStateCreateInfo vi_state = {};
-    vi_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vk::PipelineVertexInputStateCreateInfo vi_state;
     vi_state.vertexBindingDescriptionCount = 1;
     vi_state.pVertexBindingDescriptions = &binding_description;
     vi_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());

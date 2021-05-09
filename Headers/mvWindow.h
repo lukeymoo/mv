@@ -28,7 +28,6 @@
 #include "mvMouse.h"
 #include "mvDevice.h"
 #include "mvSwap.h"
-#include "mvInit.h"
 #include "mvTimer.h"
 
 const size_t MAX_IN_FLIGHT = 3;
@@ -114,9 +113,9 @@ namespace mv
         ~MWindow()
         {
             // ensure gpu not using any resources
-            if (logical_device)
+            if (mv_device->logical_device)
             {
-                logical_device->waitIdle();
+                mv_device->logical_device->waitIdle();
             }
 
             // swapchain related resource cleanup
@@ -127,7 +126,7 @@ namespace mv
             {
                 if (!command_buffers->empty())
                 {
-                    logical_device->freeCommandBuffers(*command_pool, *command_buffers);
+                    mv_device->logical_device->freeCommandBuffers(*command_pool, *command_buffers);
                 }
                 command_buffers.reset();
             }
@@ -139,7 +138,7 @@ namespace mv
                 {
                     if (fence)
                     {
-                        logical_device->destroyFence(fence, nullptr);
+                        mv_device->logical_device->destroyFence(fence, nullptr);
                     }
                 }
                 in_flight_fences.reset();
@@ -148,15 +147,15 @@ namespace mv
             if (semaphores)
             {
                 if (semaphores->present_complete)
-                    logical_device->destroySemaphore(semaphores->present_complete, nullptr);
+                    mv_device->logical_device->destroySemaphore(semaphores->present_complete, nullptr);
                 if (semaphores->render_complete)
-                    logical_device->destroySemaphore(semaphores->render_complete, nullptr);
+                    mv_device->logical_device->destroySemaphore(semaphores->render_complete, nullptr);
                 semaphores.reset();
             }
 
             if (render_pass)
             {
-                logical_device->destroyRenderPass(*render_pass, nullptr);
+                mv_device->logical_device->destroyRenderPass(*render_pass, nullptr);
                 render_pass.reset();
             }
 
@@ -168,7 +167,7 @@ namespace mv
                     {
                         if (buffer)
                         {
-                            logical_device->destroyFramebuffer(buffer, nullptr);
+                            mv_device->logical_device->destroyFramebuffer(buffer, nullptr);
                         }
                     }
                     frame_buffers.reset();
@@ -179,15 +178,15 @@ namespace mv
             {
                 if (depth_stencil->image)
                 {
-                    logical_device->destroyImage(depth_stencil->image, nullptr);
+                    mv_device->logical_device->destroyImage(depth_stencil->image, nullptr);
                 }
                 if (depth_stencil->view)
                 {
-                    logical_device->destroyImageView(depth_stencil->view, nullptr);
+                    mv_device->logical_device->destroyImageView(depth_stencil->view, nullptr);
                 }
                 if (depth_stencil->mem)
                 {
-                    logical_device->freeMemory(depth_stencil->mem, nullptr);
+                    mv_device->logical_device->freeMemory(depth_stencil->mem, nullptr);
                 }
                 depth_stencil.reset();
             }
@@ -214,11 +213,11 @@ namespace mv
         } // end destructor
 
         // delete copy operations
-        MWindow &operator=(const MWindow &) = delete;
         MWindow(const MWindow &) = delete;
+        MWindow &operator=(const MWindow &) = delete;
         // delete move operations
-        MWindow &operator=(MWindow &&) = delete;
         MWindow(MWindow &&) = delete;
+        MWindow &operator=(MWindow &&) = delete;
 
         void create_instance(void);
 
@@ -227,7 +226,7 @@ namespace mv
 
         // produces mouse/keyboard handler events
         // based on xcb events
-        void handle_x_event(void);
+        void handle_x_event(xcb_generic_event_t* event);
 
     protected:
         void init_vulkan(void);
@@ -237,7 +236,8 @@ namespace mv
         void create_synchronization_primitives(void);
         void setup_depth_stencil(void);
         void setup_render_pass(void);
-        void create_pipeline_cache(void);
+        // TODO re implement
+        // void create_pipeline_cache(void);
         void setup_framebuffer(void);
 
         void destroy_command_buffers(void);

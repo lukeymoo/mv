@@ -16,8 +16,8 @@ namespace mv
 
         mv::Buffer ubo_view;
         mv::Buffer ubo_projection;
-        VkDescriptorSet view_descriptor_set;
-        VkDescriptorSet proj_descriptor_set;
+        vk::DescriptorSet view_descriptor_set;
+        vk::DescriptorSet proj_descriptor_set;
     };
 
     struct Collection

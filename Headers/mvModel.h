@@ -1,7 +1,7 @@
 #ifndef HEADERS_MVMODEL_H_
 #define HEADERS_MVMODEL_H_
 
-#include <vulkan/vulkan.h>
+#include <vulkan/vulkan.hpp>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -31,7 +31,7 @@ namespace mv
         std::string type;
         std::string path;
         mv::Image mv_image;
-        VkDescriptorSet descriptor;
+        vk::DescriptorSet descriptor;
     };
 
     struct Object
@@ -42,8 +42,8 @@ namespace mv
             // uv, normals implemented as Vertex attributes
         } matrices;
 
-        VkDescriptorSet model_descriptor;
-        VkDescriptorSet texture_descriptor;
+        vk::DescriptorSet model_descriptor;
+        vk::DescriptorSet texture_descriptor;
         mv::Buffer uniform_buffer;
         glm::vec3 rotation;
         glm::vec3 position;
@@ -169,37 +169,36 @@ namespace mv
         glm::vec4 uv;
         glm::vec4 color;
 
-        static VkVertexInputBindingDescription get_binding_description()
+        static vk::VertexInputBindingDescription get_binding_description()
         {
-            VkVertexInputBindingDescription binding_description{};
+            vk::VertexInputBindingDescription binding_description;
             binding_description.binding = 0;
             binding_description.stride = sizeof(Vertex);
-            binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
+            binding_description.inputRate = vk::VertexInputRate::eVertex;
             return binding_description;
         }
 
-        static std::array<VkVertexInputAttributeDescription, 3> get_attribute_descriptions()
+        static std::array<vk::VertexInputAttributeDescription, 3> get_attribute_descriptions()
         {
             // Temp container to be returned
-            std::array<VkVertexInputAttributeDescription, 3> attribute_descriptions{};
+            std::array<vk::VertexInputAttributeDescription, 3> attribute_descriptions{};
 
             // position
             attribute_descriptions[0].binding = 0;
             attribute_descriptions[0].location = 0;
-            attribute_descriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            attribute_descriptions[0].format = vk::Format::eR32G32B32A32Sfloat;
             attribute_descriptions[0].offset = offsetof(Vertex, position);
 
             // texture uv coordinates
             attribute_descriptions[1].binding = 0;
             attribute_descriptions[1].location = 1;
-            attribute_descriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            attribute_descriptions[1].format = vk::Format::eR32G32B32A32Sfloat;
             attribute_descriptions[1].offset = offsetof(Vertex, uv);
 
             // color
             attribute_descriptions[2].binding = 0;
             attribute_descriptions[2].location = 2;
-            attribute_descriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            attribute_descriptions[2].format = vk::Format::eR32G32B32A32Sfloat;
             attribute_descriptions[2].offset = offsetof(Vertex, color);
 
             return attribute_descriptions;
@@ -209,6 +208,7 @@ namespace mv
     // Collection of data that makes up the various components of a model
     struct _Mesh
     {
+        // we should remove this data after everything is loaded
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
         std::vector<_Texture> textures;
@@ -217,48 +217,55 @@ namespace mv
         // Consider linking all related mesh objects into a single buffer.
         // Will use offsets to access data relevant to particular mesh the
         // application is drawing
-        VkBuffer vertex_buffer = nullptr;
-        VkBuffer index_buffer = nullptr;
+        vk::Buffer vertex_buffer;
+        vk::Buffer index_buffer;
 
-        VkDeviceMemory vertex_memory = nullptr;
-        VkDeviceMemory index_memory = nullptr;
+        vk::DeviceMemory vertex_memory;
+        vk::DeviceMemory index_memory;
 
-        void bindBuffers(VkCommandBuffer cmdbuffer)
+        void bindBuffers(vk::CommandBuffer &command_buffer)
         {
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vertex_buffer, offsets);
-            vkCmdBindIndexBuffer(cmdbuffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
+            vk::DeviceSize offsets = 0;
+            command_buffer.bindVertexBuffers(0, 1, &vertex_buffer, &offsets);
+            command_buffer.bindIndexBuffer(index_buffer, 0, vk::IndexType::eUint32);
             return;
         }
 
-        void cleanup(mv::Device *device)
+        void cleanup(std::weak_ptr<mv::Device> mv_device)
         {
+            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            if (!m_dvc)
+                throw std::runtime_error("Passed invalid mv device handler :: model handler");
+
             if (vertex_buffer)
             {
-                vkDestroyBuffer(device->device, vertex_buffer, nullptr);
+                m_dvc->logical_device->destroyBuffer(vertex_buffer);
                 vertex_buffer = nullptr;
             }
             if (vertex_memory)
             {
-                vkFreeMemory(device->device, vertex_memory, nullptr);
+                m_dvc->logical_device->freeMemory(vertex_memory);
                 vertex_memory = nullptr;
             }
 
             if (index_buffer)
             {
-                vkDestroyBuffer(device->device, index_buffer, nullptr);
+                m_dvc->logical_device->destroyBuffer(index_buffer);
                 index_buffer = nullptr;
             }
             if (index_memory)
             {
-                vkFreeMemory(device->device, index_memory, nullptr);
+                m_dvc->logical_device->freeMemory(index_memory);
                 index_memory = nullptr;
             }
 
             // cleanup textures
-            for (auto &texture : textures)
+            if (!textures.empty())
             {
-                texture.mv_image.destroy();
+                for (auto &texture : textures)
+                {
+                    texture.mv_image.destroy();
+                }
             }
             return;
         }
@@ -267,38 +274,50 @@ namespace mv
     class Model
     {
     public:
-        // objects of this model type
-        std::vector<std::unique_ptr<mv::Object>> objects;
+        // remove copy operations
+        Model(const Model &) = delete;
+        Model &operator=(const Model &) = delete;
 
-    public:
-        Model(){};
-        // Resize with copy was losing data
-        Model(const Model &m) = delete;
-        // Prefer move operations over copy
+        // allow move operations
         Model(Model &&) = default;
-        ~Model(void) {}
+        Model &operator=(Model &&) = default;
 
-        mv::Device *device;
-        // mv::Image image;
-        bool has_texture = false; // do not assume model has texture
-        VkDescriptorPool descriptor_pool = nullptr;
+        Model(void) {}
+        ~Model() {}
+
         std::string model_name;
+        bool has_texture = false; // do not assume model has texture
 
-        /*
-            Assimp Loader Params
-        */
-        std::vector<_Mesh> _meshes;
-        std::vector<_Texture> _loaded_textures;
+        // owns
+        std::unique_ptr<std::vector<mv::Object>> objects;
+        std::unique_ptr<std::vector<_Mesh>> _meshes;
+        std::unique_ptr<std::vector<_Texture>> _loaded_textures;
 
-        void _load(mv::Device *dvc, std::shared_ptr<mv::Allocator> descriptor_allocator, const char *filename)
+        // references
+        std::weak_ptr<mv::Device> mv_device;
+        std::weak_ptr<mv::Allocator> descriptor_allocator;
+
+        void _load(std::weak_ptr<mv::Device> mv_device,
+                   std::weak_ptr<mv::Allocator> descriptor_allocator,
+                   const char *filename)
         {
-            assert(dvc);
-            device = dvc;
+            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            std::shared_ptr<mv::Allocator> m_alloc = std::make_shared<mv::Allocator>(descriptor_allocator);
+
+            if (!m_dvc)
+                throw std::runtime_error("Invalid mv device handle passed :: model handler");
+
+            if (!m_alloc)
+                throw std::runtime_error("Invalid descriptor allocator handle passed :: model handler");
+
+            this->mv_device = mv_device;
+            this->descriptor_allocator = descriptor_allocator;
 
             model_name = filename;
 
             Assimp::Importer importer;
-            const aiScene *ai_scene = importer.ReadFile(filename, aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs);
+            const aiScene *ai_scene = importer.ReadFile(filename,
+                                                        aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs);
 
             if (!ai_scene)
             {
@@ -309,41 +328,43 @@ namespace mv
             std::cout << "[+] Processing model => " << filename << std::endl;
             _process_node(ai_scene->mRootNode, ai_scene);
 
-            std::cout << "\tMeshes loaded => " << _meshes.size() << std::endl;
+            std::cout << "\tMeshes loaded => " << _meshes->size() << std::endl;
 
             // Create buffer for each mesh
-            for (auto &mesh : _meshes)
+            for (auto &mesh : *_meshes)
             {
                 // if the model required textures
                 // create the descriptor sets for them
                 if (!mesh.textures.empty())
                 {
-                    std::cout << "inside model loader" << std::endl;
                     has_texture = true;
-                    VkDescriptorSetLayout sampler_layout = descriptor_allocator->get_layout("sampler_layout");
+
+                    vk::DescriptorSetLayout sampler_layout = m_alloc->get_layout("sampler_layout");
                     for (auto &texture : mesh.textures)
                     {
-                        descriptor_allocator->allocate_set(descriptor_allocator->get(),
-                                                           sampler_layout,
-                                                           texture.descriptor);
-                        descriptor_allocator->update_set(descriptor_allocator->get(),
-                                                         texture.mv_image.descriptor,
-                                                         texture.descriptor, 0);
+                        m_alloc->allocate_set(m_alloc->get(),
+                                              sampler_layout,
+                                              texture.descriptor);
+                        m_alloc->update_set(m_alloc->get(),
+                                            texture.mv_image.descriptor,
+                                            texture.descriptor, 0);
                     }
                 }
                 std::cout << std::endl
                           << "[+] Creating buffers for mesh => " << &mesh << std::endl;
                 // create vertex buffer and load vertices
-                device->create_buffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                      mesh.vertices.size() * sizeof(Vertex),
-                                      &mesh.vertex_buffer,
-                                      &mesh.vertex_memory,
-                                      mesh.vertices.data());
+                m_dvc->create_buffer(vk::BufferUsageFlagBits::eVertexBuffer,
+                                     vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
+                                     mesh.vertices.size() * sizeof(Vertex),
+                                     &mesh.vertex_buffer,
+                                     &mesh.vertex_memory,
+                                     mesh.vertices.data());
+
+                
 
                 // create index buffer, load indices data into it
-                device->create_buffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                m_dvc->create_buffer(vk::BufferUsageFlagBits::eIndexBuffer,
+                                      vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
                                       mesh.indices.size() * sizeof(uint32_t),
                                       &mesh.index_buffer,
                                       &mesh.index_memory,
@@ -359,7 +380,7 @@ namespace mv
             {
                 aiMesh *l_mesh = scene->mMeshes[node->mMeshes[i]];
                 std::cout << "\t\tLoading mesh" << std::endl;
-                _meshes.push_back(_process_mesh(l_mesh, scene));
+                _meshes->push_back(_process_mesh(l_mesh, scene));
             }
 
             // recall function for children of this node
@@ -438,11 +459,11 @@ namespace mv
                 mat->GetTexture(type, i, &t_name);
                 bool skip = false;
                 // check if this material texture has already been loaded
-                for (uint32_t j = 0; j < _loaded_textures.size(); j++)
+                for (uint32_t j = 0; j < _loaded_textures->size(); j++)
                 {
-                    if (strcmp(_loaded_textures[j].path.c_str(), t_name.C_Str()) == 0)
+                    if (strcmp(_loaded_textures->at(j).path.c_str(), t_name.C_Str()) == 0)
                     {
-                        textures.push_back(_loaded_textures[j]);
+                        textures.push_back(_loaded_textures->at(j));
                         skip = true;
                         break;
                     }
@@ -460,18 +481,18 @@ namespace mv
 
                     tex.path = filename;
                     tex.type = type;
-                    mv::Image::ImageCreateInfo create_info = {};
-                    create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
-                    create_info.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-                    create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-                    create_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                    mv::Image::ImageCreateInfo create_info;
+                    create_info.format = vk::Format::eR8G8B8A8Srgb;
+                    create_info.memory_properties = vk::MemoryPropertyFlagBits::eDeviceLocal;
+                    create_info.tiling = vk::ImageTiling::eOptimal;
+                    create_info.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
 
                     // load texture
-                    tex.mv_image.create(device, create_info, filename);
+                    tex.mv_image.create(mv_device, create_info, filename);
                     // add to vector for return
                     textures.push_back(tex);
                     // add to loaded_textures to save processing time in event of duplicate
-                    _loaded_textures.push_back(tex);
+                    _loaded_textures->push_back(tex);
                 }
             }
             std::cout << "\t\t\tLoaded => " << textures.size() << " material textures" << std::endl;
