@@ -36,12 +36,13 @@ namespace mv
 
     struct Object
     {
-        Object(glm::vec3 position, glm::vec3 rotation){
+        Object(glm::vec3 position, glm::vec3 rotation)
+        {
             this->position = position;
             this->rotation = rotation;
         }
-        Object(void){}
-        ~Object(){}
+        Object(void) {}
+        ~Object() {}
         struct Matrices
         {
             alignas(16) glm::mat4 model;
@@ -239,7 +240,7 @@ namespace mv
 
         void cleanup(std::weak_ptr<mv::Device> mv_device)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
             if (!m_dvc)
                 throw std::runtime_error("Passed invalid mv device handler :: model handler");
 
@@ -288,7 +289,16 @@ namespace mv
         Model(Model &&) = default;
         Model &operator=(Model &&) = default;
 
-        Model(void) {}
+        Model(void)
+        {
+            std::cout << "[+] Model container created\n";
+            objects = std::make_unique<std::vector<mv::Object>>();
+            _meshes = std::make_unique<std::vector<_Mesh>>();
+            _loaded_textures = std::make_unique<std::vector<_Texture>>();
+            std::cout << "\t-- Objects container size => " << objects->size() << "\n";
+            std::cout << "\t-- _meshes container size => " << _meshes->size() << "\n";
+            std::cout << "\t-- _loaded_textures container size => " << _loaded_textures->size() << "\n";
+        }
         ~Model() {}
 
         std::string model_name;
@@ -307,8 +317,8 @@ namespace mv
                    std::weak_ptr<mv::Allocator> descriptor_allocator,
                    const char *filename)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
-            std::shared_ptr<mv::Allocator> m_alloc = std::make_shared<mv::Allocator>(descriptor_allocator);
+            auto m_dvc = mv_device.lock();
+            auto m_alloc = descriptor_allocator.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Invalid mv device handle passed :: model handler");
@@ -331,10 +341,7 @@ namespace mv
             }
 
             // process model data
-            std::cout << "[+] Processing model => " << filename << std::endl;
             _process_node(ai_scene->mRootNode, ai_scene);
-
-            std::cout << "\tMeshes loaded => " << _meshes->size() << std::endl;
 
             // Create buffer for each mesh
             for (auto &mesh : *_meshes)
@@ -356,8 +363,6 @@ namespace mv
                                             texture.descriptor, 0);
                     }
                 }
-                std::cout << std::endl
-                          << "[+] Creating buffers for mesh => " << &mesh << std::endl;
                 // create vertex buffer and load vertices
                 m_dvc->create_buffer(vk::BufferUsageFlagBits::eVertexBuffer,
                                      vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
@@ -366,17 +371,19 @@ namespace mv
                                      &mesh.vertex_memory,
                                      mesh.vertices.data());
 
-                
-
                 // create index buffer, load indices data into it
                 m_dvc->create_buffer(vk::BufferUsageFlagBits::eIndexBuffer,
-                                      vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
-                                      mesh.indices.size() * sizeof(uint32_t),
-                                      &mesh.index_buffer,
-                                      &mesh.index_memory,
-                                      mesh.indices.data());
+                                     vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
+                                     mesh.indices.size() * sizeof(uint32_t),
+                                     &mesh.index_buffer,
+                                     &mesh.index_memory,
+                                     mesh.indices.data());
             }
 
+            std::cout << "\t :: Loaded model => " << filename << "\n";
+            std::cout << "\t\t Meshes => " << _meshes->size() << "\n";
+            std::cout << "\t\t Textures => " << _loaded_textures->size() << "\n";
+            std::cout << "\t\t Default object count => " << objects->size() << "\n";
             return;
         }
 
@@ -385,7 +392,6 @@ namespace mv
             for (uint32_t i = 0; i < node->mNumMeshes; i++)
             {
                 aiMesh *l_mesh = scene->mMeshes[node->mMeshes[i]];
-                std::cout << "\t\tLoading mesh" << std::endl;
                 _meshes->push_back(_process_mesh(l_mesh, scene));
             }
 
@@ -399,7 +405,6 @@ namespace mv
 
         _Mesh _process_mesh(aiMesh *mesh, const aiScene *scene)
         {
-            std::cout << "\t\tProcessing mesh..." << std::endl;
             std::vector<Vertex> verts;
             std::vector<uint32_t> inds;
             std::vector<_Texture> texs;
@@ -445,18 +450,20 @@ namespace mv
             {
                 aiMaterial *mat = scene->mMaterials[mesh->mMaterialIndex];
                 std::vector<_Texture> diffuse_maps = _load_material_textures(mat, aiTextureType_DIFFUSE, "texture_diffuse", scene);
-                texs.insert(texs.end(), diffuse_maps.begin(), diffuse_maps.end());
+                texs.insert(texs.end(),
+                            std::make_move_iterator(diffuse_maps.begin()),
+                            std::make_move_iterator(diffuse_maps.end()));
             }
 
             // construct _Mesh then return
             _Mesh m;
             m.vertices = verts;
             m.indices = inds;
-            m.textures = texs;
+            m.textures = std::move(texs);
             return m;
         }
 
-        std::vector<_Texture> _load_material_textures(aiMaterial *mat, aiTextureType type, std::string type_name, const aiScene *scene)
+        std::vector<_Texture> _load_material_textures(aiMaterial *mat, aiTextureType type, [[maybe_unused]] std::string type_name, [[maybe_unused]] const aiScene *scene)
         {
             std::vector<_Texture> textures;
             for (uint32_t i = 0; i < mat->GetTextureCount(type); i++)
@@ -469,7 +476,7 @@ namespace mv
                 {
                     if (strcmp(_loaded_textures->at(j).path.c_str(), t_name.C_Str()) == 0)
                     {
-                        textures.push_back(_loaded_textures->at(j));
+                        textures.push_back(std::move(_loaded_textures->at(j)));
                         skip = true;
                         break;
                     }
@@ -496,12 +503,11 @@ namespace mv
                     // load texture
                     tex.mv_image.create(mv_device, create_info, filename);
                     // add to vector for return
-                    textures.push_back(tex);
+                    textures.push_back(std::move(tex));
                     // add to loaded_textures to save processing time in event of duplicate
-                    _loaded_textures->push_back(tex);
+                    _loaded_textures->push_back(std::move(tex));
                 }
             }
-            std::cout << "\t\t\tLoaded => " << textures.size() << " material textures" << std::endl;
             return textures;
         }
     };

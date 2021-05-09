@@ -10,6 +10,11 @@ namespace mv
 
     struct Buffer
     {
+        Buffer(){
+            buffer = std::make_shared<vk::Buffer>();
+            memory = std::make_shared<vk::DeviceMemory>();
+        }
+        ~Buffer(){}
         // owns
         std::shared_ptr<vk::Buffer> buffer;
         std::shared_ptr<vk::DeviceMemory> memory;

@@ -2,28 +2,20 @@
 
 #include <iostream>
 
-int main(int argc, char *argv[])
+int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
 {
   try
   {
     mv::Engine wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
     if (wnd.good_init)
     {
-      // wnd.go();
+      wnd.go();
     }
     else
     {
       std::cout << std::endl
                 << "\t[-] Bad initialization, program ending!" << std::endl;
     }
-  }
-  catch (mv::BException &e)
-  {
-    std::cout << std::endl
-              << ":: Moogine Engine Exception :: From -> " << e.get_type() << std::endl
-              << e.get_error_description() << std::endl
-              << std::endl;
-    std::exit(-1);
   }
   catch (std::exception &e)
   {

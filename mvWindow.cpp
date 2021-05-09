@@ -9,7 +9,7 @@ void mv::MWindow::prepare(void)
     // passes... vulkan handles to swapchain handler
     init_vulkan();
 
-    swapchain->init(std::weak_ptr<xcb_connection_t>(xcb_conn),
+    swapchain->init(std::weak_ptr<xcb_connection_t *>(xcb_conn),
                     std::weak_ptr<xcb_window_t>(xcb_win));
     command_pool = std::make_shared<vk::CommandPool>(mv_device->create_command_pool(swapchain->graphics_index));
     swapchain->create(window_width, window_height);
@@ -33,16 +33,21 @@ void mv::MWindow::init_vulkan(void)
         throw std::runtime_error("No physical devices found");
 
     // Select device
-    *physical_device = physical_devices.at(0);
+    physical_device = std::make_shared<vk::PhysicalDevice>(physical_devices.at(0));
 
     //get device info
     physical_properties = physical_device->getProperties();
     physical_features = physical_device->getFeatures();
     physical_memory_properties = physical_device->getMemoryProperties();
 
+    std::vector<std::string> tmp;
+    for (const auto &l : requested_device_extensions)
+    {
+        tmp.push_back(l);
+    }
+
     // create logical device handler mv::Device
-    mv_device = std::make_shared<mv::Device>(std::weak_ptr<vk::PhysicalDevice>(physical_device),
-                                             requested_device_extensions);
+    mv_device = std::make_shared<mv::Device>(mv::Device(std::weak_ptr<vk::PhysicalDevice>(physical_device), tmp));
 
     // create logical device & graphics queue
     mv_device->create_logical_device();
@@ -52,7 +57,7 @@ void mv::MWindow::init_vulkan(void)
 
     swapchain->map(std::weak_ptr<vk::Instance>(instance),
                    std::weak_ptr<vk::PhysicalDevice>(physical_device),
-                   std::weak_ptr<vk::Device>(mv_device->logical_device));
+                   std::weak_ptr<mv::Device>(mv_device));
 
     // Create synchronization objects
     vk::SemaphoreCreateInfo semaphore_info;
@@ -105,13 +110,13 @@ void mv::MWindow::create_instance(void)
     for (auto &layer : requested_validation_layers)
     {
         std::cout << "\t[-] Requesting layer => " << layer << "\n";
-        req_layer.push_back(layer.c_str());
+        req_layer.push_back(layer);
     }
     std::vector<const char *> req_inst_ext;
     for (auto &ext : requested_instance_extensions)
     {
         std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
-        req_inst_ext.push_back(ext.c_str());
+        req_inst_ext.push_back(ext);
     }
 
     vk::InstanceCreateInfo create_info;
@@ -127,7 +132,7 @@ void mv::MWindow::create_instance(void)
     for (auto &ext : requested_instance_extensions)
     {
         std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
-        req_inst_ext.push_back(ext.c_str());
+        req_inst_ext.push_back(ext);
     }
 
     vk::InstanceCreateInfo create_info = {};
@@ -344,7 +349,7 @@ void mv::MWindow::check_validation_support(void)
         bool match = false;
         for (const auto &layer : inst_layers)
         {
-            if (requested_layer == layer.layerName)
+            if (strcmp(requested_layer, layer.layerName) == 0)
             {
                 match = true;
                 break;
@@ -369,16 +374,6 @@ void mv::MWindow::check_validation_support(void)
     return;
 }
 
-void mv::MWindow::destroy_command_pool(void)
-{
-    if (command_pool)
-    {
-        mv_device->logical_device->destroyCommandPool(*command_pool);
-        command_pool.reset();
-    }
-    return;
-}
-
 void mv::MWindow::check_instance_ext(void)
 {
     std::vector<vk::ExtensionProperties> inst_extensions = vk::enumerateInstanceExtensionProperties();
@@ -393,7 +388,7 @@ void mv::MWindow::check_instance_ext(void)
         bool match = false;
         for (const auto &available_extension : inst_extensions)
         {
-            if (requested_extension == available_extension.extensionName)
+            if (strcmp(requested_extension, available_extension.extensionName) == 0)
             {
                 match = true;
                 break;
@@ -414,12 +409,12 @@ void mv::MWindow::check_instance_ext(void)
     return;
 }
 
-VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_message_processor(vk::DebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                                                         vk::DebugUtilsMessageTypeFlagsEXT message_type,
-                                                         const vk::DebugUtilsMessengerCallbackDataEXT *callback_data,
-                                                         void *user_data)
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+                                                       [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT message_type,
+                                                       const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+                                                       [[maybe_unused]] void *user_data)
 {
-    if (message_severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning)
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
         std::ostringstream oss;
         oss << std::endl
@@ -429,7 +424,7 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_message_processor(vk::DebugUtilsMessageSe
             << std::endl;
         std::cout << oss.str();
     }
-    else if (message_severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose && (1 == 2)) // skip verbose messages
+    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT && (1 == 2)) // skip verbose messages
     {
         // Disabled by the impossible statement
         std::ostringstream oss;
@@ -440,7 +435,7 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_message_processor(vk::DebugUtilsMessageSe
             << std::endl;
         std::cout << oss.str();
     }
-    else if (message_severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
+    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
     {
         std::ostringstream oss;
         oss << std::endl
@@ -450,7 +445,7 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_message_processor(vk::DebugUtilsMessageSe
             << std::endl;
         std::cout << oss.str();
     }
-    else if (message_severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)
+    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
     {
         std::ostringstream oss;
         oss << std::endl
@@ -515,7 +510,7 @@ std::vector<char> mv::MWindow::read_file(std::string filename)
     return buffer;
 }
 
-VkShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code)
+vk::ShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code)
 {
     vk::ShaderModuleCreateInfo module_info;
     module_info.codeSize = code.size();
@@ -542,6 +537,28 @@ VkShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code)
 
 void mv::MWindow::handle_x_event(xcb_generic_event_t *event)
 {
+    switch (event->response_type & 0x7f)
+    {
+    case XCB_CLIENT_MESSAGE:
+        if ((*(xcb_client_message_event_t *)event).data.data32[0] == (*delete_reply).atom)
+        {
+            running = false;
+            free(delete_reply);
+        }
+        break;
+    case XCB_BUTTON_PRESS:
+        std::cout << "button press\n";
+        break;
+    case XCB_BUTTON_RELEASE:
+        std::cout << "button release\n";
+        break;
+    case XCB_KEY_PRESS:
+        std::cout << "key press\n";
+        break;
+    case XCB_KEY_RELEASE:
+        std::cout << "key release\n";
+        break;
+    }
     // count time for processing events
     // XNextEvent(display, &event);
     // mv::keyboard::key mv_key = mv::keyboard::key::invalid;

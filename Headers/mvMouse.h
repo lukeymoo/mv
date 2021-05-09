@@ -12,6 +12,7 @@
 #include <xcb/xcb.h>
 
 #include <queue>
+#include <memory>
 #include <stdexcept>
 
 namespace mv
@@ -101,8 +102,19 @@ namespace mv
         mouse(mouse &&) = default;
         mouse &operator=(mouse &&) = default;
 
-        mouse(std::shared_ptr<xcb_connection_t> xcb_conn, std::weak_ptr<xcb_window_t> xcb_win)
+        mouse(std::weak_ptr<xcb_connection_t*> xcb_conn, std::weak_ptr<xcb_window_t> xcb_win)
         {
+            // validate
+            auto conn_test = xcb_conn.lock();
+            auto win_test = xcb_win.lock();
+
+            if(!conn_test)
+                throw std::runtime_error("invalid xcb connection handle passed to mouse handler, initialization :: mouse handler");
+            if(!*conn_test)
+                throw std::runtime_error("invalid xcb connection handle passed to mouse handler, initialization :: mouse handler");
+            if(!win_test)
+                throw std::runtime_error("invalid xcb window handle passed to mouse handler, initialization :: mouse handler");
+
             this->xcb_conn = xcb_conn;
             this->xcb_win = xcb_win;
             // this->deviceid = deviceid;
@@ -143,7 +155,7 @@ namespace mv
         static constexpr int max_buffer_size = 16;
 
     private:
-        std::weak_ptr<xcb_connection_t> xcb_conn;
+        std::weak_ptr<xcb_connection_t*> xcb_conn;
         std::weak_ptr<xcb_window_t> xcb_win;
         int window_width = 0;
         int window_height = 0;

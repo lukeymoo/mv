@@ -29,15 +29,15 @@ namespace mv
         std::vector<std::string> model_names;
 
         // view & projection matrix objects
-        std::unique_ptr<mv::uniform_object> view_uniform = std::make_unique<mv::uniform_object>();
-        std::unique_ptr<mv::uniform_object> projection_uniform = std::make_unique<mv::uniform_object>();
+        std::unique_ptr<mv::uniform_object> view_uniform;
+        std::unique_ptr<mv::uniform_object> projection_uniform;
 
         Collection(std::weak_ptr<mv::Device> mv_device,
                    std::weak_ptr<mv::Allocator> descriptor_allocator)
         {
             // validate params
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
-            std::shared_ptr<mv::Allocator> m_alloc = std::make_shared<mv::Allocator>(descriptor_allocator);
+            auto m_dvc = mv_device.lock();
+            auto m_alloc = descriptor_allocator.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, initalization :: collection handler");
@@ -47,6 +47,10 @@ namespace mv
 
             this->mv_device = mv_device;
             this->descriptor_allocator = descriptor_allocator;
+
+            view_uniform = std::make_unique<mv::uniform_object>();
+            projection_uniform = std::make_unique<mv::uniform_object>();
+            models = std::make_unique<std::vector<mv::Model>>();
 
             // create uniform buffer for view matrix
             m_dvc->create_buffer(vk::BufferUsageFlagBits::eUniformBuffer,
@@ -72,6 +76,7 @@ namespace mv
             {
                 if (name.compare(filename) == 0) // if same
                 {
+                    std::cout << "[-] Skipping already loaded model name => " << filename << "\n";
                     already_loaded = true;
                     break;
                 }
@@ -79,6 +84,7 @@ namespace mv
 
             if (!already_loaded)
             {
+                std::cout << "[+] Loading model => " << filename << "\n";
                 // make space for new model
                 models->push_back(mv::Model());
                 // call model routine _load
@@ -93,8 +99,8 @@ namespace mv
         // creates object with specified model data
         void create_object(std::string model_name)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
-            std::shared_ptr<mv::Allocator> m_alloc = std::make_shared<mv::Allocator>(descriptor_allocator);
+            auto m_dvc = mv_device.lock();
+            auto m_alloc = descriptor_allocator.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, creating object :: collection handler");
@@ -109,15 +115,14 @@ namespace mv
             bool model_exist = false;
             bool model_index = 0;
 
-            auto find_model_name = [&](std::string name) {
-                if (model_name == name)
+            for (auto &model : *models)
+            {
+                if (model.model_name == model_name)
                 {
-                    return true;
+                    model_exist = true;
+                    model_index = (&model - &(*models)[0]);
                 }
-                return false;
-            };
-
-            bool model_exist = std::all_of(models->begin(), models->end(), find_model_name);
+            }
 
             if (!model_exist)
             {
@@ -131,6 +136,8 @@ namespace mv
 
             // create new object element in specified model
             models->at(model_index).objects->push_back(mv::Object());
+
+            std::cout << "\t -- Model type object count is now => " << models->at(model_index).objects->size() << "\n";
 
             // create uniform buffer for object
             m_dvc->create_buffer(vk::BufferUsageFlagBits::eUniformBuffer,
@@ -173,8 +180,8 @@ namespace mv
 
         void cleanup(void)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
-            std::shared_ptr<mv::Allocator> m_alloc = std::make_shared<mv::Allocator>(descriptor_allocator);
+            auto m_dvc = mv_device.lock();
+            auto m_alloc = descriptor_allocator.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler in cleanup :: collection handler");

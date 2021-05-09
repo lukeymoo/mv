@@ -20,7 +20,7 @@ namespace mv
     class Engine : public mv::MWindow
     {
     public:
-    // delete copy
+        // delete copy
         Engine &operator=(const Engine &) = delete;
         Engine(const Engine &) = delete;
 
@@ -41,61 +41,36 @@ namespace mv
         Engine(int w, int h, const char *title)
             : MWindow(w, h, title)
         {
+            pipelines = std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
+            pipeline_layouts = std::make_unique<std::unordered_map<std::string, vk::PipelineLayout>>();
             return;
         }
-        ~Engine(void) // Cleanup
+        ~Engine() // Cleanup
         {
             if (!mv_device)
-                throw std::runtime_error("Logical device has been destroyed before proper cleanup");
+                return;
 
             mv_device->logical_device->waitIdle();
 
             if (pipelines)
             {
-                auto destroy_pipeline = [&, this](std::pair<std::string, vk::Pipeline> entry) {
-                    if (entry.second)
-                        mv_device->logical_device->destroyPipeline(entry.second);
-                };
-
-                std::all_of(pipelines->begin(), pipelines->end(), destroy_pipeline);
+                for (auto &pipeline : *pipelines)
+                {
+                    if (pipeline.second)
+                        mv_device->logical_device->destroyPipeline(pipeline.second);
+                }
                 pipelines.reset();
             }
 
             if (pipeline_layouts)
             {
-                auto destroy_layout = [&, this](std::pair<std::string, vk::PipelineLayout> entry) {
-                    if (entry.second)
-                        mv_device->logical_device->destroyPipelineLayout(entry.second);
-                };
-
-                std::all_of(pipeline_layouts->begin(), pipeline_layouts->end(), destroy_layout);
+                for (auto &layout : *pipeline_layouts)
+                {
+                    if (layout.second)
+                        mv_device->logical_device->destroyPipelineLayout(layout.second);
+                }
                 pipeline_layouts.reset();
             }
-
-            // pipelines
-            // if (pipeline_w_sampler)
-            // {
-            //     mv_device->logical_device
-            //         vkDestroyPipeline(device->device, pipeline_w_sampler, nullptr);
-            //     pipeline_w_sampler = nullptr;
-            // }
-            // if (pipeline_no_sampler)
-            // {
-            //     vkDestroyPipeline(device->device, pipeline_no_sampler, nullptr);
-            //     pipeline_no_sampler = nullptr;
-            // }
-
-            // // pipeline layouts
-            // if (pipeline_layout_w_sampler)
-            // {
-            //     vkDestroyPipelineLayout(device->device, pipeline_layout_w_sampler, nullptr);
-            //     pipeline_layout_w_sampler = nullptr;
-            // }
-            // if (pipeline_layout_no_sampler)
-            // {
-            //     vkDestroyPipelineLayout(device->device, pipeline_layout_no_sampler, nullptr);
-            //     pipeline_layout_no_sampler = nullptr;
-            // }
 
             // collection struct will handle cleanup of models & objs
             if (collection_handler)
@@ -106,7 +81,7 @@ namespace mv
 
         void add_new_model(mv::Allocator::Container *pool, const char *filename);
 
-        // void recreate_swapchain(void);
+        void recreate_swapchain(void);
 
         void go(void);
         void record_command_buffer(uint32_t imageIndex);
@@ -118,7 +93,7 @@ namespace mv
         // void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);
         void prepare_pipeline(void);
 
-        // void cleanup_swapchain(void);
+        void cleanup_swapchain(void);
     };
 };
 

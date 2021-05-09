@@ -51,7 +51,7 @@ namespace mv
                     ImageCreateInfo &c_info,
                     std::string image_filename)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Invalid mv device handler passed :: image handler");
@@ -119,7 +119,6 @@ namespace mv
 
             // transition image to transfer dst
             transition_image_layout(image.get(),
-                                    vk::Format::eR8G8B8A8Srgb,
                                     vk::ImageLayout::eUndefined,
                                     vk::ImageLayout::eTransferDstOptimal);
 
@@ -146,7 +145,6 @@ namespace mv
 
             // transition image to shader read only
             transition_image_layout(image.get(),
-                                    vk::Format::eR8G8B8A8Srgb,
                                     vk::ImageLayout::eTransferDstOptimal,
                                     vk::ImageLayout::eShaderReadOnlyOptimal);
 
@@ -205,7 +203,7 @@ namespace mv
                                    vk::Buffer &staging_buffer,
                                    vk::DeviceMemory &staging_memory)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler while creating buffer :: image handler");
@@ -237,7 +235,6 @@ namespace mv
         }
 
         void transition_image_layout(vk::Image *image,
-                                     vk::Format format,
                                      vk::ImageLayout initial_layout,
                                      vk::ImageLayout final_layout)
         {
@@ -294,7 +291,7 @@ namespace mv
 
         vk::CommandBuffer begin_command_buffer(void)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler creating temp command buffers :: image handler");
 
@@ -337,7 +334,7 @@ namespace mv
 
         void end_command_buffer(vk::CommandBuffer command_buffer)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler ending commands :: image handler");
@@ -363,7 +360,7 @@ namespace mv
 
         void destroy(void)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler cleaning up:: image handler");

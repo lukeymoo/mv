@@ -10,6 +10,7 @@
 
 #include <bitset>
 #include <queue>
+#include <memory>
 #include <stdexcept>
 
 /*
@@ -39,12 +40,19 @@ namespace mv
         keyboard(keyboard &&) = default;
         keyboard &operator=(keyboard &&) = default;
 
-        keyboard(std::weak_ptr<xcb_connection_t> xcb_conn) noexcept
+        keyboard(std::weak_ptr<xcb_connection_t*> xcb_conn)
         {
+            // validate ptr
+            auto test = xcb_conn.lock();
+            if(!test)
+                throw std::runtime_error("invalid xcb connection handle passed to keyboard handler, initialization :: keyboard handler");
+            if(!*test)
+                throw std::runtime_error("invalid xcb connection handle passed to keyboard handler, initialization :: keyboard handler");
+
             this->xcb_conn = xcb_conn;
         }
         ~keyboard() {}
-        
+
         enum key
         {
             invalid = 0,
@@ -799,7 +807,7 @@ namespace mv
         static constexpr unsigned int max_buffer_size = 16;
 
         // weak reference to x server connection
-        std::weak_ptr<xcb_connection_t> xcb_conn;
+        std::weak_ptr<xcb_connection_t*> xcb_conn;
 
         // bitfield representing press|release of all tracked keys in keys enum
         std::bitset<mv::keyboard::max_key_count> key_states;

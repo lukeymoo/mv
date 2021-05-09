@@ -35,7 +35,6 @@ set(SOURCES
     mvDevice.cpp
     mvKeyboard.cpp
     mvMouse.cpp
-    mvException.cpp
     mvWindow.cpp
     main.cpp)
 

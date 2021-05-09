@@ -258,33 +258,6 @@ mvEngine.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvEngine.cpp.s
 .PHONY : mvEngine.cpp.s
 
-mvException.o: mvException.cpp.o
-
-.PHONY : mvException.o
-
-# target to build an object file
-mvException.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvException.cpp.o
-.PHONY : mvException.cpp.o
-
-mvException.i: mvException.cpp.i
-
-.PHONY : mvException.i
-
-# target to preprocess a source file
-mvException.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvException.cpp.i
-.PHONY : mvException.cpp.i
-
-mvException.s: mvException.cpp.s
-
-.PHONY : mvException.s
-
-# target to generate assembly for a file
-mvException.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvException.cpp.s
-.PHONY : mvException.cpp.s
-
 mvImage.o: mvImage.cpp.o
 
 .PHONY : mvImage.o
@@ -498,9 +471,6 @@ help:
 	@echo "... mvEngine.o"
 	@echo "... mvEngine.i"
 	@echo "... mvEngine.s"
-	@echo "... mvException.o"
-	@echo "... mvException.i"
-	@echo "... mvException.s"
 	@echo "... mvImage.o"
 	@echo "... mvImage.i"
 	@echo "... mvImage.s"

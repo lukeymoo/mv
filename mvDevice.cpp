@@ -28,7 +28,7 @@ void mv::Device::create_logical_device(void)
     device_create_info.enabledExtensionCount = static_cast<uint32_t>(e_ext.size());
     device_create_info.ppEnabledExtensionNames = e_ext.data();
 
-    std::shared_ptr<vk::PhysicalDevice> p_dvc = std::make_shared<vk::PhysicalDevice>(physical_device);
+    auto p_dvc = physical_device.lock();
 
     // create logical device
     logical_device = std::make_shared<vk::Device>(p_dvc->createDevice(device_create_info));
@@ -98,8 +98,11 @@ uint32_t mv::Device::get_memory_type(uint32_t type_bits,
 
 vk::Format mv::Device::get_supported_depth_format(void)
 {
-    std::shared_ptr<vk::PhysicalDevice> p_dvc =
-        std::make_shared<vk::PhysicalDevice>(physical_device);
+    auto p_dvc = physical_device.lock();
+
+    if(!p_dvc)
+        throw std::runtime_error("Failed to reference physical device getting supported depth format :: mv device handler");
+
     std::vector<vk::Format> depth_formats = {
         vk::Format::eD32SfloatS8Uint,
         vk::Format::eD32Sfloat,
@@ -136,7 +139,7 @@ void mv::Device::create_buffer(vk::BufferUsageFlags usage_flags,
     buffer_info.sharingMode = vk::SharingMode::eExclusive;
 
     // create vulkan buffer
-    *logical_device->createBuffer(buffer_info);
+    *buffer = logical_device->createBuffer(buffer_info);
 
     // allocate memory for buffer
     vk::MemoryRequirements memreqs;

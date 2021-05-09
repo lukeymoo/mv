@@ -20,8 +20,8 @@ namespace mv
     struct camera_init_struct
     {
         // ptr to view & projection matrices
-        mv::Collection::uniform_object *view_uniform_object = nullptr;
-        mv::Collection::uniform_object *projection_uniform_object = nullptr;
+        mv::uniform_object *view_uniform_object = nullptr;
+        mv::uniform_object *projection_uniform_object = nullptr;
 
         float fov = -1;
         float aspect = -1;
@@ -138,8 +138,8 @@ namespace mv
         float nearz = 0.1f;
         float aspect = 0;
 
-        mv::Collection::uniform_object *view_uniform_object = nullptr;
-        mv::Collection::uniform_object *projection_uniform_object = nullptr;
+        mv::uniform_object *view_uniform_object = nullptr;
+        mv::uniform_object *projection_uniform_object = nullptr;
 
         static constexpr glm::vec3 DEFAULT_UP_VECTOR = {0.0f, 1.0f, 0.0f};
         static constexpr glm::vec3 DEFAULT_DOWN_VECTOR = {0.0f, -1.0f, 0.0f};

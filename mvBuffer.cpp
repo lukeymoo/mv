@@ -3,7 +3,7 @@
 // Maps vulkan buffer/memory to member variable void* mapped
 void mv::Buffer::map(vk::DeviceSize psize, vk::DeviceSize poffset)
 {
-    std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+    auto l_dvc = logical_device.lock();
 
     mapped = l_dvc->mapMemory(*memory, poffset, psize);
     if (!mapped)
@@ -16,7 +16,7 @@ void mv::Buffer::unmap(void)
 {
     if (mapped)
     {
-        std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+        auto l_dvc = logical_device.lock();
         l_dvc->unmapMemory(*memory);
         mapped = nullptr;
     }
@@ -25,7 +25,7 @@ void mv::Buffer::unmap(void)
 // Bind allocated memory to buffer
 void mv::Buffer::bind(vk::DeviceSize poffset)
 {
-    std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+    auto l_dvc = logical_device.lock();
 
     l_dvc->bindBufferMemory(*buffer, *memory, poffset);
 
@@ -56,7 +56,7 @@ void mv::Buffer::copy_from(void *data, vk::DeviceSize size)
 // Destroys buffer and frees allocated memory
 void mv::Buffer::destroy(void)
 {
-    std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+    auto l_dvc = logical_device.lock();
 
     unmap();
     if (buffer)

@@ -1,10 +1,10 @@
 #include "mvSwap.h"
 
-void mv::Swap::init(std::weak_ptr<xcb_connection_t> xcb_conn, std::weak_ptr<xcb_window_t> xcb_win)
+void mv::Swap::init(std::weak_ptr<xcb_connection_t *> xcb_conn, std::weak_ptr<xcb_window_t> xcb_win)
 {
     // ensure we got valid params
-    std::shared_ptr<xcb_connection_t> tc = std::make_shared<xcb_connection_t>(xcb_conn);
-    std::shared_ptr<xcb_window_t> tw = std::make_shared<xcb_window_t>(xcb_win);
+    auto tc = xcb_conn.lock();
+    auto tw = xcb_win.lock();
 
     if (!tc)
         throw std::runtime_error("Invalid xcb connection handle passed to swap chain interface");
@@ -15,16 +15,19 @@ void mv::Swap::init(std::weak_ptr<xcb_connection_t> xcb_conn, std::weak_ptr<xcb_
     this->xcb_win = xcb_win;
 
     vk::XcbSurfaceCreateInfoKHR surface_info;
-    surface_info.connection = tc.get();
+    surface_info.connection = *tc;
     surface_info.window = *tw;
 
-    std::shared_ptr<vk::Instance> inst = std::make_shared<vk::Instance>(instance);
+    auto inst = instance.lock();
 
     surface = std::make_shared<vk::SurfaceKHR>(inst->createXcbSurfaceKHR(surface_info, nullptr));
     if (!*surface)
         throw std::runtime_error("Failed to create vulkan surface");
 
-    std::shared_ptr<vk::PhysicalDevice> p_dvc = std::make_shared<vk::PhysicalDevice>(physical_device);
+    auto p_dvc = physical_device.lock();
+
+    if (!p_dvc)
+        throw std::runtime_error("Failed to reference physical device initializing swap handler :: swap handler");
 
     // get queue family properties
     std::vector<vk::QueueFamilyProperties> queue_properties = p_dvc->getQueueFamilyProperties();
@@ -120,10 +123,22 @@ void mv::Swap::init(std::weak_ptr<xcb_connection_t> xcb_conn, std::weak_ptr<xcb_
 
 void mv::Swap::create(uint32_t &w, uint32_t &h)
 {
-    std::shared_ptr<vk::PhysicalDevice> p_dvc = std::make_shared<vk::PhysicalDevice>(physical_device);
+    auto p_dvc = physical_device.lock();
+
+    if (!p_dvc)
+        throw std::runtime_error("Failed to reference physical device while creating swap chain :: swap handler");
 
     // get surface capabilities
-    vk::SurfaceCapabilitiesKHR capabilities = p_dvc->getSurfaceCapabilitiesKHR(*surface);
+    vk::SurfaceCapabilitiesKHR capabilities;
+    vk::Result res = p_dvc->getSurfaceCapabilitiesKHR(*surface, &capabilities);
+    switch(res)
+    {
+        case vk::Result::eSuccess:
+            break;
+        default:
+            throw std::runtime_error("Failed to get surface capabilities, does the window no longer exist?");
+            break;
+    }
 
     // get surface present modes
     std::vector<vk::PresentModeKHR> present_modes = p_dvc->getSurfacePresentModesKHR(*surface);
@@ -244,13 +259,16 @@ void mv::Swap::create(uint32_t &w, uint32_t &h)
         swap_ci.imageUsage |= vk::ImageUsageFlagBits::eTransferDst;
     }
 
-    std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+    auto m_dvc = mv_device.lock();
+
+    if (!m_dvc)
+        throw std::runtime_error("failed to reference mv device handler, creating swap chain :: swap handler");
 
     // create swap chain
-    swapchain = std::make_shared<vk::SwapchainKHR>(l_dvc->createSwapchainKHR(swap_ci));
+    swapchain = std::make_shared<vk::SwapchainKHR>(m_dvc->logical_device->createSwapchainKHR(swap_ci));
 
     // get swap chain images
-    *images = l_dvc->getSwapchainImagesKHR(*swapchain);
+    *images = m_dvc->logical_device->getSwapchainImagesKHR(*swapchain);
 
     if (images->size() < 1)
         throw std::runtime_error("Failed to retreive any swap chain images");
@@ -277,15 +295,21 @@ void mv::Swap::create(uint32_t &w, uint32_t &h)
         buffers->at(i).image = images->at(i);
         view_ci.image = buffers->at(i).image;
         // create image view
-        buffers->at(i).view = l_dvc->createImageView(view_ci);
+        buffers->at(i).view = m_dvc->logical_device->createImageView(view_ci);
     }
     return;
 }
 
 void mv::Swap::cleanup(bool should_destroy_surface)
 {
-    std::shared_ptr<vk::Instance> inst = std::make_shared<vk::Instance>(instance);
-    std::shared_ptr<vk::Device> l_dvc = std::make_shared<vk::Device>(logical_device);
+    auto inst = instance.lock();
+    auto m_dvc = mv_device.lock();
+
+    if (!inst)
+        throw std::runtime_error("failed to reference vulkan instance, cleanup :: swap handler");
+
+    if (!m_dvc)
+        throw std::runtime_error("failed to reference mv device handler, cleanup :: swap handler");
 
     if (swapchain)
     {
@@ -293,12 +317,14 @@ void mv::Swap::cleanup(bool should_destroy_surface)
         {
             for (auto &swap_buffer : *buffers)
             {
-                l_dvc->destroyImageView(swap_buffer.view);
+                m_dvc->logical_device->destroyImageView(swap_buffer.view);
             }
             buffers.reset();
+            buffers = std::make_unique<std::vector<mv::swapchain_buffer>>();
         }
-        l_dvc->destroySwapchainKHR(*swapchain);
+        m_dvc->logical_device->destroySwapchainKHR(*swapchain);
         swapchain.reset();
+        swapchain = std::make_shared<vk::SwapchainKHR>();
     }
 
     if (should_destroy_surface)
@@ -307,17 +333,32 @@ void mv::Swap::cleanup(bool should_destroy_surface)
         {
             inst->destroySurfaceKHR(*surface);
             surface.reset();
+            surface = std::make_shared<vk::SurfaceKHR>();
         }
     }
     return;
 }
 
-void mv::Swap::map(std::weak_ptr<vk::Instance> instance,
-                   std::weak_ptr<vk::PhysicalDevice> physical_device,
-                   std::weak_ptr<vk::Device> device)
+void mv::Swap::map(std::weak_ptr<vk::Instance> ins,
+                   std::weak_ptr<vk::PhysicalDevice> pdvc,
+                   std::weak_ptr<mv::Device> mdvc)
 {
-    this->instance = instance;
-    this->physical_device = physical_device;
-    this->logical_device = logical_device;
+    // validate params
+    auto inst = ins.lock();
+    auto p_dvc = pdvc.lock();
+    auto m_dvc = mdvc.lock();
+
+    if (!inst)
+        throw std::runtime_error("invalid instance handle passed to swap chain, mapping :: swap handler");
+
+    if (!p_dvc)
+        throw std::runtime_error("invalid physical device handle passed to swap chain, mapping :: swap handler");
+
+    if (!m_dvc)
+        throw std::runtime_error("invalid mv device handle passed to swap chain, mapping :: swap handler");
+
+    this->instance = ins;
+    this->physical_device = pdvc;
+    this->mv_device = mdvc;
     return;
 }

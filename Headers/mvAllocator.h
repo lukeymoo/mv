@@ -38,11 +38,14 @@ namespace mv
 
         Allocator(std::weak_ptr<mv::Device> mv_device)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
             if (!m_dvc)
                 throw std::runtime_error("Invalid reference to mv device handler creating allocator :: descriptor handler");
 
             this->mv_device = mv_device;
+
+            containers = std::make_unique<std::vector<Container>>();
+            layouts = std::make_unique<std::unordered_map<std::string, vk::DescriptorSetLayout>>();
             return;
         }
         ~Allocator()
@@ -53,7 +56,7 @@ namespace mv
 
         void cleanup(void)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, cleaning up :: descriptor handler");
 
@@ -61,12 +64,11 @@ namespace mv
             {
                 if (!layouts->empty())
                 {
-                    auto destroy_layout = [&, this](std::pair<std::string, vk::DescriptorSetLayout> entry) {
-                        if (entry.second)
-                            m_dvc->logical_device->destroyDescriptorSetLayout(entry.second);
-                    };
-
-                    std::all_of(layouts->begin(), layouts->end(), destroy_layout);
+                    for (auto &layout : *layouts)
+                    {
+                        if (layout.second)
+                            m_dvc->logical_device->destroyDescriptorSetLayout(layout.second);
+                    }
                 }
                 layouts.reset();
             }
@@ -75,11 +77,11 @@ namespace mv
             {
                 if (!containers->empty())
                 {
-                    auto destroy_pool = [&, this](mv::Allocator::Container container) {
-                        m_dvc->logical_device->destroyDescriptorPool(container.pool);
-                    };
-
-                    std::all_of(containers->begin(), containers->end(), destroy_pool);
+                    for (auto &container : *containers)
+                    {
+                        if (container.pool)
+                            m_dvc->logical_device->destroyDescriptorPool(container.pool);
+                    }
                 }
                 containers.reset();
             }
@@ -117,7 +119,7 @@ namespace mv
         void create_layout(std::string layout_name,
                            vk::DescriptorSetLayoutCreateInfo &create_info)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, creating set layout :: descriptor handler");
@@ -170,7 +172,7 @@ namespace mv
         // auto retrieve currently in use pool
         void allocate_set(vk::DescriptorSetLayout &layout, vk::DescriptorSet &set)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, allocating descriptor set :: descriptor handler");
@@ -229,12 +231,13 @@ namespace mv
         // allocate descriptor set from a specified pool
         void allocate_set(Container *container, vk::DescriptorSetLayout &layout, vk::DescriptorSet &set)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, allocating descriptor set :: descriptor handler");
 
-            Container *container = &containers->at(current_pool);
+            if (!container)
+                throw std::runtime_error("Invalid container passed to allocate set :: descriptor handler");
 
             // ensure pool exist
             if (!container->pool)
@@ -288,12 +291,13 @@ namespace mv
         {
             Container *container = &containers->at(current_pool);
 
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            if(!container)
+                throw std::runtime_error("Failed to get current pool handle, updating set :: descriptor handler");
+
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, updating descriptor set :: descriptor handler");
-
-            Container *container = &containers->at(current_pool);
 
             // ensure pool exist
             if (!container->pool)
@@ -314,7 +318,7 @@ namespace mv
         // update set from specified descriptor pool
         void update_set(Container *container, vk::DescriptorBufferInfo &buffer_info, vk::DescriptorSet &dst_set, uint32_t dst_binding)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, updating descriptor set :: descriptor handler");
@@ -333,7 +337,7 @@ namespace mv
 
         void update_set(Container *container, vk::DescriptorImageInfo &image_info, vk::DescriptorSet &dst_set, uint32_t dst_binding)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, updating descriptor set :: descriptor handler");
@@ -420,7 +424,7 @@ namespace mv
 
         Container *allocate_pool(uint32_t count)
         {
-            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            auto m_dvc = mv_device.lock();
 
             if (!m_dvc)
                 throw std::runtime_error("Failed to reference mv device handler, allocating descriptor pool :: descriptor handler");
@@ -450,7 +454,7 @@ namespace mv
             Container np(init_struct);
             np.pool = m_dvc->logical_device->createDescriptorPool(pool_info);
             np.status = Container::Status::Clear;
-            containers->push_back(np);
+            containers->push_back(std::move(np));
             // give object its addr & index
             containers->back().self = &containers->back();
             containers->back().index = containers->size() - 1;

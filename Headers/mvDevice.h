@@ -21,7 +21,7 @@ namespace mv
                std::vector<std::string> &requested_device_exts)
         {
             // validate param
-            std::shared_ptr<vk::PhysicalDevice> p_dvc = std::make_shared<vk::PhysicalDevice>(physical_device);
+            auto p_dvc = physical_device.lock();
             requested_physical_device_exts = requested_device_exts;
 
             if (!*p_dvc)
