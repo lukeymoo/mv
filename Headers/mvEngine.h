@@ -115,7 +115,7 @@ namespace mv
     protected:
         void prepare_uniforms(void);
 
-        void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);
+        // void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool should_create_layout = true);
         void prepare_pipeline(void);
 
         // void cleanup_swapchain(void);

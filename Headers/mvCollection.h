@@ -9,55 +9,58 @@
 
 namespace mv
 {
-    struct GlobalUniforms
+    struct uniform_object
     {
-        alignas(16) glm::mat4 view;
-        alignas(16) glm::mat4 projection;
-
-        mv::Buffer ubo_view;
-        mv::Buffer ubo_projection;
-        vk::DescriptorSet view_descriptor_set;
-        vk::DescriptorSet proj_descriptor_set;
+        alignas(16) glm::mat4 matrix = glm::mat4(1.0);
+        mv::Buffer mv_buffer;
+        vk::DescriptorSet descriptor;
     };
 
     struct Collection
     {
-        mv::Device *device = nullptr;
-        std::vector<mv::Model> models;
+        // owns
+        std::unique_ptr<std::vector<mv::Model>> models;
+
+        // references
+        std::weak_ptr<mv::Device> mv_device;
+        std::weak_ptr<mv::Allocator> descriptor_allocator;
+
+        // infos
         std::vector<std::string> model_names;
-        std::shared_ptr<mv::Allocator> descriptor_allocator;
 
-        struct uniform_object
-        {
-            alignas(16) glm::mat4 matrix;
-            mv::Buffer mv_buffer;
-            VkDescriptorSet descriptor;
-        } view_uniform, projection_uniform;
+        // view & projection matrix objects
+        std::unique_ptr<mv::uniform_object> view_uniform = std::make_unique<mv::uniform_object>();
+        std::unique_ptr<mv::uniform_object> projection_uniform = std::make_unique<mv::uniform_object>();
 
-        Collection(mv::Device *device, std::shared_ptr<mv::Allocator> &descriptor_allocator)
+        Collection(std::weak_ptr<mv::Device> mv_device,
+                   std::weak_ptr<mv::Allocator> descriptor_allocator)
         {
-            this->device = device;
+            // validate params
+            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            std::shared_ptr<mv::Allocator> m_alloc = std::make_shared<mv::Allocator>(descriptor_allocator);
+
+            if (!m_dvc)
+                throw std::runtime_error("Failed to reference mv device handler, initalization :: collection handler");
+
+            if (!m_alloc)
+                throw std::runtime_error("Failed to reference descriptor allocator, initialization :: collection handler");
+
+            this->mv_device = mv_device;
             this->descriptor_allocator = descriptor_allocator;
 
             // create uniform buffer for view matrix
-            device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                  &view_uniform.mv_buffer,
-                                  sizeof(GlobalUniforms::view));
-            if (view_uniform.mv_buffer.map() != VK_SUCCESS)
-            {
-                throw std::runtime_error("Failed to map view matrix buffer");
-            }
+            m_dvc->create_buffer(vk::BufferUsageFlagBits::eUniformBuffer,
+                                 vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                                 &view_uniform->mv_buffer,
+                                 sizeof(uniform_object));
+            view_uniform->mv_buffer.map();
 
             // create uniform buffer for projection matrix
-            device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                  &projection_uniform.mv_buffer,
-                                  sizeof(GlobalUniforms::projection));
-            if (projection_uniform.mv_buffer.map() != VK_SUCCESS)
-            {
-                throw std::runtime_error("Failed to map projection matrix buffer");
-            }
+            m_dvc->create_buffer(vk::BufferUsageFlagBits::eUniformBuffer,
+                                 vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                                 &projection_uniform->mv_buffer,
+                                 sizeof(uniform_object));
+            projection_uniform->mv_buffer.map();
         }
         ~Collection(void) {}
 
@@ -77,9 +80,9 @@ namespace mv
             if (!already_loaded)
             {
                 // make space for new model
-                models.push_back(mv::Model());
+                models->push_back(mv::Model());
                 // call model routine _load
-                models.back()._load(device, descriptor_allocator, filename);
+                models->back()._load(mv_device, descriptor_allocator, filename);
 
                 // add filename to model_names container
                 model_names.push_back(filename);
@@ -90,18 +93,32 @@ namespace mv
         // creates object with specified model data
         void create_object(std::string model_name)
         {
+            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            std::shared_ptr<mv::Allocator> m_alloc = std::make_shared<mv::Allocator>(descriptor_allocator);
+
+            if (!m_dvc)
+                throw std::runtime_error("Failed to reference mv device handler, creating object :: collection handler");
+
+            if (!m_alloc)
+                throw std::runtime_error("Failed to reference descriptor allocator, creating object :: collection handler");
+
+            if (!models)
+                throw std::runtime_error("Requested to create object but models container never initialized :: collection handler");
+
             // ensure model exists
             bool model_exist = false;
             bool model_index = 0;
-            for (const auto &model : models)
-            {
-                if (model.model_name == model_name)
+
+            auto find_model_name = [&](std::string name) {
+                if (model_name == name)
                 {
-                    model_exist = true;
-                    model_index = (&model - &models[0]);
-                    break;
+                    return true;
                 }
-            }
+                return false;
+            };
+
+            bool model_exist = std::all_of(models->begin(), models->end(), find_model_name);
+
             if (!model_exist)
             {
                 std::ostringstream oss;
@@ -113,39 +130,42 @@ namespace mv
             std::cout << "[+] Creating object of model type => " << model_name << std::endl;
 
             // create new object element in specified model
-            std::unique_ptr<mv::Object> tmp = std::make_unique<mv::Object>();
-            models[model_index].objects.push_back(std::move(tmp));
+            models->at(model_index).objects->push_back(mv::Object());
 
             // create uniform buffer for object
-            device->create_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                  &models[model_index].objects.back()->uniform_buffer,
-                                  sizeof(mv::Object::matrices));
-            if (models[model_index].objects.back()->uniform_buffer.map() != VK_SUCCESS)
-            {
-                throw std::runtime_error("Failed to create uniform buffer for new object");
-            }
+            m_dvc->create_buffer(vk::BufferUsageFlagBits::eUniformBuffer,
+                                 vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                                 &models->at(model_index).objects->back().uniform_buffer,
+                                 sizeof(mv::Object::matrices));
+            models->at(model_index).objects->back().uniform_buffer.map();
 
-            VkDescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
+            vk::DescriptorSetLayout uniform_layout = m_alloc->get_layout("uniform_layout");
 
             // allocate descriptor set for object's model uniform
-            descriptor_allocator->allocate_set(descriptor_allocator->get(),
-                                               uniform_layout,
-                                               models[model_index].objects.back()->model_descriptor);
-            descriptor_allocator->update_set(descriptor_allocator->get(),
-                                             models[model_index].objects.back()->uniform_buffer.descriptor,
-                                             models[model_index].objects.back()->model_descriptor,
-                                             0);
+            m_alloc->allocate_set(m_alloc->get(),
+                                  uniform_layout,
+                                  models->at(model_index).objects->back().model_descriptor);
+            m_alloc->update_set(m_alloc->get(),
+                                models->at(model_index).objects->back().uniform_buffer.descriptor,
+                                models->at(model_index).objects->back().model_descriptor, 0);
             return;
         }
 
         void update(void)
         {
-            for (auto &model : models)
+            if (!models)
+                throw std::runtime_error("Collection handler was requested to update but models never initialized :: collection handler");
+            for (auto &model : *models)
             {
-                for (auto &object : model.objects)
+                if (!model.objects)
                 {
-                    object->update();
+                    std::ostringstream oss;
+                    oss << "In collection handler update of objects => " << model.model_name << " object container never initialized\n";
+                    throw std::runtime_error(oss.str());
+                }
+                for (auto &object : *model.objects)
+                {
+                    object.update();
                 }
             }
             return;
@@ -153,26 +173,50 @@ namespace mv
 
         void cleanup(void)
         {
-            vkDeviceWaitIdle(device->device);
+            std::shared_ptr<mv::Device> m_dvc = std::make_shared<mv::Device>(mv_device);
+            std::shared_ptr<mv::Allocator> m_alloc = std::make_shared<mv::Allocator>(descriptor_allocator);
+
+            if (!m_dvc)
+                throw std::runtime_error("Failed to reference mv device handler in cleanup :: collection handler");
+
+            if (!m_alloc)
+                throw std::runtime_error("Failed to reference descriptor allocator in cleanup :: collection handler");
+
+            if (!models)
+                throw std::runtime_error("Failed to reference model container in cleanup :: collection handler");
+
+            m_dvc->logical_device->waitIdle();
 
             // cleanup descriptor_allocator
-            descriptor_allocator->cleanup();
+            m_alloc->cleanup();
 
             // cleanup models & objects buffers
-            for (auto &model : models)
+            for (auto &model : *models)
             {
-                for (auto &object : model.objects)
+                if (!model.objects)
                 {
-                    object->uniform_buffer.destroy();
+                    std::ostringstream oss;
+                    oss << "In collection handler cleanup of objects => " << model.model_name << " object container never initialized\n";
+                    throw std::runtime_error(oss.str());
                 }
-                for (auto &mesh : model._meshes)
+                if (!model._meshes)
                 {
-                    mesh.cleanup(device);
+                    std::ostringstream oss;
+                    oss << "In collection handler cleanup of objects => " << model.model_name << " mesh container never initialized\n";
+                    throw std::runtime_error(oss.str());
+                }
+                for (auto &object : *model.objects)
+                {
+                    object.uniform_buffer.destroy();
+                }
+                for (auto &mesh : *model._meshes)
+                {
+                    mesh.cleanup(mv_device);
                 }
             }
 
-            view_uniform.mv_buffer.destroy();
-            projection_uniform.mv_buffer.destroy();
+            view_uniform->mv_buffer.destroy();
+            projection_uniform->mv_buffer.destroy();
             return;
         }
     };

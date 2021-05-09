@@ -36,6 +36,12 @@ namespace mv
 
     struct Object
     {
+        Object(glm::vec3 position, glm::vec3 rotation){
+            this->position = position;
+            this->rotation = rotation;
+        }
+        Object(void){}
+        ~Object(){}
         struct Matrices
         {
             alignas(16) glm::mat4 model;
@@ -45,8 +51,8 @@ namespace mv
         vk::DescriptorSet model_descriptor;
         vk::DescriptorSet texture_descriptor;
         mv::Buffer uniform_buffer;
-        glm::vec3 rotation;
-        glm::vec3 position;
+        glm::vec3 rotation = glm::vec3(1.0);
+        glm::vec3 position = glm::vec3(1.0);
         uint32_t model_index;
         glm::vec3 front_face;
         float scale_factor = 1.0f;

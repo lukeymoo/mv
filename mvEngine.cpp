@@ -145,17 +145,16 @@ void mv::Engine::go(void)
 
     // allocate & update descriptor set for view uniform buffer
     descriptor_allocator->allocate_set(uniform_layout,
-                                       collection_handler->view_uniform.descriptor);
-    descriptor_allocator->update_set(collection_handler->view_uniform.mv_buffer.descriptor,
-                                     collection_handler->view_uniform.descriptor,
+                                       collection_handler->view_uniform->descriptor);
+    descriptor_allocator->update_set(collection_handler->view_uniform->mv_buffer.descriptor,
+                                     collection_handler->view_uniform->descriptor,
                                      0);
 
     // allocate & update descriptor set for projection uniform buffer
     descriptor_allocator->allocate_set(uniform_layout,
-                                       collection_handler->projection_uniform.descriptor);
-    descriptor_allocator->update_set(collection_handler->projection_uniform.mv_buffer.descriptor,
-                                     collection_handler->projection_uniform.descriptor,
-                                     0);
+                                       collection_handler->projection_uniform->descriptor);
+    descriptor_allocator->update_set(collection_handler->projection_uniform->mv_buffer.descriptor,
+                                     collection_handler->projection_uniform->descriptor, 0);
 
     // Load model
     collection_handler->load_model("models/_viking_room.fbx");
@@ -163,17 +162,17 @@ void mv::Engine::go(void)
 
     // Create object
     collection_handler->create_object("models/_viking_room.fbx");
-    collection_handler->models[0].objects[0]->position = glm::vec3(0.0f, 0.0f, -5.0f);
-    collection_handler->models[0].objects[0]->rotation = glm::vec3(0.0f, 90.0f, 0.0f);
+    collection_handler->models->at(0).objects->at(0).position = glm::vec3(0.0f, 0.0f, -5.0f);
+    collection_handler->models->at(0).objects->at(0).rotation = glm::vec3(0.0f, 90.0f, 0.0f);
 
     collection_handler->create_object("models/Male.obj");
-    collection_handler->models[1].objects[0]->rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-    collection_handler->models[1].objects[0]->position = glm::vec3(0.0f, 0.0f, 0.0f);
+    collection_handler->models->at(1).objects->at(0).rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    collection_handler->models->at(1).objects->at(0).position = glm::vec3(0.0f, 0.0f, 0.0f);
 
     // configure camera before uniform buffer creation
     camera_init_struct camera_params;
-    camera_params.fov = 45.0f * ((float)swapchain.swap_extent.width / swapchain.swap_extent.height);
-    camera_params.aspect = static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
+    camera_params.fov = 45.0f * ((float)swapchain->swap_extent.width / swapchain->swap_extent.height);
+    camera_params.aspect = static_cast<float>(((float)swapchain->swap_extent.height / (float)swapchain->swap_extent.height));
     camera_params.nearz = 0.1f;
     camera_params.farz = 200.0f;
     camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
@@ -181,7 +180,7 @@ void mv::Engine::go(void)
     camera_params.projection_uniform_object = &collection_handler->projection_uniform;
 
     camera_params.camera_type = Camera::camera_type::third_person;
-    camera_params.target = collection_handler->models.at(1).objects.at(0).get();
+    camera_params.target = &collection_handler->models->at(1).objects->at(0);
 
     camera = std::make_unique<Camera>(camera_params);
 
@@ -386,8 +385,7 @@ void mv::Engine::go(void)
                     float y = xy_distr(eng);
                     float z = z_distr(eng);
                     collection_handler->create_object("models/_viking_room.fbx");
-                    collection_handler->models.at(0).objects.back()->position =
-                        glm::vec3(x, y, z);
+                    collection_handler->models->at(0).objects->back().position = glm::vec3(x, y, z);
                 }
             }
             // update game objects
@@ -397,13 +395,15 @@ void mv::Engine::go(void)
             camera->update();
         }
 
+        // TODO
+        // Add alpha to render
         // Render
         draw(current_frame, image_index);
     }
     int total_object_count = 0;
-    for (const auto &model : collection_handler->models)
+    for (const auto &model : *collection_handler->models)
     {
-        total_object_count += model.objects.size();
+        total_object_count += model.objects->size();
     }
     std::cout << "Total objects => " << total_object_count << std::endl;
     return;
@@ -448,11 +448,25 @@ void mv::Engine::prepare_pipeline(void)
     vi_state.pVertexBindingDescriptions = &binding_description;
     vi_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
     vi_state.pVertexAttributeDescriptions = attribute_description.data();
-    VkPipelineInputAssemblyStateCreateInfo ia_state = mv::initializer::input_assembly_state_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE, 0);
-    VkPipelineColorBlendAttachmentState cba_state = mv::initializer::color_blend_attachment_state(0xf, VK_FALSE);
-    VkPipelineColorBlendStateCreateInfo cb_state = mv::initializer::color_blend_state_info(1, &cba_state);
-    VkPipelineDepthStencilStateCreateInfo ds_state = mv::initializer::depth_stencil_state_info(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
+
+    vk::PipelineInputAssemblyStateCreateInfo ia_state;
+    ia_state.topology = vk::PrimitiveTopology::eTriangleList;
+
+    vk::PipelineRasterizationStateCreateInfo rs_state;
+    rs_state.depthClampEnable = VK_FALSE;
+    rs_state.rasterizerDiscardEnable = VK_FALSE;
+    rs_state.polygonMode = vk::PolygonMode::eFill;
+    rs_state.cullMode = vk::CullModeFlagBits::eNone;
+    rs_state.frontFace = vk::FrontFace::eClockwise;
+    rs_state.depthBiasEnable = VK_FALSE;
+    rs_state.depthBiasConstantFactor = 0.0f;
+    rs_state.depthBiasClamp = 0.0f;
+    rs_state.depthBiasSlopeFactor = 0.0f;
+    rs_state.lineWidth = 1.0f;
+
+    vk::PipelineColorBlendAttachmentState cba_state = mv::initializer::color_blend_attachment_state(0xf, VK_FALSE);
+    vk::PipelineColorBlendStateCreateInfo cb_state = mv::initializer::color_blend_state_info(1, &cba_state);
+    vk::PipelineDepthStencilStateCreateInfo ds_state = mv::initializer::depth_stencil_state_info(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
 
     VkViewport vp = {};
     VkRect2D sc = {};
