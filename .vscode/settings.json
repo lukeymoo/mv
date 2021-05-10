@@ -1,4 +1,14 @@
 {
+    "clang-format.executable": "/usr/bin/clang-format-11",
+    "clang-format.style": "Google",
+    "clang-format.language.c.enable": true,
+    "editor.formatOnSave": true,
+    "[c]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.wordBasedSuggestions": false,
+        "editor.suggest.insertMode": "replace",
+        "editor.semanticHighlighting.enabled": true
+    },
     "files.associations": {
         "array": "cpp",
         "atomic": "cpp",

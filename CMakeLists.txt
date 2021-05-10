@@ -9,6 +9,8 @@ set(CMAKE_CXX_COMPILER "clang++")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(Vulkan REQUIRED)
+
 set(HEADERS
     Headers/mvWindow.h
     Headers/mvCollection.h
@@ -44,4 +46,4 @@ add_executable(main ${HEADERS} ${SOURCES})
 
 target_include_directories(main PUBLIC Headers/)
 
-target_link_libraries(main gcc vulkan dl stdc++fs assimp xcb)
+target_link_libraries(main gcc vulkan dl stdc++fs assimp xcb xcb-keysyms)
