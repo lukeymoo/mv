@@ -10,6 +10,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Vulkan REQUIRED)
+find_package(X11 REQUIRED)
 
 set(HEADERS
     Headers/mvWindow.h
@@ -46,4 +47,4 @@ add_executable(main ${HEADERS} ${SOURCES})
 
 target_include_directories(main PUBLIC Headers/)
 
-target_link_libraries(main gcc vulkan dl stdc++fs assimp xcb xcb-keysyms)
+target_link_libraries(main gcc vulkan dl stdc++fs assimp ${X11_LIBRARIES} Xi)

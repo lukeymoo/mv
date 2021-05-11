@@ -8,16 +8,22 @@ void mv::MWindow::prepare(void) {
   // passes... vulkan handles to swapchain handler
   init_vulkan();
 
-  swapchain->init(std::weak_ptr<xcb_connection_t *>(xcb_conn),
-                  std::weak_ptr<xcb_window_t>(xcb_win));
-  command_pool = std::make_shared<vk::CommandPool>(
-      mv_device->create_command_pool(swapchain->graphics_index));
-  swapchain->create(window_width, window_height);
+  swapchain->init(*display, window, *instance, *physical_device);
+  command_pool =
+      std::make_unique<vk::CommandPool>(mv_device->create_command_pool(swapchain->graphics_index));
+
+  swapchain->create(*physical_device, *mv_device, window_width, window_height);
+
   create_command_buffers();
+
   create_synchronization_primitives();
+
   setup_depth_stencil();
+
   setup_render_pass();
+
   // create_pipeline_cache();
+
   setup_framebuffer();
   return;
 }
@@ -26,15 +32,15 @@ void mv::MWindow::init_vulkan(void) {
   // creates vulkan instance with specified instance extensions/layers
   create_instance();
 
-  std::vector<vk::PhysicalDevice> physical_devices =
-      instance->enumeratePhysicalDevices();
+  std::vector<vk::PhysicalDevice> physical_devices = instance->enumeratePhysicalDevices();
 
   if (physical_devices.size() < 1)
     throw std::runtime_error("No physical devices found");
 
   // Select device
-  physical_device =
-      std::make_shared<vk::PhysicalDevice>(physical_devices.at(0));
+  physical_device = std::make_unique<vk::PhysicalDevice>(std::move(physical_devices.at(0)));
+  // resize devices container
+  physical_devices.erase(physical_devices.begin());
 
   // get device info
   physical_properties = physical_device->getProperties();
@@ -47,32 +53,23 @@ void mv::MWindow::init_vulkan(void) {
   }
 
   // create logical device handler mv::Device
-  mv_device = std::make_shared<mv::Device>(
-      mv::Device(std::weak_ptr<vk::PhysicalDevice>(physical_device), tmp));
+  mv_device = std::make_unique<mv::Device>(*physical_device, tmp);
 
   // create logical device & graphics queue
-  mv_device->create_logical_device();
+  mv_device->create_logical_device(*physical_device);
 
   // get format
-  depth_format = mv_device->get_supported_depth_format();
+  depth_format = mv_device->get_supported_depth_format(*physical_device);
 
-  swapchain->map(std::weak_ptr<vk::Instance>(instance),
-                 std::weak_ptr<vk::PhysicalDevice>(physical_device),
-                 std::weak_ptr<mv::Device>(mv_device));
+  // no longer pass references to swapchain, pass reference on per function basis now
+  // swapchain->map(std::weak_ptr<vk::Instance>(instance),
+  //                std::weak_ptr<vk::PhysicalDevice>(physical_device),
+  //                std::weak_ptr<mv::Device>(mv_device));
 
   // Create synchronization objects
   vk::SemaphoreCreateInfo semaphore_info;
-  semaphores->present_complete =
-      mv_device->logical_device->createSemaphore(semaphore_info);
-  semaphores->render_complete =
-      mv_device->logical_device->createSemaphore(semaphore_info);
-
-  // vk::SubmitInfo submit_info;
-  // submit_info.pWaitDstStageMask = &stage_flags;
-  // submit_info.waitSemaphoreCount = 1;
-  // submit_info.pWaitSemaphores = &semaphores->present_complete;
-  // submit_info.signalSemaphoreCount = 1;
-  // submit_info.pSignalSemaphores = &semaphores->render_complete;
+  semaphores->present_complete = mv_device->logical_device->createSemaphore(semaphore_info);
+  semaphores->render_complete = mv_device->logical_device->createSemaphore(semaphore_info);
 
   return;
 }
@@ -96,14 +93,12 @@ void mv::MWindow::create_instance(void) {
 /* If debugging enabled */
 #ifndef NDEBUG
   vk::DebugUtilsMessengerCreateInfoEXT debugger_settings{};
-  debugger_settings.messageSeverity =
-      vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
-      vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-      vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
-  debugger_settings.messageType =
-      vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-      vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-      vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+  debugger_settings.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+                                      vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+                                      vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
+  debugger_settings.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                                  vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+                                  vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
   debugger_settings.pfnUserCallback = debug_message_processor;
   debugger_settings.pUserData = nullptr;
 
@@ -124,8 +119,7 @@ void mv::MWindow::create_instance(void) {
   create_info.pApplicationInfo = &app_info;
   create_info.enabledLayerCount = static_cast<uint32_t>(req_layer.size());
   create_info.ppEnabledLayerNames = req_layer.data();
-  create_info.enabledExtensionCount =
-      static_cast<uint32_t>(req_inst_ext.size());
+  create_info.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
   create_info.ppEnabledExtensionNames = req_inst_ext.data();
 #endif
 #ifdef NDEBUG /* Debugging disabled */
@@ -137,14 +131,14 @@ void mv::MWindow::create_instance(void) {
 
   vk::InstanceCreateInfo create_info = {};
   create_info.pApplicationInfo = &app_info;
-  create_info.enabledExtensionCount =
-      static_cast<uint32_t>(req_inst_ext.size());
+  create_info.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
   create_info.ppEnabledExtensionNames = req_inst_ext.data();
 #endif
 
-  instance = std::make_shared<vk::Instance>(vk::createInstance(create_info));
+  instance = std::make_unique<vk::Instance>(vk::createInstance(create_info));
   // double check instance(prob a triple check at this point)
-  if (!*instance) throw std::runtime_error("Failed to create vulkan instance");
+  if (!*instance)
+    throw std::runtime_error("Failed to create vulkan instance");
 }
 
 void mv::MWindow::create_command_buffers(void) {
@@ -153,11 +147,9 @@ void mv::MWindow::create_command_buffers(void) {
   vk::CommandBufferAllocateInfo alloc_info;
   alloc_info.commandPool = *command_pool;
   alloc_info.level = vk::CommandBufferLevel::ePrimary;
-  alloc_info.commandBufferCount =
-      static_cast<uint32_t>(command_buffers->size());
+  alloc_info.commandBufferCount = static_cast<uint32_t>(command_buffers->size());
 
-  *command_buffers =
-      mv_device->logical_device->allocateCommandBuffers(alloc_info);
+  *command_buffers = mv_device->logical_device->allocateCommandBuffers(alloc_info);
 
   if (command_buffers->size() < 1)
     throw std::runtime_error("Failed to allocate command buffers");
@@ -193,20 +185,18 @@ void mv::MWindow::setup_depth_stencil(void) {
 
   // Allocate memory for image
   vk::MemoryRequirements mem_req;
-  mem_req = mv_device->logical_device->getImageMemoryRequirements(
-      depth_stencil->image);
+  mem_req = mv_device->logical_device->getImageMemoryRequirements(depth_stencil->image);
 
   vk::MemoryAllocateInfo alloc_info;
   alloc_info.allocationSize = mem_req.size;
-  alloc_info.memoryTypeIndex = mv_device->get_memory_type(
-      mem_req.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
+  alloc_info.memoryTypeIndex =
+      mv_device->get_memory_type(mem_req.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
   // allocate depth stencil image memory
   depth_stencil->mem = mv_device->logical_device->allocateMemory(alloc_info);
 
   // bind image and memory
-  mv_device->logical_device->bindImageMemory(depth_stencil->image,
-                                             depth_stencil->mem, 0);
+  mv_device->logical_device->bindImageMemory(depth_stencil->image, depth_stencil->mem, 0);
 
   // Create view into depth stencil testing image
   vk::ImageViewCreateInfo iv_info;
@@ -273,20 +263,18 @@ void mv::MWindow::setup_render_pass(void) {
   dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
   dependencies[0].dstSubpass = 0;
   dependencies[0].srcStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
-  dependencies[0].dstStageMask =
-      vk::PipelineStageFlagBits::eColorAttachmentOutput;
+  dependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
   dependencies[0].srcAccessMask = vk::AccessFlagBits::eMemoryRead;
-  dependencies[0].dstAccessMask = vk::AccessFlagBits::eColorAttachmentRead |
-                                  vk::AccessFlagBits::eColorAttachmentWrite;
+  dependencies[0].dstAccessMask =
+      vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
   dependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
   dependencies[1].srcSubpass = 0;
   dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-  dependencies[1].srcStageMask =
-      vk::PipelineStageFlagBits::eColorAttachmentOutput;
+  dependencies[1].srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
   dependencies[1].dstStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
-  dependencies[1].srcAccessMask = vk::AccessFlagBits::eColorAttachmentRead |
-                                  vk::AccessFlagBits::eColorAttachmentWrite;
+  dependencies[1].srcAccessMask =
+      vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
   dependencies[1].dstAccessMask = vk::AccessFlagBits::eMemoryRead;
   dependencies[1].dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
@@ -298,7 +286,7 @@ void mv::MWindow::setup_render_pass(void) {
   render_pass_info.dependencyCount = static_cast<uint32_t>(dependencies.size());
   render_pass_info.pDependencies = dependencies.data();
 
-  render_pass = std::make_shared<vk::RenderPass>(
+  render_pass = std::make_unique<vk::RenderPass>(
       mv_device->logical_device->createRenderPass(render_pass_info));
   return;
 }
@@ -332,15 +320,13 @@ void mv::MWindow::setup_framebuffer(void) {
   for (size_t i = 0; i < frame_buffers->size(); i++) {
     // different image views for each frame buffer
     attachments[0] = swapchain->buffers->at(i).view;
-    frame_buffers->at(i) =
-        mv_device->logical_device->createFramebuffer(framebuffer_info);
+    frame_buffers->at(i) = mv_device->logical_device->createFramebuffer(framebuffer_info);
   }
   return;
 }
 
 void mv::MWindow::check_validation_support(void) {
-  std::vector<vk::LayerProperties> inst_layers =
-      vk::enumerateInstanceLayerProperties();
+  std::vector<vk::LayerProperties> inst_layers = vk::enumerateInstanceLayerProperties();
 
   if (inst_layers.size() == 0 && !requested_validation_layers.empty())
     throw std::runtime_error("No supported validation layers found");
@@ -366,15 +352,13 @@ void mv::MWindow::check_validation_support(void) {
   if (!failed.empty()) {
     throw std::runtime_error(prelude + failed);
   } else {
-    std::cout << "[+] System supports all requested validation layers"
-              << std::endl;
+    std::cout << "[+] System supports all requested validation layers" << std::endl;
   }
   return;
 }
 
 void mv::MWindow::check_instance_ext(void) {
-  std::vector<vk::ExtensionProperties> inst_extensions =
-      vk::enumerateInstanceExtensionProperties();
+  std::vector<vk::ExtensionProperties> inst_extensions = vk::enumerateInstanceExtensionProperties();
 
   if (inst_extensions.size() < 1 && !requested_instance_extensions.empty())
     throw std::runtime_error("No instance extensions found");
@@ -405,19 +389,17 @@ void mv::MWindow::check_instance_ext(void) {
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(
     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
     [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT message_type,
-    const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-    [[maybe_unused]] void *user_data) {
+    const VkDebugUtilsMessengerCallbackDataEXT *callback_data, [[maybe_unused]] void *user_data) {
   if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
     std::ostringstream oss;
     oss << std::endl
-        << "Warning: " << callback_data->messageIdNumber << ", "
-        << callback_data->pMessageIdName << std::endl
+        << "Warning: " << callback_data->messageIdNumber << ", " << callback_data->pMessageIdName
+        << std::endl
         << callback_data->pMessage << std::endl
         << std::endl;
     std::cout << oss.str();
-  } else if (message_severity &
-                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT &&
-             (1 == 2))  // skip verbose messages
+  } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT &&
+             (1 == 2)) // skip verbose messages
   {
     // Disabled by the impossible statement
     std::ostringstream oss;
@@ -430,16 +412,16 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(
   } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
     std::ostringstream oss;
     oss << std::endl
-        << "Error: " << callback_data->messageIdNumber << ", "
-        << callback_data->pMessageIdName << std::endl
+        << "Error: " << callback_data->messageIdNumber << ", " << callback_data->pMessageIdName
+        << std::endl
         << callback_data->pMessage << std::endl
         << std::endl;
     std::cout << oss.str();
   } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
     std::ostringstream oss;
     oss << std::endl
-        << "Info: " << callback_data->messageIdNumber << ", "
-        << callback_data->pMessageIdName << std::endl
+        << "Info: " << callback_data->messageIdNumber << ", " << callback_data->pMessageIdName
+        << std::endl
         << callback_data->pMessage << std::endl
         << std::endl;
   }
@@ -483,213 +465,148 @@ std::vector<char> mv::MWindow::read_file(std::string filename) {
   }
 
   if (buffer.empty()) {
-    throw std::runtime_error(
-        "File reading operation returned empty buffer :: shaders?");
+    throw std::runtime_error("File reading operation returned empty buffer :: shaders?");
   }
 
   return buffer;
 }
 
-vk::ShaderModule mv::MWindow::create_shader_module(
-    const std::vector<char> &code) {
+vk::ShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code) {
   vk::ShaderModuleCreateInfo module_info;
   module_info.codeSize = code.size();
   module_info.pCode = reinterpret_cast<const uint32_t *>(code.data());
 
-  vk::ShaderModule module =
-      mv_device->logical_device->createShaderModule(module_info);
+  vk::ShaderModule module = mv_device->logical_device->createShaderModule(module_info);
 
   return module;
 }
 
-// inline XEvent mv::MWindow::create_event(const char *event_type)
-// {
-//     XEvent cev;
+static XEvent create_event(Display *display, Window window, const char *event_type) {
+  XEvent cev;
 
-//     cev.xclient.type = ClientMessage;
-//     cev.xclient.window = window;
-//     cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
-//     cev.xclient.format = 32;
-//     cev.xclient.data.l[0] = XInternAtom(display, event_type, false);
-//     cev.xclient.data.l[1] = CurrentTime;
+  cev.xclient.type = ClientMessage;
+  cev.xclient.window = window;
+  cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
+  cev.xclient.format = 32;
+  cev.xclient.data.l[0] = XInternAtom(display, event_type, false);
+  cev.xclient.data.l[1] = CurrentTime;
 
-//     return cev;
-// }
+  return cev;
+}
 
-bool mv::MWindow::handle_x_event(xcb_generic_event_t *event) {
-  switch (event->response_type & 0x7f) {
-    case XCB_KEY_PRESS: {
-      xcb_key_press_event_t *m_evt =
-          reinterpret_cast<xcb_key_press_event_t *>(event);
+void mv::MWindow::handle_x_event(void) {
+  XEvent event;
+  XNextEvent(*display, &event);
+  mv::keyboard::key mv_key = mv::keyboard::key::invalid;
 
-      // convert to mv key
-      mv::keyboard::key mv_key = kbd->keycode_to_mvkey(m_evt->detail);
+  // query if xinput
+  if (event.xcookie.type == GenericEvent && event.xcookie.extension == xinput_opcode) {
+    // if raw motion, query pointer
+    XGetEventData(*display, &event.xcookie);
 
-      // test escape
-      if (mv_key == mv::keyboard::escape) {
-        running = false;
-        free(event);
-        return false;
-      }
-
-      if (mv_key) {
-        // send event only if not already signaled in key_states bitset
-        if (!kbd->is_keystate(mv_key)) {
-          kbd->on_key_press(mv_key);
-        }
-      }
-      break;
+    XGenericEventCookie *gen_cookie = &event.xcookie;
+    XIDeviceEvent *xi_device_evt = static_cast<XIDeviceEvent *>(gen_cookie->data);
+    // retrieve mouse deltas
+    if (event.xcookie.evtype == XI_RawMotion) {
+      std::cout << "raw event => " << xi_device_evt->event_x << ", " << xi_device_evt->event_y
+                << "\n";
+      mouse->process_device_event(xi_device_evt);
     }
-    case XCB_KEY_RELEASE: {
-      xcb_key_release_event_t *m_evt =
-          reinterpret_cast<xcb_key_release_event_t *>(event);
-
-      // convert to mv key
-      mv::keyboard::key mv_key = kbd->keycode_to_mvkey(m_evt->detail);
-
-      if (mv_key) {
-        // always send release, xkb configured to not send synthetic release
-        // events
-        kbd->on_key_release(mv_key);
-      }
-
-      break;
-    }
-    case XCB_BUTTON_PRESS: {
-      xcb_button_press_event_t *m_evt =
-          reinterpret_cast<xcb_button_press_event_t *>(event);
-
-      std::cout << "Mouse button pressed => " << +m_evt->detail << "\n";
-      break;
-    }
-    case XCB_BUTTON_RELEASE: {
-      xcb_button_release_event_t *m_evt =
-          reinterpret_cast<xcb_button_release_event_t *>(event);
-      std::cout << "Mouse button release => " << +m_evt->detail << "\n";
-      break;
-    }
-    case XCB_CLIENT_MESSAGE: {
-      if ((*(xcb_client_message_event_t *)event).data.data32[0] ==
-          (*delete_reply).atom) {
-        running = false;
-        free(delete_reply);
-      }
-      break;
-    }
+    XFreeEventData(*display, &event.xcookie);
   }
-  free(event);
-  return true;
-  // count time for processing events
-  // XNextEvent(display, &event);
-  // mv::keyboard::key mv_key = mv::keyboard::key::invalid;
 
-  // // query if xinput
-  // if (event.xcookie.type == GenericEvent && event.xcookie.extension ==
-  // xinput_opcode)
-  // {
-  //     // if raw motion, query pointer
-  //     XGetEventData(display, &event.xcookie);
+  switch (event.type) {
+    case LeaveNotify:
+    case FocusOut:
+      {
+        mouse->on_mouse_leave();
+        XUngrabPointer(*display, CurrentTime);
+        break;
+      }
+    case MapNotify:
+    case EnterNotify:
+      {
+        mouse->on_mouse_enter();
+        // confine cursor to interior of window
+        // mouse released on focus out or cursor leaving window
+        XGrabPointer(*display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None,
+                     CurrentTime);
+        break;
+      }
+    case ButtonPress:
+      {
+        if (event.xbutton.button == Button1) {
+          mouse->on_left_press(event.xbutton.x, event.xbutton.y);
+        } else if (event.xbutton.button == Button2) {
+          mouse->on_middle_press(event.xbutton.x, event.xbutton.y);
+        } else if (event.xbutton.button == Button3) {
+          mouse->on_right_press(event.xbutton.x, event.xbutton.y);
+        }
+        // Mouse wheel scroll up
+        else if (event.xbutton.button == Button4) {
+          mouse->on_wheel_up(event.xbutton.x, event.xbutton.y);
+        }
+        // Mouse wheel scroll down
+        else if (event.xbutton.button == Button5) {
+          mouse->on_wheel_down(event.xbutton.x, event.xbutton.y);
+        }
+        break;
+      }
+    case ButtonRelease:
+      {
+        if (event.xbutton.button == Button1) {
+          mouse->on_left_release(event.xbutton.x, event.xbutton.y);
+        } else if (event.xbutton.button == Button2) {
+          mouse->on_middle_release(event.xbutton.x, event.xbutton.y);
+        } else if (event.xbutton.button == Button3) {
+          mouse->on_right_release(event.xbutton.x, event.xbutton.y);
+        }
+        break;
+      }
+    case KeyPress:
+      { // try to convert to our mv::keyboard::key enum
+        mv_key = kbd->keycode_to_mvkey(*display, event.xkey.keycode);
 
-  //     XGenericEventCookie *gen_cookie = &event.xcookie;
-  //     XIDeviceEvent *xi_device_evt = static_cast<XIDeviceEvent
-  //     *>(gen_cookie->data);
-  //     // retrieve mouse deltas
-  //     if (event.xcookie.evtype == XI_RawMotion)
-  //     {
-  //         std::cout << "Delta x,y => " << xi_device_evt->event_x << ", " <<
-  //         xi_device_evt->event_y << "\n";
-  //         mouse->process_device_event(xi_device_evt);
-  //     }
-  //     XFreeEventData(display, &event.xcookie);
-  // }
-  // switch (event.type)
-  // {
-  // case LeaveNotify:
-  // case FocusOut:
-  //     mouse->on_mouse_leave();
-  //     XUngrabPointer(display, CurrentTime);
-  //     break;
-  // case MapNotify:
-  // case EnterNotify:
-  //     mouse->on_mouse_enter();
-  //     // confine cursor to interior of window
-  //     // mouse released on focus out or cursor leaving window
-  //     XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync,
-  //     window, None, CurrentTime); break;
-  // case ButtonPress:
-  //     if (event.xbutton.button == Button1)
-  //     {
-  //         mouse->on_left_press(event.xbutton.x, event.xbutton.y);
-  //     }
-  //     else if (event.xbutton.button == Button2)
-  //     {
-  //         mouse->on_middle_press(event.xbutton.x, event.xbutton.y);
-  //     }
-  //     else if (event.xbutton.button == Button3)
-  //     {
-  //         mouse->on_right_press(event.xbutton.x, event.xbutton.y);
-  //     }
-  //     // Mouse wheel scroll up
-  //     else if (event.xbutton.button == Button4)
-  //     {
-  //         mouse->on_wheel_up(event.xbutton.x, event.xbutton.y);
-  //     }
-  //     // Mouse wheel scroll down
-  //     else if (event.xbutton.button == Button5)
-  //     {
-  //         mouse->on_wheel_down(event.xbutton.x, event.xbutton.y);
-  //     }
-  //     break;
-  // case ButtonRelease:
-  //     if (event.xbutton.button == Button1)
-  //     {
-  //         mouse->on_left_release(event.xbutton.x, event.xbutton.y);
-  //     }
-  //     else if (event.xbutton.button == Button2)
-  //     {
-  //         mouse->on_middle_release(event.xbutton.x, event.xbutton.y);
-  //     }
-  //     else if (event.xbutton.button == Button3)
-  //     {
-  //         mouse->on_right_release(event.xbutton.x, event.xbutton.y);
-  //     }
-  //     break;
-  // case KeyPress:
-  //     // try to convert to our mv::keyboard::key enum
-  //     mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
-  //     // check quit case
-  //     if (mv_key == mv::keyboard::key::escape)
-  //     {
-  //         XEvent q = create_event("WM_DELETE_WINDOW");
-  //         XSendEvent(display, window, false, ExposureMask, &q);
-  //     }
+        // check quit case
+        if (mv_key == mv::keyboard::key::escape) {
+          XEvent q = create_event(*display, window, "WM_DELETE_WINDOW");
+          XSendEvent(*display, window, false, ExposureMask, &q);
+        }
 
-  //     if (mv_key)
-  //     {
-  //         // send event only if not already signaled in key_states bitset
-  //         if (!kbd->is_keystate(mv_key))
-  //         {
-  //             kbd->on_key_press(mv_key);
-  //         }
-  //     }
-  //     break;
-  // case KeyRelease:
-  //     mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
-  //     if (mv_key)
-  //     {
-  //         // x11 configured to not send repeat releases with xkb method in
-  //         constructor
-  //         // so just process it
-  //         kbd->on_key_release(mv_key);
-  //     }
-  //     break;
-  // case Expose:
-  //     break;
-  // case ClientMessage:
-  //     std::cout << "[+] Exit requested" << std::endl;
-  //     running = false;
-  //     break;
-  // default: // Unhandled events do nothing
-  //     break;
-  // } // End of switch
+        if (mv_key) {
+          // send event only if not already signaled in key_states bitset
+          if (!kbd->is_keystate(mv_key)) {
+            kbd->on_key_press(mv_key);
+          }
+        }
+        break;
+      }
+    case KeyRelease:
+      {
+        mv_key = kbd->keycode_to_mvkey(*display, event.xkey.keycode);
+
+        if (mv_key) {
+          // x11 configured to not send repeat releases with xkb method in
+          // constructor
+          // so just process it
+          kbd->on_key_release(mv_key);
+        }
+        break;
+      }
+    case Expose:
+      {
+        break;
+      }
+    case ClientMessage:
+      {
+        std::cout << "[+] Exit requested" << std::endl;
+        running = false;
+        break;
+      }
+    default: // Unhandled events do nothing
+      {
+        break;
+      }
+  } // End of switch
+  return;
 }

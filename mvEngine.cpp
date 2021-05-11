@@ -4,8 +4,7 @@ void mv::Engine::cleanup_swapchain(void) {
   // destroy command buffers
   if (command_buffers) {
     if (!command_buffers->empty()) {
-      mv_device->logical_device->freeCommandBuffers(*command_pool,
-                                                    *command_buffers);
+      mv_device->logical_device->freeCommandBuffers(*command_pool, *command_buffers);
     }
     command_buffers.reset();
     command_buffers = std::make_unique<std::vector<vk::CommandBuffer>>();
@@ -35,8 +34,7 @@ void mv::Engine::cleanup_swapchain(void) {
       mv_device->logical_device->freeMemory(depth_stencil->mem, nullptr);
     }
     depth_stencil.reset();
-    depth_stencil =
-        std::make_unique<struct mv::MWindow::depth_stencil_struct>();
+    depth_stencil = std::make_unique<struct mv::MWindow::depth_stencil_struct>();
   }
 
   // destroy pipelines
@@ -46,8 +44,7 @@ void mv::Engine::cleanup_swapchain(void) {
         mv_device->logical_device->destroyPipeline(pipeline.second);
     }
     pipelines.reset();
-    pipelines =
-        std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
+    pipelines = std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
   }
 
   // destroy pipeline layouts
@@ -57,26 +54,25 @@ void mv::Engine::cleanup_swapchain(void) {
         mv_device->logical_device->destroyPipelineLayout(layout.second);
     }
     pipeline_layouts.reset();
-    pipeline_layouts =
-        std::make_unique<std::unordered_map<std::string, vk::PipelineLayout>>();
+    pipeline_layouts = std::make_unique<std::unordered_map<std::string, vk::PipelineLayout>>();
   }
 
   // destroy render pass
   if (render_pass) {
     mv_device->logical_device->destroyRenderPass(*render_pass, nullptr);
     render_pass.reset();
-    render_pass = std::make_shared<vk::RenderPass>();
+    render_pass = std::make_unique<vk::RenderPass>();
   }
 
   // cleanup command pool
   if (command_pool) {
     mv_device->logical_device->destroyCommandPool(*command_pool);
     command_pool.reset();
-    command_pool = std::make_shared<vk::CommandPool>();
+    command_pool = std::make_unique<vk::CommandPool>();
   }
 
   // cleanup swapchain
-  swapchain->cleanup(false);
+  swapchain->cleanup(*instance, *mv_device, false);
 
   return;
 }
@@ -86,9 +82,8 @@ void mv::Engine::recreate_swapchain(void) {
   std::cout << "[+] recreating swapchain" << std::endl;
 
   if (!mv_device)
-    throw std::runtime_error(
-        "mv device handler is somehow null, tried to recreate swap chain :: "
-        "main");
+    throw std::runtime_error("mv device handler is somehow null, tried to recreate swap chain :: "
+                             "main");
 
   mv_device->logical_device->waitIdle();
 
@@ -98,7 +93,7 @@ void mv::Engine::recreate_swapchain(void) {
   *command_pool = mv_device->create_command_pool(swapchain->graphics_index);
 
   // create swapchain
-  swapchain->create(window_width, window_height);
+  swapchain->create(*physical_device, *mv_device, window_width, window_height);
 
   // call after swapchain creation!!!
   // needed for mouse delta calc when using from_center method
@@ -123,84 +118,72 @@ void mv::Engine::go(void) {
   prepare();
 
   // Create descriptor pool allocator
-  descriptor_allocator =
-      std::make_shared<mv::Allocator>(std::weak_ptr<mv::Device>(mv_device));
+  descriptor_allocator = std::make_unique<mv::Allocator>();
 
   // allocate pool
-  descriptor_allocator->allocate_pool(2000);
+  descriptor_allocator->allocate_pool(*mv_device, 2000);
 
   // create uniform buffer layout ( single mat4 object )
-  descriptor_allocator->create_layout("uniform_layout",
+  descriptor_allocator->create_layout(*mv_device, "uniform_layout",
                                       vk::DescriptorType::eUniformBuffer, 1,
                                       vk::ShaderStageFlagBits::eVertex, 0);
 
   // create texture sampler layout
-  descriptor_allocator->create_layout("sampler_layout",
-                                      vk::DescriptorType::eCombinedImageSampler,
-                                      1, vk::ShaderStageFlagBits::eFragment, 0);
+  descriptor_allocator->create_layout(*mv_device, "sampler_layout",
+                                      vk::DescriptorType::eCombinedImageSampler, 1,
+                                      vk::ShaderStageFlagBits::eFragment, 0);
 
   // initialize model/object container
   // by default it contains uniform buffer for view & projection matrices
-  collection_handler = std::make_unique<Collection>(
-      std::weak_ptr<mv::Device>(mv_device),
-      std::weak_ptr<mv::Allocator>(descriptor_allocator));
+  collection_handler = std::make_unique<Collection>(*mv_device);
 
   // get uniform layout to create descriptors for view & projection matrix ubos
-  vk::DescriptorSetLayout uniform_layout =
-      descriptor_allocator->get_layout("uniform_layout");
+  vk::DescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
 
   // allocate & update descriptor set for view uniform buffer
-  descriptor_allocator->allocate_set(
-      uniform_layout, collection_handler->view_uniform->descriptor);
-  descriptor_allocator->update_set(
-      collection_handler->view_uniform->mv_buffer.descriptor,
-      collection_handler->view_uniform->descriptor, 0);
+  descriptor_allocator->allocate_set(*mv_device, uniform_layout,
+                                     collection_handler->view_uniform->descriptor);
+  descriptor_allocator->update_set(*mv_device,
+                                   collection_handler->view_uniform->mv_buffer.descriptor,
+                                   collection_handler->view_uniform->descriptor, 0);
 
   // allocate & update descriptor set for projection uniform buffer
-  descriptor_allocator->allocate_set(
-      uniform_layout, collection_handler->projection_uniform->descriptor);
-  descriptor_allocator->update_set(
-      collection_handler->projection_uniform->mv_buffer.descriptor,
-      collection_handler->projection_uniform->descriptor, 0);
+  descriptor_allocator->allocate_set(*mv_device, uniform_layout,
+                                     collection_handler->projection_uniform->descriptor);
+  descriptor_allocator->update_set(*mv_device,
+                                   collection_handler->projection_uniform->mv_buffer.descriptor,
+                                   collection_handler->projection_uniform->descriptor, 0);
 
   // Load model
-  collection_handler->load_model("models/_viking_room.fbx");
-  collection_handler->load_model("models/Male.obj");
+  collection_handler->load_model(*mv_device, *descriptor_allocator, "models/_viking_room.fbx");
+  collection_handler->load_model(*mv_device, *descriptor_allocator, "models/Male.obj");
 
   // Create object
-  collection_handler->create_object("models/_viking_room.fbx");
-  collection_handler->models->at(0).objects->at(0).position =
-      glm::vec3(0.0f, 0.0f, -5.0f);
-  collection_handler->models->at(0).objects->at(0).rotation =
-      glm::vec3(0.0f, 90.0f, 0.0f);
+  collection_handler->create_object(*mv_device, *descriptor_allocator, "models/_viking_room.fbx");
+  collection_handler->models->at(0).objects->at(0).position = glm::vec3(0.0f, 0.0f, -5.0f);
+  collection_handler->models->at(0).objects->at(0).rotation = glm::vec3(0.0f, 90.0f, 0.0f);
 
-  collection_handler->create_object("models/Male.obj");
-  collection_handler->models->at(1).objects->at(0).rotation =
-      glm::vec3(0.0f, 0.0f, 0.0f);
-  collection_handler->models->at(1).objects->at(0).position =
-      glm::vec3(0.0f, 0.0f, 0.0f);
+  collection_handler->create_object(*mv_device, *descriptor_allocator, "models/Male.obj");
+  collection_handler->models->at(1).objects->at(0).rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+  collection_handler->models->at(1).objects->at(0).position = glm::vec3(0.0f, 0.0f, 0.0f);
 
   // configure camera before uniform buffer creation
   camera_init_struct camera_params;
-  camera_params.fov = 45.0f * ((float)swapchain->swap_extent.width /
-                               swapchain->swap_extent.height);
-  camera_params.aspect =
-      static_cast<float>(((float)swapchain->swap_extent.height /
-                          (float)swapchain->swap_extent.height));
+  camera_params.fov = 45.0f * ((float)swapchain->swap_extent.width / swapchain->swap_extent.height);
+  camera_params.aspect = static_cast<float>(
+      ((float)swapchain->swap_extent.height / (float)swapchain->swap_extent.height));
   camera_params.nearz = 0.1f;
   camera_params.farz = 200.0f;
   camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
   camera_params.view_uniform_object = collection_handler->view_uniform.get();
-  camera_params.projection_uniform_object =
-      collection_handler->projection_uniform.get();
+  camera_params.projection_uniform_object = collection_handler->projection_uniform.get();
 
   camera_params.camera_type = Camera::camera_type::third_person;
   camera_params.target = &collection_handler->models->at(1).objects->at(0);
 
   camera = std::make_unique<Camera>(camera_params);
 
-  if (camera->type == Camera::camera_type::first_person ||
-      Camera::camera_type::free_look) {
+  if (camera->type == Camera::camera_type::first_person || Camera::camera_type::free_look) {
     mouse->set_delta_style(mouse::delta_calc_style::from_center);
   } else {
     mouse->set_delta_style(mouse::delta_calc_style::from_last);
@@ -218,9 +201,6 @@ void mv::Engine::go(void) {
 
   bool added = false;
 
-  std::cout << "[+] xcb conn smart ptr => " << xcb_conn.get()
-            << " :: points to => " << *xcb_conn << "\n";
-
   fps.startTimer();
   [[maybe_unused]] int fps_counter = 0;
 
@@ -233,13 +213,10 @@ void mv::Engine::go(void) {
   while (running) {
     auto delta_time = chrono::now() - start_time;
     start_time = chrono::now();
-    accumulated +=
-        std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time);
+    accumulated += std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time);
 
-    while (xcb_generic_event_t *evt = xcb_poll_for_event(*xcb_conn)) {
-      if (!handle_x_event(evt)) {
-        continue;
-      }
+    while (XPending(*display)) {
+      handle_x_event();
     }
 
     while (accumulated >= timestep) {
@@ -259,14 +236,12 @@ void mv::Engine::go(void) {
         }
 
         // start mouse drag
-        if (mouse_event.type == mv::mouse::event::etype::r_down &&
-            !mouse->is_dragging) {
+        if (mouse_event.type == mv::mouse::event::etype::r_down && !mouse->is_dragging) {
           // XDefineCursor(display, window, mouse->hidden_cursor);
           mouse->start_drag(camera->orbit_angle, camera->pitch);
         }
         // end drag
-        if (mouse_event.type == mv::mouse::event::etype::r_release &&
-            mouse->is_dragging) {
+        if (mouse_event.type == mv::mouse::event::etype::r_release && mouse->is_dragging) {
           // XUndefineCursor(display, window);
           camera->realign_orbit();
           mouse->end_drag();
@@ -276,19 +251,16 @@ void mv::Engine::go(void) {
         if (mouse->is_dragging) {
           // camera orbit
           if (mouse->drag_delta_x > 0) {
-            camera->adjust_orbit(-abs(mouse->drag_delta_x),
-                                 mouse->stored_orbit);
+            camera->adjust_orbit(-abs(mouse->drag_delta_x), mouse->stored_orbit);
           } else if (mouse->drag_delta_x < 0) {
             camera->adjust_orbit(abs(mouse->drag_delta_x), mouse->stored_orbit);
           }
 
           // camera pitch
           if (mouse->drag_delta_y > 0) {
-            camera->adjust_pitch(abs(mouse->drag_delta_y) * 0.25f,
-                                 mouse->stored_pitch);
+            camera->adjust_pitch(abs(mouse->drag_delta_y) * 0.25f, mouse->stored_pitch);
           } else if (mouse->drag_delta_y < 0) {
-            camera->adjust_pitch(-abs(mouse->drag_delta_y) * 0.25f,
-                                 mouse->stored_pitch);
+            camera->adjust_pitch(-abs(mouse->drag_delta_y) * 0.25f, mouse->stored_pitch);
           }
 
           // fetch new orbit & pitch
@@ -304,84 +276,63 @@ void mv::Engine::go(void) {
         // sort movement by key combination
 
         // forward only
-        if (kbd->is_keystate(mv::keyboard::key::w) &&
-            !kbd->is_keystate(mv::keyboard::key::d) &&
-            !kbd->is_keystate(mv::keyboard::key::a) &&
-            !kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
+        if (kbd->is_keystate(mv::keyboard::key::w) && !kbd->is_keystate(mv::keyboard::key::d) &&
+            !kbd->is_keystate(mv::keyboard::key::a) && !kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
         }
 
         // forward + left + right -- go straight
-        if (kbd->is_keystate(mv::keyboard::key::w) &&
-            kbd->is_keystate(mv::keyboard::key::d) &&
-            kbd->is_keystate(mv::keyboard::key::a) &&
-            !kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
+        if (kbd->is_keystate(mv::keyboard::key::w) && kbd->is_keystate(mv::keyboard::key::d) &&
+            kbd->is_keystate(mv::keyboard::key::a) && !kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
         }
 
         // forward + right
-        if (kbd->is_keystate(mv::keyboard::key::w) &&
-            kbd->is_keystate(mv::keyboard::key::d) &&
-            !kbd->is_keystate(mv::keyboard::key::a) &&
-            !kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(1.0f, 0.0f, -1.0f, 1.0f));
+        if (kbd->is_keystate(mv::keyboard::key::w) && kbd->is_keystate(mv::keyboard::key::d) &&
+            !kbd->is_keystate(mv::keyboard::key::a) && !kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, -1.0f, 1.0f));
         }
 
         // forward + left
-        if (kbd->is_keystate(mv::keyboard::key::w) &&
-            !kbd->is_keystate(mv::keyboard::key::d) &&
-            kbd->is_keystate(mv::keyboard::key::a) &&
-            !kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(-1.0f, 0.0f, -1.0f, 1.0f));
+        if (kbd->is_keystate(mv::keyboard::key::w) && !kbd->is_keystate(mv::keyboard::key::d) &&
+            kbd->is_keystate(mv::keyboard::key::a) && !kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, -1.0f, 1.0f));
         }
 
         // backward only
-        if (!kbd->is_keystate(mv::keyboard::key::w) &&
-            !kbd->is_keystate(mv::keyboard::key::d) &&
-            !kbd->is_keystate(mv::keyboard::key::a) &&
-            kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+        if (!kbd->is_keystate(mv::keyboard::key::w) && !kbd->is_keystate(mv::keyboard::key::d) &&
+            !kbd->is_keystate(mv::keyboard::key::a) && kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
         }
 
         // backward + left
-        if (!kbd->is_keystate(mv::keyboard::key::w) &&
-            !kbd->is_keystate(mv::keyboard::key::d) &&
-            kbd->is_keystate(mv::keyboard::key::a) &&
-            kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(-1.0f, 0.0f, 1.0f, 1.0f));
+        if (!kbd->is_keystate(mv::keyboard::key::w) && !kbd->is_keystate(mv::keyboard::key::d) &&
+            kbd->is_keystate(mv::keyboard::key::a) && kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, 1.0f, 1.0f));
         }
 
         // backward + right
-        if (!kbd->is_keystate(mv::keyboard::key::w) &&
-            kbd->is_keystate(mv::keyboard::key::d) &&
-            !kbd->is_keystate(mv::keyboard::key::a) &&
-            kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+        if (!kbd->is_keystate(mv::keyboard::key::w) && kbd->is_keystate(mv::keyboard::key::d) &&
+            !kbd->is_keystate(mv::keyboard::key::a) && kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+        }
+
+        // backward + left + right -- go back
+        if (!kbd->is_keystate(mv::keyboard::key::w) && kbd->is_keystate(mv::keyboard::key::d) &&
+            kbd->is_keystate(mv::keyboard::key::a) && kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
         }
 
         // left only
-        if (!kbd->is_keystate(mv::keyboard::key::w) &&
-            !kbd->is_keystate(mv::keyboard::key::d) &&
-            kbd->is_keystate(mv::keyboard::key::a) &&
-            !kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f));
+        if (!kbd->is_keystate(mv::keyboard::key::w) && !kbd->is_keystate(mv::keyboard::key::d) &&
+            kbd->is_keystate(mv::keyboard::key::a) && !kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f));
         }
 
         // right only
-        if (!kbd->is_keystate(mv::keyboard::key::w) &&
-            kbd->is_keystate(mv::keyboard::key::d) &&
-            !kbd->is_keystate(mv::keyboard::key::a) &&
-            !kbd->is_keystate(mv::keyboard::key::s)) {
-          camera->target->move(camera->orbit_angle,
-                               glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+        if (!kbd->is_keystate(mv::keyboard::key::w) && kbd->is_keystate(mv::keyboard::key::d) &&
+            !kbd->is_keystate(mv::keyboard::key::a) && !kbd->is_keystate(mv::keyboard::key::s)) {
+          camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
         }
 
         // debug -- add new objects to world with random position
@@ -399,9 +350,9 @@ void mv::Engine::go(void) {
           float x = xy_distr(eng);
           float y = xy_distr(eng);
           float z = z_distr(eng);
-          collection_handler->create_object("models/_viking_room.fbx");
-          collection_handler->models->at(0).objects->back().position =
-              glm::vec3(x, y, z);
+          collection_handler->create_object(*mv_device, *descriptor_allocator,
+                                            "models/_viking_room.fbx");
+          collection_handler->models->at(0).objects->back().position = glm::vec3(x, y, z);
         }
       }
       // update game objects
@@ -425,35 +376,29 @@ void mv::Engine::go(void) {
 }
 
 void mv::Engine::prepare_pipeline(void) {
-  vk::DescriptorSetLayout uniform_layout =
-      descriptor_allocator->get_layout("uniform_layout");
-  vk::DescriptorSetLayout sampler_layout =
-      descriptor_allocator->get_layout("sampler_layout");
+  vk::DescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
+  vk::DescriptorSetLayout sampler_layout = descriptor_allocator->get_layout("sampler_layout");
 
-  std::vector<vk::DescriptorSetLayout> layout_w_sampler = {
-      uniform_layout, uniform_layout, uniform_layout, sampler_layout};
-  std::vector<vk::DescriptorSetLayout> layout_no_sampler = {
-      uniform_layout, uniform_layout, uniform_layout};
+  std::vector<vk::DescriptorSetLayout> layout_w_sampler = {uniform_layout, uniform_layout,
+                                                           uniform_layout, sampler_layout};
+  std::vector<vk::DescriptorSetLayout> layout_no_sampler = {uniform_layout, uniform_layout,
+                                                            uniform_layout};
 
   // Pipeline for models with textures
   vk::PipelineLayoutCreateInfo w_sampler_info;
-  w_sampler_info.setLayoutCount =
-      static_cast<uint32_t>(layout_w_sampler.size());
+  w_sampler_info.setLayoutCount = static_cast<uint32_t>(layout_w_sampler.size());
   w_sampler_info.pSetLayouts = layout_w_sampler.data();
 
   // Pipeline with no textures
   vk::PipelineLayoutCreateInfo no_sampler_info;
-  no_sampler_info.setLayoutCount =
-      static_cast<uint32_t>(layout_no_sampler.size());
+  no_sampler_info.setLayoutCount = static_cast<uint32_t>(layout_no_sampler.size());
   no_sampler_info.pSetLayouts = layout_no_sampler.data();
 
   pipeline_layouts->insert(std::pair<std::string, vk::PipelineLayout>(
-      "sampler",
-      mv_device->logical_device->createPipelineLayout(w_sampler_info)));
+      "sampler", mv_device->logical_device->createPipelineLayout(w_sampler_info)));
 
   pipeline_layouts->insert(std::pair<std::string, vk::PipelineLayout>(
-      "no_sampler",
-      mv_device->logical_device->createPipelineLayout(no_sampler_info)));
+      "no_sampler", mv_device->logical_device->createPipelineLayout(no_sampler_info)));
 
   auto binding_description = Vertex::get_binding_description();
   auto attribute_description = Vertex::get_attribute_descriptions();
@@ -461,8 +406,7 @@ void mv::Engine::prepare_pipeline(void) {
   vk::PipelineVertexInputStateCreateInfo vi_state;
   vi_state.vertexBindingDescriptionCount = 1;
   vi_state.pVertexBindingDescriptions = &binding_description;
-  vi_state.vertexAttributeDescriptionCount =
-      static_cast<uint32_t>(attribute_description.size());
+  vi_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
   vi_state.pVertexAttributeDescriptions = attribute_description.data();
 
   vk::PipelineInputAssemblyStateCreateInfo ia_state;
@@ -481,9 +425,8 @@ void mv::Engine::prepare_pipeline(void) {
   rs_state.lineWidth = 1.0f;
 
   vk::PipelineColorBlendAttachmentState cba_state;
-  cba_state.colorWriteMask =
-      vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-      vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+  cba_state.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                             vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
   cba_state.blendEnable = VK_FALSE;
 
   vk::PipelineColorBlendStateCreateInfo cb_state;
@@ -520,19 +463,15 @@ void mv::Engine::prepare_pipeline(void) {
   // Load shaders
   auto vertex_shader = read_file("shaders/vertex.spv");
   auto fragment_shader = read_file("shaders/fragment.spv");
-  auto fragment_shader_no_sampler =
-      read_file("shaders/fragment_no_sampler.spv");
+  auto fragment_shader_no_sampler = read_file("shaders/fragment_no_sampler.spv");
 
   // Ensure we have files
-  if (vertex_shader.empty() || fragment_shader.empty() ||
-      fragment_shader_no_sampler.empty()) {
-    throw std::runtime_error(
-        "Failed to load fragment or vertex shader spv files");
+  if (vertex_shader.empty() || fragment_shader.empty() || fragment_shader_no_sampler.empty()) {
+    throw std::runtime_error("Failed to load fragment or vertex shader spv files");
   }
 
   vk::ShaderModule vertex_shader_module = create_shader_module(vertex_shader);
-  vk::ShaderModule fragment_shader_module =
-      create_shader_module(fragment_shader);
+  vk::ShaderModule fragment_shader_module = create_shader_module(fragment_shader);
   vk::ShaderModule fragment_shader_no_sampler_module =
       create_shader_module(fragment_shader_no_sampler);
 
@@ -552,15 +491,13 @@ void mv::Engine::prepare_pipeline(void) {
 
   // fragment shader stage NO sampler
   vk::PipelineShaderStageCreateInfo fragment_shader_stage_no_sampler_info;
-  fragment_shader_stage_no_sampler_info.stage =
-      vk::ShaderStageFlagBits::eFragment;
-  fragment_shader_stage_no_sampler_info.module =
-      fragment_shader_no_sampler_module;
+  fragment_shader_stage_no_sampler_info.stage = vk::ShaderStageFlagBits::eFragment;
+  fragment_shader_stage_no_sampler_info.module = fragment_shader_no_sampler_module;
   fragment_shader_stage_no_sampler_info.pName = "main";
   fragment_shader_stage_no_sampler_info.pSpecializationInfo = nullptr;
 
-  std::vector<vk::PipelineShaderStageCreateInfo> shader_stages = {
-      vertex_shader_stage_info, fragment_shader_stage_info};
+  std::vector<vk::PipelineShaderStageCreateInfo> shader_stages = {vertex_shader_stage_info,
+                                                                  fragment_shader_stage_info};
   std::vector<vk::PipelineShaderStageCreateInfo> shader_stages_no_sampler = {
       vertex_shader_stage_info, fragment_shader_stage_no_sampler_info};
 
@@ -574,19 +511,17 @@ void mv::Engine::prepare_pipeline(void) {
   pipeline_w_sampler_info.pDepthStencilState = &ds_state;
   pipeline_w_sampler_info.pViewportState = &vp_state;
   pipeline_w_sampler_info.pMultisampleState = &ms_state;
-  pipeline_w_sampler_info.stageCount =
-      static_cast<uint32_t>(shader_stages.size());
+  pipeline_w_sampler_info.stageCount = static_cast<uint32_t>(shader_stages.size());
   pipeline_w_sampler_info.pStages = shader_stages.data();
   pipeline_w_sampler_info.pVertexInputState = &vi_state;
   pipeline_w_sampler_info.pDynamicState = nullptr;
 
   // Create graphics pipeline with sampler
-  vk::ResultValue result = mv_device->logical_device->createGraphicsPipeline(
-      nullptr, pipeline_w_sampler_info);
+  vk::ResultValue result =
+      mv_device->logical_device->createGraphicsPipeline(nullptr, pipeline_w_sampler_info);
   if (result.result != vk::Result::eSuccess)
     throw std::runtime_error("Failed to create graphics pipeline with sampler");
-  pipelines->insert(
-      std::pair<std::string, vk::Pipeline>("sampler", result.value));
+  pipelines->insert(std::pair<std::string, vk::Pipeline>("sampler", result.value));
 
   // Create pipeline with NO sampler
   vk::GraphicsPipelineCreateInfo pipeline_no_sampler_info;
@@ -598,25 +533,20 @@ void mv::Engine::prepare_pipeline(void) {
   pipeline_no_sampler_info.pDepthStencilState = &ds_state;
   pipeline_no_sampler_info.pViewportState = &vp_state;
   pipeline_no_sampler_info.pMultisampleState = &ms_state;
-  pipeline_no_sampler_info.stageCount =
-      static_cast<uint32_t>(shader_stages_no_sampler.size());
+  pipeline_no_sampler_info.stageCount = static_cast<uint32_t>(shader_stages_no_sampler.size());
   pipeline_no_sampler_info.pStages = shader_stages_no_sampler.data();
   pipeline_no_sampler_info.pVertexInputState = &vi_state;
   pipeline_no_sampler_info.pDynamicState = nullptr;
 
   // Create graphics pipeline NO sampler
-  result = mv_device->logical_device->createGraphicsPipeline(
-      nullptr, pipeline_no_sampler_info);
+  result = mv_device->logical_device->createGraphicsPipeline(nullptr, pipeline_no_sampler_info);
   if (result.result != vk::Result::eSuccess)
-    throw std::runtime_error(
-        "Failed to create graphics pipeline with no sampler");
-  pipelines->insert(
-      std::pair<std::string, vk::Pipeline>("no_sampler", result.value));
+    throw std::runtime_error("Failed to create graphics pipeline with no sampler");
+  pipelines->insert(std::pair<std::string, vk::Pipeline>("no_sampler", result.value));
 
   mv_device->logical_device->destroyShaderModule(vertex_shader_module);
   mv_device->logical_device->destroyShaderModule(fragment_shader_module);
-  mv_device->logical_device->destroyShaderModule(
-      fragment_shader_no_sampler_module);
+  mv_device->logical_device->destroyShaderModule(fragment_shader_no_sampler_module);
   return;
 }
 
@@ -639,47 +569,40 @@ void mv::Engine::record_command_buffer(uint32_t image_index) {
   pass_info.clearValueCount = static_cast<uint32_t>(cls.size());
   pass_info.pClearValues = cls.data();
 
-  command_buffers->at(image_index)
-      .beginRenderPass(pass_info, vk::SubpassContents::eInline);
+  command_buffers->at(image_index).beginRenderPass(pass_info, vk::SubpassContents::eInline);
 
   for (auto &model : *collection_handler->models) {
     // for each model select the appropriate pipeline
     if (model.has_texture) {
       command_buffers->at(image_index)
-          .bindPipeline(vk::PipelineBindPoint::eGraphics,
-                        pipelines->at("sampler"));
+          .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines->at("sampler"));
     } else {
       command_buffers->at(image_index)
-          .bindPipeline(vk::PipelineBindPoint::eGraphics,
-                        pipelines->at("no_sampler"));
+          .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines->at("no_sampler"));
     }
     for (auto &object : *model.objects) {
       for (auto &mesh : *model._meshes) {
         std::vector<vk::DescriptorSet> to_bind = {
-            object.model_descriptor,
-            collection_handler->view_uniform->descriptor,
+            object.model_descriptor, collection_handler->view_uniform->descriptor,
             collection_handler->projection_uniform->descriptor};
         if (model.has_texture) {
           // TODO
           // allow for multiple texture descriptors
           to_bind.push_back(mesh.textures.at(0).descriptor);
           command_buffers->at(image_index)
-              .bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                  pipeline_layouts->at("sampler"), 0, to_bind,
-                                  nullptr);
+              .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layouts->at("sampler"),
+                                  0, to_bind, nullptr);
         } else {
           command_buffers->at(image_index)
               .bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                  pipeline_layouts->at("no_sampler"), 0,
-                                  to_bind, nullptr);
+                                  pipeline_layouts->at("no_sampler"), 0, to_bind, nullptr);
         }
         // Bind mesh buffers
         mesh.bindBuffers(command_buffers->at(image_index));
 
         // Indexed draw
         command_buffers->at(image_index)
-            .drawIndexed(static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0,
-                         0);
+            .drawIndexed(static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
       }
     }
   }
@@ -692,14 +615,13 @@ void mv::Engine::record_command_buffer(uint32_t image_index) {
 }
 
 void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index) {
-  vk::Result res = mv_device->logical_device->waitForFences(
-      in_flight_fences->at(cur_frame), VK_TRUE, UINT64_MAX);
+  vk::Result res = mv_device->logical_device->waitForFences(in_flight_fences->at(cur_frame),
+                                                            VK_TRUE, UINT64_MAX);
   if (res != vk::Result::eSuccess)
     throw std::runtime_error("Error occurred while waiting for fence");
 
   vk::Result result = mv_device->logical_device->acquireNextImageKHR(
-      *swapchain->swapchain, UINT64_MAX, semaphores->present_complete, nullptr,
-      &cur_index);
+      *swapchain->swapchain, UINT64_MAX, semaphores->present_complete, nullptr, &cur_index);
 
   switch (result) {
     case vk::Result::eErrorOutOfDateKHR:
@@ -707,21 +629,19 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index) {
       return;
       break;
     case vk::Result::eSuboptimalKHR:
-      std::cout << "[/] Swapchain is no longer optimal : not recreating"
-                << std::endl;
+      std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
       break;
     case vk::Result::eSuccess:
       break;
-    default:  // unhandled error occurred
-      throw std::runtime_error(
-          "Unhandled error case while acquiring a swapchain image for "
-          "rendering");
+    default: // unhandled error occurred
+      throw std::runtime_error("Unhandled error case while acquiring a swapchain image for "
+                               "rendering");
       break;
   }
 
   if (wait_fences->at(cur_index)) {
-    vk::Result res = mv_device->logical_device->waitForFences(
-        wait_fences->at(cur_index), VK_TRUE, UINT64_MAX);
+    vk::Result res =
+        mv_device->logical_device->waitForFences(wait_fences->at(cur_index), VK_TRUE, UINT64_MAX);
     if (res != vk::Result::eSuccess)
       throw std::runtime_error("Error occurred while waiting for fence");
   }
@@ -733,8 +653,7 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index) {
 
   vk::SubmitInfo submit_info;
   vk::Semaphore waitSemaphores[] = {semaphores->present_complete};
-  vk::PipelineStageFlags wait_stages[] = {
-      vk::PipelineStageFlagBits::eColorAttachmentOutput};
+  vk::PipelineStageFlags wait_stages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
   submit_info.waitSemaphoreCount = 1;
   submit_info.pWaitSemaphores = waitSemaphores;
   submit_info.pWaitDstStageMask = wait_stages;
@@ -746,8 +665,7 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index) {
 
   mv_device->logical_device->resetFences(in_flight_fences->at(cur_frame));
 
-  result = mv_device->graphics_queue->submit(1, &submit_info,
-                                             in_flight_fences->at(cur_frame));
+  result = mv_device->graphics_queue->submit(1, &submit_info, in_flight_fences->at(cur_frame));
 
   switch (result) {
     case vk::Result::eErrorOutOfDateKHR:
@@ -755,12 +673,11 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index) {
       return;
       break;
     case vk::Result::eSuboptimalKHR:
-      std::cout << "[/] Swapchain is no longer optimal : not recreating"
-                << std::endl;
+      std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
       break;
     case vk::Result::eSuccess:
       break;
-    default:  // unhandled error occurred
+    default: // unhandled error occurred
       throw std::runtime_error("Unhandled error case while submitting queue");
       break;
   }
@@ -782,12 +699,11 @@ void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index) {
       return;
       break;
     case vk::Result::eSuboptimalKHR:
-      std::cout << "[/] Swapchain is no longer optimal : not recreating"
-                << std::endl;
+      std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
       break;
     case vk::Result::eSuccess:
       break;
-    default:  // unhandled error occurred
+    default: // unhandled error occurred
       throw std::runtime_error("Unhandled error case while presenting");
       break;
   }
