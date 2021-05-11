@@ -22,13 +22,7 @@ namespace mv {
     Engine &operator=(const Engine &) = delete;
     Engine(const Engine &) = delete;
 
-    // vk::Pipeline pipeline_w_sampler;
-    // vk::Pipeline pipeline_no_sampler;
-
-    // vk::PipelineLayout pipeline_layout_w_sampler;
-    // vk::PipelineLayout pipeline_layout_no_sampler;
-
-    std::shared_ptr<Allocator> descriptor_allocator; // descriptor pool/set manager
+    std::unique_ptr<Allocator> descriptor_allocator; // descriptor pool/set manager
     std::unique_ptr<Collection> collection_handler;  // model/obj manager
     std::unique_ptr<Camera> camera;                  // camera manager(view/proj matrix handler)
 
