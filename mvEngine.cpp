@@ -267,8 +267,10 @@ void mv::Engine::go(void) {
           mouse->stored_orbit = camera->orbit_angle;
           mouse->stored_pitch = camera->pitch;
           // hide pointer & warp to drag start
-          // XIWarpPointer(display, mouse->deviceid, None, window, 0, 0, 0, 0,
-          // mouse->drag_startx, mouse->drag_starty); XFlush(display);
+          // XIWarpPointer(*display, mouse->deviceid, None, window, 0, 0, 0, 0, mouse->drag_startx,
+          //               mouse->drag_starty);
+          XWarpPointer(*display, None, window, 0, 0, 0, 0, mouse->drag_startx, mouse->drag_starty);
+          XFlush(*display);
           mouse->clear();
           camera->target->rotate_to_face(camera->orbit_angle);
         }

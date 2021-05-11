@@ -508,8 +508,6 @@ void mv::MWindow::handle_x_event(void) {
     XIDeviceEvent *xi_device_evt = static_cast<XIDeviceEvent *>(gen_cookie->data);
     // retrieve mouse deltas
     if (event.xcookie.evtype == XI_RawMotion) {
-      std::cout << "raw event => " << xi_device_evt->event_x << ", " << xi_device_evt->event_y
-                << "\n";
       mouse->process_device_event(xi_device_evt);
     }
     XFreeEventData(*display, &event.xcookie);

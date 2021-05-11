@@ -37,14 +37,14 @@ namespace mv {
                           vk::MemoryPropertyFlagBits::eHostVisible |
                               vk::MemoryPropertyFlagBits::eHostCoherent,
                           &view_uniform->mv_buffer, sizeof(uniform_object));
-      view_uniform->mv_buffer.map(*m_dvc.logical_device);
+      view_uniform->mv_buffer.map(m_dvc);
 
       // create uniform buffer for projection matrix
       m_dvc.create_buffer(vk::BufferUsageFlagBits::eUniformBuffer,
                           vk::MemoryPropertyFlagBits::eHostVisible |
                               vk::MemoryPropertyFlagBits::eHostCoherent,
                           &projection_uniform->mv_buffer, sizeof(uniform_object));
-      projection_uniform->mv_buffer.map(*m_dvc.logical_device);
+      projection_uniform->mv_buffer.map(m_dvc);
     }
     ~Collection(void) {
     }
@@ -112,7 +112,7 @@ namespace mv {
           vk::BufferUsageFlagBits::eUniformBuffer,
           vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
           &models->at(model_index).objects->back().uniform_buffer, sizeof(mv::Object::matrices));
-      models->at(model_index).objects->back().uniform_buffer.map(*m_dvc.logical_device);
+      models->at(model_index).objects->back().uniform_buffer.map(m_dvc);
 
       vk::DescriptorSetLayout uniform_layout = m_alloc.get_layout("uniform_layout");
 
@@ -165,15 +165,15 @@ namespace mv {
           throw std::runtime_error(oss.str());
         }
         for (auto &object : *model.objects) {
-          object.uniform_buffer.destroy(*m_dvc.logical_device);
+          object.uniform_buffer.destroy(m_dvc);
         }
         for (auto &mesh : *model._meshes) {
           mesh.cleanup(m_dvc);
         }
       }
 
-      view_uniform->mv_buffer.destroy(*m_dvc.logical_device);
-      projection_uniform->mv_buffer.destroy(*m_dvc.logical_device);
+      view_uniform->mv_buffer.destroy(m_dvc);
+      projection_uniform->mv_buffer.destroy(m_dvc);
       return;
     }
   };

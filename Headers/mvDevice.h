@@ -14,6 +14,7 @@
 #include "mvBuffer.h"
 
 namespace mv {
+  struct Buffer;
   struct Device {
     Device(const vk::PhysicalDevice &p_dvc, std::vector<std::string> &requested_device_exts) {
       requested_physical_device_exts = requested_device_exts;

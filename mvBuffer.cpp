@@ -1,25 +1,25 @@
 #include "mvBuffer.h"
 
 // Maps vulkan buffer/memory to member variable void* mapped
-void mv::Buffer::map(const vk::Device &l_dvc, vk::DeviceSize psize, vk::DeviceSize poffset) {
-  mapped = l_dvc.mapMemory(*memory, poffset, psize);
+void mv::Buffer::map(const mv::Device &m_dvc, vk::DeviceSize psize, vk::DeviceSize poffset) {
+  mapped = m_dvc.logical_device->mapMemory(*memory, poffset, psize);
   if (!mapped)
     throw std::runtime_error("Failed to map memory :: buffer handler");
   return;
 }
 
 // Unmaps void* mapped from vulkan buffer/memory
-void mv::Buffer::unmap(const vk::Device &l_dvc) {
+void mv::Buffer::unmap(const mv::Device &m_dvc) {
   if (mapped) {
-    l_dvc.unmapMemory(*memory);
+    m_dvc.logical_device->unmapMemory(*memory);
     mapped = nullptr;
   }
 }
 
 // Bind allocated memory to buffer
-void mv::Buffer::bind(const vk::Device &l_dvc, vk::DeviceSize poffset) {
+void mv::Buffer::bind(const mv::Device &m_dvc, vk::DeviceSize poffset) {
 
-  l_dvc.bindBufferMemory(*buffer, *memory, poffset);
+  m_dvc.logical_device->bindBufferMemory(*buffer, *memory, poffset);
 
   return;
 }
@@ -45,17 +45,17 @@ void mv::Buffer::copy_from(void *data, vk::DeviceSize size) {
 
 // Unmaps void* mapped if it was previously mapped to vulkan buffer/memory
 // Destroys buffer and frees allocated memory
-void mv::Buffer::destroy(const vk::Device &l_dvc) {
+void mv::Buffer::destroy(const mv::Device &m_dvc) {
 
-  unmap(l_dvc);
+  unmap(m_dvc);
 
   if (buffer) {
-    l_dvc.destroyBuffer(*buffer);
+    m_dvc.logical_device->destroyBuffer(*buffer);
     buffer.reset();
   }
 
   if (memory) {
-    l_dvc.freeMemory(*memory);
+    m_dvc.logical_device->freeMemory(*memory);
     memory.reset();
   }
 }

@@ -168,17 +168,17 @@ void mv::Device::create_buffer(vk::BufferUsageFlags usage_flags,
   buffer->memory_property_flags = memory_property_flags;
 
   // bind buffer & memory
-  buffer->bind(*logical_device);
+  buffer->bind(*this);
 
   buffer->setup_descriptor();
 
   // copy if necessary
   if (data != nullptr) {
-    buffer->map(*logical_device);
+    buffer->map(*this);
 
     memcpy(buffer->mapped, data, size);
 
-    buffer->unmap(*logical_device);
+    buffer->unmap(*this);
   }
 
   return;

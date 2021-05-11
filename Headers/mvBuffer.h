@@ -5,7 +5,11 @@
 #include <cstring>
 #include <vulkan/vulkan.hpp>
 
+#include "mvDevice.h"
+
 namespace mv {
+
+  struct Device;
 
   struct Buffer {
     Buffer() {
@@ -36,12 +40,12 @@ namespace mv {
     // ptr to mapped memory for host visible/coherent buffers
     void *mapped = nullptr;
 
-    void map(const vk::Device &l_dvc, vk::DeviceSize size = VK_WHOLE_SIZE,
+    void map(const mv::Device &m_dvc, vk::DeviceSize size = VK_WHOLE_SIZE,
              vk::DeviceSize offset = 0);
 
-    void unmap(const vk::Device &l_dvc);
+    void unmap(const mv::Device &m_dvc);
 
-    void bind(const vk::Device &l_dvc, vk::DeviceSize offset = 0);
+    void bind(const mv::Device &m_dvc, vk::DeviceSize offset = 0);
 
     void setup_descriptor(vk::DeviceSize size = VK_WHOLE_SIZE, vk::DeviceSize offset = 0);
 
@@ -51,7 +55,7 @@ namespace mv {
     // flush buffer
     // invalidate buffer
 
-    void destroy(const vk::Device &l_dvc);
+    void destroy(const mv::Device &m_dvc);
   };
 
 }; // namespace mv
