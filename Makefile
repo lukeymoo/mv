@@ -123,168 +123,6 @@ main/fast:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/build
 .PHONY : main/fast
 
-Headers/imgui-1.82/backends/imgui_impl_vulkan.o: Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.o
-
-.PHONY : Headers/imgui-1.82/backends/imgui_impl_vulkan.o
-
-# target to build an object file
-Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.o
-.PHONY : Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.o
-
-Headers/imgui-1.82/backends/imgui_impl_vulkan.i: Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.i
-
-.PHONY : Headers/imgui-1.82/backends/imgui_impl_vulkan.i
-
-# target to preprocess a source file
-Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.i
-.PHONY : Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.i
-
-Headers/imgui-1.82/backends/imgui_impl_vulkan.s: Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.s
-
-.PHONY : Headers/imgui-1.82/backends/imgui_impl_vulkan.s
-
-# target to generate assembly for a file
-Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.s
-.PHONY : Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp.s
-
-Headers/imgui-1.82/imgui.o: Headers/imgui-1.82/imgui.cpp.o
-
-.PHONY : Headers/imgui-1.82/imgui.o
-
-# target to build an object file
-Headers/imgui-1.82/imgui.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui.cpp.o
-.PHONY : Headers/imgui-1.82/imgui.cpp.o
-
-Headers/imgui-1.82/imgui.i: Headers/imgui-1.82/imgui.cpp.i
-
-.PHONY : Headers/imgui-1.82/imgui.i
-
-# target to preprocess a source file
-Headers/imgui-1.82/imgui.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui.cpp.i
-.PHONY : Headers/imgui-1.82/imgui.cpp.i
-
-Headers/imgui-1.82/imgui.s: Headers/imgui-1.82/imgui.cpp.s
-
-.PHONY : Headers/imgui-1.82/imgui.s
-
-# target to generate assembly for a file
-Headers/imgui-1.82/imgui.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui.cpp.s
-.PHONY : Headers/imgui-1.82/imgui.cpp.s
-
-Headers/imgui-1.82/imgui_demo.o: Headers/imgui-1.82/imgui_demo.cpp.o
-
-.PHONY : Headers/imgui-1.82/imgui_demo.o
-
-# target to build an object file
-Headers/imgui-1.82/imgui_demo.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_demo.cpp.o
-.PHONY : Headers/imgui-1.82/imgui_demo.cpp.o
-
-Headers/imgui-1.82/imgui_demo.i: Headers/imgui-1.82/imgui_demo.cpp.i
-
-.PHONY : Headers/imgui-1.82/imgui_demo.i
-
-# target to preprocess a source file
-Headers/imgui-1.82/imgui_demo.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_demo.cpp.i
-.PHONY : Headers/imgui-1.82/imgui_demo.cpp.i
-
-Headers/imgui-1.82/imgui_demo.s: Headers/imgui-1.82/imgui_demo.cpp.s
-
-.PHONY : Headers/imgui-1.82/imgui_demo.s
-
-# target to generate assembly for a file
-Headers/imgui-1.82/imgui_demo.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_demo.cpp.s
-.PHONY : Headers/imgui-1.82/imgui_demo.cpp.s
-
-Headers/imgui-1.82/imgui_draw.o: Headers/imgui-1.82/imgui_draw.cpp.o
-
-.PHONY : Headers/imgui-1.82/imgui_draw.o
-
-# target to build an object file
-Headers/imgui-1.82/imgui_draw.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_draw.cpp.o
-.PHONY : Headers/imgui-1.82/imgui_draw.cpp.o
-
-Headers/imgui-1.82/imgui_draw.i: Headers/imgui-1.82/imgui_draw.cpp.i
-
-.PHONY : Headers/imgui-1.82/imgui_draw.i
-
-# target to preprocess a source file
-Headers/imgui-1.82/imgui_draw.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_draw.cpp.i
-.PHONY : Headers/imgui-1.82/imgui_draw.cpp.i
-
-Headers/imgui-1.82/imgui_draw.s: Headers/imgui-1.82/imgui_draw.cpp.s
-
-.PHONY : Headers/imgui-1.82/imgui_draw.s
-
-# target to generate assembly for a file
-Headers/imgui-1.82/imgui_draw.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_draw.cpp.s
-.PHONY : Headers/imgui-1.82/imgui_draw.cpp.s
-
-Headers/imgui-1.82/imgui_tables.o: Headers/imgui-1.82/imgui_tables.cpp.o
-
-.PHONY : Headers/imgui-1.82/imgui_tables.o
-
-# target to build an object file
-Headers/imgui-1.82/imgui_tables.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_tables.cpp.o
-.PHONY : Headers/imgui-1.82/imgui_tables.cpp.o
-
-Headers/imgui-1.82/imgui_tables.i: Headers/imgui-1.82/imgui_tables.cpp.i
-
-.PHONY : Headers/imgui-1.82/imgui_tables.i
-
-# target to preprocess a source file
-Headers/imgui-1.82/imgui_tables.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_tables.cpp.i
-.PHONY : Headers/imgui-1.82/imgui_tables.cpp.i
-
-Headers/imgui-1.82/imgui_tables.s: Headers/imgui-1.82/imgui_tables.cpp.s
-
-.PHONY : Headers/imgui-1.82/imgui_tables.s
-
-# target to generate assembly for a file
-Headers/imgui-1.82/imgui_tables.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_tables.cpp.s
-.PHONY : Headers/imgui-1.82/imgui_tables.cpp.s
-
-Headers/imgui-1.82/imgui_widgets.o: Headers/imgui-1.82/imgui_widgets.cpp.o
-
-.PHONY : Headers/imgui-1.82/imgui_widgets.o
-
-# target to build an object file
-Headers/imgui-1.82/imgui_widgets.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_widgets.cpp.o
-.PHONY : Headers/imgui-1.82/imgui_widgets.cpp.o
-
-Headers/imgui-1.82/imgui_widgets.i: Headers/imgui-1.82/imgui_widgets.cpp.i
-
-.PHONY : Headers/imgui-1.82/imgui_widgets.i
-
-# target to preprocess a source file
-Headers/imgui-1.82/imgui_widgets.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_widgets.cpp.i
-.PHONY : Headers/imgui-1.82/imgui_widgets.cpp.i
-
-Headers/imgui-1.82/imgui_widgets.s: Headers/imgui-1.82/imgui_widgets.cpp.s
-
-.PHONY : Headers/imgui-1.82/imgui_widgets.s
-
-# target to generate assembly for a file
-Headers/imgui-1.82/imgui_widgets.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_widgets.cpp.s
-.PHONY : Headers/imgui-1.82/imgui_widgets.cpp.s
-
 main.o: main.cpp.o
 
 .PHONY : main.o
@@ -447,32 +285,32 @@ mvImage.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvImage.cpp.s
 .PHONY : mvImage.cpp.s
 
-mvKeyboard.o: mvKeyboard.cpp.o
+mvInput.o: mvInput.cpp.o
 
-.PHONY : mvKeyboard.o
+.PHONY : mvInput.o
 
 # target to build an object file
-mvKeyboard.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvKeyboard.cpp.o
-.PHONY : mvKeyboard.cpp.o
+mvInput.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvInput.cpp.o
+.PHONY : mvInput.cpp.o
 
-mvKeyboard.i: mvKeyboard.cpp.i
+mvInput.i: mvInput.cpp.i
 
-.PHONY : mvKeyboard.i
+.PHONY : mvInput.i
 
 # target to preprocess a source file
-mvKeyboard.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvKeyboard.cpp.i
-.PHONY : mvKeyboard.cpp.i
+mvInput.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvInput.cpp.i
+.PHONY : mvInput.cpp.i
 
-mvKeyboard.s: mvKeyboard.cpp.s
+mvInput.s: mvInput.cpp.s
 
-.PHONY : mvKeyboard.s
+.PHONY : mvInput.s
 
 # target to generate assembly for a file
-mvKeyboard.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvKeyboard.cpp.s
-.PHONY : mvKeyboard.cpp.s
+mvInput.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvInput.cpp.s
+.PHONY : mvInput.cpp.s
 
 mvModel.o: mvModel.cpp.o
 
@@ -500,33 +338,6 @@ mvModel.s: mvModel.cpp.s
 mvModel.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvModel.cpp.s
 .PHONY : mvModel.cpp.s
-
-mvMouse.o: mvMouse.cpp.o
-
-.PHONY : mvMouse.o
-
-# target to build an object file
-mvMouse.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvMouse.cpp.o
-.PHONY : mvMouse.cpp.o
-
-mvMouse.i: mvMouse.cpp.i
-
-.PHONY : mvMouse.i
-
-# target to preprocess a source file
-mvMouse.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvMouse.cpp.i
-.PHONY : mvMouse.cpp.i
-
-mvMouse.s: mvMouse.cpp.s
-
-.PHONY : mvMouse.s
-
-# target to generate assembly for a file
-mvMouse.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvMouse.cpp.s
-.PHONY : mvMouse.cpp.s
 
 mvSwap.o: mvSwap.cpp.o
 
@@ -618,24 +429,6 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
 	@echo "... main"
-	@echo "... Headers/imgui-1.82/backends/imgui_impl_vulkan.o"
-	@echo "... Headers/imgui-1.82/backends/imgui_impl_vulkan.i"
-	@echo "... Headers/imgui-1.82/backends/imgui_impl_vulkan.s"
-	@echo "... Headers/imgui-1.82/imgui.o"
-	@echo "... Headers/imgui-1.82/imgui.i"
-	@echo "... Headers/imgui-1.82/imgui.s"
-	@echo "... Headers/imgui-1.82/imgui_demo.o"
-	@echo "... Headers/imgui-1.82/imgui_demo.i"
-	@echo "... Headers/imgui-1.82/imgui_demo.s"
-	@echo "... Headers/imgui-1.82/imgui_draw.o"
-	@echo "... Headers/imgui-1.82/imgui_draw.i"
-	@echo "... Headers/imgui-1.82/imgui_draw.s"
-	@echo "... Headers/imgui-1.82/imgui_tables.o"
-	@echo "... Headers/imgui-1.82/imgui_tables.i"
-	@echo "... Headers/imgui-1.82/imgui_tables.s"
-	@echo "... Headers/imgui-1.82/imgui_widgets.o"
-	@echo "... Headers/imgui-1.82/imgui_widgets.i"
-	@echo "... Headers/imgui-1.82/imgui_widgets.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
@@ -654,15 +447,12 @@ help:
 	@echo "... mvImage.o"
 	@echo "... mvImage.i"
 	@echo "... mvImage.s"
-	@echo "... mvKeyboard.o"
-	@echo "... mvKeyboard.i"
-	@echo "... mvKeyboard.s"
+	@echo "... mvInput.o"
+	@echo "... mvInput.i"
+	@echo "... mvInput.s"
 	@echo "... mvModel.o"
 	@echo "... mvModel.i"
 	@echo "... mvModel.s"
-	@echo "... mvMouse.o"
-	@echo "... mvMouse.i"
-	@echo "... mvMouse.s"
 	@echo "... mvSwap.o"
 	@echo "... mvSwap.i"
 	@echo "... mvSwap.s"

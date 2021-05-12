@@ -13,8 +13,9 @@ find_package(Vulkan REQUIRED)
 find_package(X11 REQUIRED)
 
 set(HEADERS
-    Headers/imgui-1.82/imgui.h
-    Headers/imgui-1.82/backends/imgui_impl_vulkan.h
+    # Headers/imgui-1.82/imgui.h
+    # Headers/imgui-1.82/backends/imgui_impl_vulkan.h
+    Headers/mvInput.h
     Headers/mvWindow.h
     Headers/mvCollection.h
     Headers/mvImage.h
@@ -25,17 +26,16 @@ set(HEADERS
     Headers/mvBuffer.h
     Headers/mvEngine.h
     Headers/mvSwap.h
-    Headers/mvDevice.h
-    Headers/mvKeyboard.h
-    Headers/mvMouse.h)
+    Headers/mvDevice.h)
 
 set(SOURCES
-    Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp
-    Headers/imgui-1.82/imgui.cpp
-    Headers/imgui-1.82/imgui_tables.cpp
-    Headers/imgui-1.82/imgui_draw.cpp
-    Headers/imgui-1.82/imgui_widgets.cpp
-    Headers/imgui-1.82/imgui_demo.cpp
+    # Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp
+    # Headers/imgui-1.82/imgui.cpp
+    # Headers/imgui-1.82/imgui_tables.cpp
+    # Headers/imgui-1.82/imgui_draw.cpp
+    # Headers/imgui-1.82/imgui_widgets.cpp
+    # Headers/imgui-1.82/imgui_demo.cpp
+    mvInput.cpp
     mvImage.cpp
     mvTimer.cpp
     mvCamera.cpp
@@ -44,8 +44,6 @@ set(SOURCES
     mvEngine.cpp
     mvSwap.cpp
     mvDevice.cpp
-    mvKeyboard.cpp
-    mvMouse.cpp
     mvWindow.cpp
     main.cpp)
 
