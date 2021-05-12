@@ -1,14 +1,14 @@
 #include "mvSwap.h"
 
-void mv::Swap::init(Display *display, Window window, const vk::Instance &inst,
-                    const vk::PhysicalDevice &p_dvc) {
+void mv::Swap::init(GLFWwindow *window, const vk::Instance &inst, const vk::PhysicalDevice &p_dvc) {
+  // create window
+  VkSurfaceKHR t_surface = nullptr;
+  glfwCreateWindowSurface(inst, window, nullptr, &t_surface);
+  if (!t_surface)
+    throw std::runtime_error("Failed to create vulkan surface");
 
-  vk::XlibSurfaceCreateInfoKHR surface_info;
-  surface_info.dpy = display;
-  surface_info.window = window;
-
-  // Create surface for vulkan
-  surface = std::make_unique<vk::SurfaceKHR>(inst.createXlibSurfaceKHR(surface_info, nullptr));
+  // store surface
+  surface = std::make_unique<vk::SurfaceKHR>(t_surface);
 
   // get queue family properties
   std::vector<vk::QueueFamilyProperties> queue_properties = p_dvc.getQueueFamilyProperties();

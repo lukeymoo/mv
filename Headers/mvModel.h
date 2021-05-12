@@ -58,8 +58,8 @@ namespace mv {
     vk::DescriptorSet model_descriptor;
     vk::DescriptorSet texture_descriptor;
     mv::Buffer uniform_buffer;
-    glm::vec3 rotation = glm::vec3(1.0);
-    glm::vec3 position = glm::vec3(1.0);
+    glm::vec3 rotation = {0.0f, 0.0f, 0.0f};
+    glm::vec3 position = {0.0f, 0.0f, 0.0f};
     uint32_t model_index;
     glm::vec3 front_face;
     float scale_factor = 1.0f;
@@ -342,7 +342,6 @@ namespace mv {
       std::cout << "\t :: Loaded model => " << filename << "\n";
       std::cout << "\t\t Meshes => " << _meshes->size() << "\n";
       std::cout << "\t\t Textures => " << _loaded_textures->size() << "\n";
-      std::cout << "\t\t Default object count => " << objects->size() << "\n";
       return;
     }
 

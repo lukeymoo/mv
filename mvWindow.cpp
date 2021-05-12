@@ -8,7 +8,7 @@ void mv::MWindow::prepare(void) {
   // passes... vulkan handles to swapchain handler
   init_vulkan();
 
-  swapchain->init(*display, window, *instance, *physical_device);
+  swapchain->init(window, *instance, *physical_device);
   command_pool =
       std::make_unique<vk::CommandPool>(mv_device->create_command_pool(swapchain->graphics_index));
 
@@ -25,6 +25,12 @@ void mv::MWindow::prepare(void) {
   // create_pipeline_cache();
 
   setup_framebuffer();
+
+  // load device extension functions
+  pfn_vkCmdSetPrimitiveTopology = reinterpret_cast<PFN_vkCmdSetPrimitiveTopologyEXT>(
+      vkGetInstanceProcAddr(*instance, "vkCmdSetPrimitiveTopologyEXT"));
+  if (!pfn_vkCmdSetPrimitiveTopology)
+    throw std::runtime_error("Failed to load extended dynamic state extensions");
   return;
 }
 
@@ -49,6 +55,7 @@ void mv::MWindow::init_vulkan(void) {
 
   std::vector<std::string> tmp;
   for (const auto &l : requested_device_extensions) {
+    std::cout << "\t[-] Requesting device extension => " << l << "\n";
     tmp.push_back(l);
   }
 
@@ -109,9 +116,9 @@ void mv::MWindow::create_instance(void) {
     req_layer.push_back(layer);
   }
   std::vector<const char *> req_inst_ext;
-  for (auto &ext : requested_instance_extensions) {
+  for (auto &ext : f_req) {
     std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
-    req_inst_ext.push_back(ext);
+    req_inst_ext.push_back(ext.c_str());
   }
 
   vk::InstanceCreateInfo create_info;
@@ -124,9 +131,9 @@ void mv::MWindow::create_instance(void) {
 #endif
 #ifdef NDEBUG /* Debugging disabled */
   std::vector<const char *> req_inst_ext;
-  for (auto &ext : requested_instance_extensions) {
+  for (auto &ext : f_req) {
     std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
-    req_inst_ext.push_back(ext);
+    req_inst_ext.push_back(ext.c_str());
   }
 
   vk::InstanceCreateInfo create_info = {};
@@ -139,6 +146,8 @@ void mv::MWindow::create_instance(void) {
   // double check instance(prob a triple check at this point)
   if (!*instance)
     throw std::runtime_error("Failed to create vulkan instance");
+
+  return;
 }
 
 void mv::MWindow::create_command_buffers(void) {
@@ -360,15 +369,16 @@ void mv::MWindow::check_validation_support(void) {
 void mv::MWindow::check_instance_ext(void) {
   std::vector<vk::ExtensionProperties> inst_extensions = vk::enumerateInstanceExtensionProperties();
 
-  if (inst_extensions.size() < 1 && !requested_instance_extensions.empty())
+  // use f_req vector for instance extensions
+  if (inst_extensions.size() < 1 && !f_req.empty())
     throw std::runtime_error("No instance extensions found");
 
   std::string prelude = "The following instance extensions were not found...\n";
   std::string failed;
-  for (const auto &requested_extension : requested_instance_extensions) {
+  for (const auto &requested_extension : f_req) {
     bool match = false;
     for (const auto &available_extension : inst_extensions) {
-      if (strcmp(requested_extension, available_extension.extensionName) == 0) {
+      if (strcmp(requested_extension.c_str(), available_extension.extensionName) == 0) {
         match = true;
         break;
       }
@@ -481,130 +491,131 @@ vk::ShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code
   return module;
 }
 
-static XEvent create_event(Display *display, Window window, const char *event_type) {
-  XEvent cev;
 
-  cev.xclient.type = ClientMessage;
-  cev.xclient.window = window;
-  cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
-  cev.xclient.format = 32;
-  cev.xclient.data.l[0] = XInternAtom(display, event_type, false);
-  cev.xclient.data.l[1] = CurrentTime;
+// static XEvent create_event(Display *display, Window window, const char *event_type) {
+//   XEvent cev;
 
-  return cev;
-}
+//   cev.xclient.type = ClientMessage;
+//   cev.xclient.window = window;
+//   cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
+//   cev.xclient.format = 32;
+//   cev.xclient.data.l[0] = XInternAtom(display, event_type, false);
+//   cev.xclient.data.l[1] = CurrentTime;
 
-void mv::MWindow::handle_x_event(void) {
-  XEvent event;
-  XNextEvent(*display, &event);
-  mv::keyboard::key mv_key = mv::keyboard::key::invalid;
+//   return cev;
+// }
 
-  // query if xinput
-  if (event.xcookie.type == GenericEvent && event.xcookie.extension == xinput_opcode) {
-    // if raw motion, query pointer
-    XGetEventData(*display, &event.xcookie);
+// void mv::MWindow::handle_x_event(void) {
+//   XEvent event;
+//   XNextEvent(*display, &event);
+//   mv::keyboard::key mv_key = mv::keyboard::key::invalid;
 
-    XGenericEventCookie *gen_cookie = &event.xcookie;
-    XIDeviceEvent *xi_device_evt = static_cast<XIDeviceEvent *>(gen_cookie->data);
-    // retrieve mouse deltas
-    if (event.xcookie.evtype == XI_RawMotion) {
-      mouse->process_device_event(xi_device_evt);
-    }
-    XFreeEventData(*display, &event.xcookie);
-  }
+//   // query if xinput
+//   if (event.xcookie.type == GenericEvent && event.xcookie.extension == xinput_opcode) {
+//     // if raw motion, query pointer
+//     XGetEventData(*display, &event.xcookie);
 
-  switch (event.type) {
-    case LeaveNotify:
-    case FocusOut:
-      {
-        mouse->on_mouse_leave();
-        XUngrabPointer(*display, CurrentTime);
-        break;
-      }
-    case MapNotify:
-    case EnterNotify:
-      {
-        mouse->on_mouse_enter();
-        // confine cursor to interior of window
-        // mouse released on focus out or cursor leaving window
-        XGrabPointer(*display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None,
-                     CurrentTime);
-        break;
-      }
-    case ButtonPress:
-      {
-        if (event.xbutton.button == Button1) {
-          mouse->on_left_press(event.xbutton.x, event.xbutton.y);
-        } else if (event.xbutton.button == Button2) {
-          mouse->on_middle_press(event.xbutton.x, event.xbutton.y);
-        } else if (event.xbutton.button == Button3) {
-          mouse->on_right_press(event.xbutton.x, event.xbutton.y);
-        }
-        // Mouse wheel scroll up
-        else if (event.xbutton.button == Button4) {
-          mouse->on_wheel_up(event.xbutton.x, event.xbutton.y);
-        }
-        // Mouse wheel scroll down
-        else if (event.xbutton.button == Button5) {
-          mouse->on_wheel_down(event.xbutton.x, event.xbutton.y);
-        }
-        break;
-      }
-    case ButtonRelease:
-      {
-        if (event.xbutton.button == Button1) {
-          mouse->on_left_release(event.xbutton.x, event.xbutton.y);
-        } else if (event.xbutton.button == Button2) {
-          mouse->on_middle_release(event.xbutton.x, event.xbutton.y);
-        } else if (event.xbutton.button == Button3) {
-          mouse->on_right_release(event.xbutton.x, event.xbutton.y);
-        }
-        break;
-      }
-    case KeyPress:
-      { // try to convert to our mv::keyboard::key enum
-        mv_key = kbd->keycode_to_mvkey(*display, event.xkey.keycode);
+//     XGenericEventCookie *gen_cookie = &event.xcookie;
+//     XIDeviceEvent *xi_device_evt = static_cast<XIDeviceEvent *>(gen_cookie->data);
+//     // retrieve mouse deltas
+//     if (event.xcookie.evtype == XI_RawMotion) {
+//       mouse->process_device_event(xi_device_evt);
+//     }
+//     XFreeEventData(*display, &event.xcookie);
+//   }
 
-        // check quit case
-        if (mv_key == mv::keyboard::key::escape) {
-          XEvent q = create_event(*display, window, "WM_DELETE_WINDOW");
-          XSendEvent(*display, window, false, ExposureMask, &q);
-        }
+//   switch (event.type) {
+//     case LeaveNotify:
+//     case FocusOut:
+//       {
+//         mouse->on_mouse_leave();
+//         // XUngrabPointer(*display, CurrentTime);
+//         break;
+//       }
+//     case MapNotify:
+//     case EnterNotify:
+//       {
+//         mouse->on_mouse_enter();
+//         // confine cursor to interior of window
+//         // mouse released on focus out or cursor leaving window
+//         // XGrabPointer(*display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None,
+//         //              CurrentTime);
+//         break;
+//       }
+//     case ButtonPress:
+//       {
+//         if (event.xbutton.button == Button1) {
+//           mouse->on_left_press(event.xbutton.x, event.xbutton.y);
+//         } else if (event.xbutton.button == Button2) {
+//           mouse->on_middle_press(event.xbutton.x, event.xbutton.y);
+//         } else if (event.xbutton.button == Button3) {
+//           mouse->on_right_press(event.xbutton.x, event.xbutton.y);
+//         }
+//         // Mouse wheel scroll up
+//         else if (event.xbutton.button == Button4) {
+//           mouse->on_wheel_up(event.xbutton.x, event.xbutton.y);
+//         }
+//         // Mouse wheel scroll down
+//         else if (event.xbutton.button == Button5) {
+//           mouse->on_wheel_down(event.xbutton.x, event.xbutton.y);
+//         }
+//         break;
+//       }
+//     case ButtonRelease:
+//       {
+//         if (event.xbutton.button == Button1) {
+//           mouse->on_left_release(event.xbutton.x, event.xbutton.y);
+//         } else if (event.xbutton.button == Button2) {
+//           mouse->on_middle_release(event.xbutton.x, event.xbutton.y);
+//         } else if (event.xbutton.button == Button3) {
+//           mouse->on_right_release(event.xbutton.x, event.xbutton.y);
+//         }
+//         break;
+//       }
+//     case KeyPress:
+//       { // try to convert to our mv::keyboard::key enum
+//         mv_key = kbd->keycode_to_mvkey(*display, event.xkey.keycode);
 
-        if (mv_key) {
-          // send event only if not already signaled in key_states bitset
-          if (!kbd->is_keystate(mv_key)) {
-            kbd->on_key_press(mv_key);
-          }
-        }
-        break;
-      }
-    case KeyRelease:
-      {
-        mv_key = kbd->keycode_to_mvkey(*display, event.xkey.keycode);
+//         // check quit case
+//         if (mv_key == mv::keyboard::key::escape) {
+//           XEvent q = create_event(*display, window, "WM_DELETE_WINDOW");
+//           XSendEvent(*display, window, false, ExposureMask, &q);
+//         }
 
-        if (mv_key) {
-          // x11 configured to not send repeat releases with xkb method in
-          // constructor
-          // so just process it
-          kbd->on_key_release(mv_key);
-        }
-        break;
-      }
-    case Expose:
-      {
-        break;
-      }
-    case ClientMessage:
-      {
-        std::cout << "[+] Exit requested" << std::endl;
-        running = false;
-        break;
-      }
-    default: // Unhandled events do nothing
-      {
-        break;
-      }
-  } // End of switch
-  return;
-}
+//         if (mv_key) {
+//           // send event only if not already signaled in key_states bitset
+//           if (!is_keystate(mv_key)) {
+//             kbd->on_key_press(mv_key);
+//           }
+//         }
+//         break;
+//       }
+//     case KeyRelease:
+//       {
+//         mv_key = kbd->keycode_to_mvkey(*display, event.xkey.keycode);
+
+//         if (mv_key) {
+//           // x11 configured to not send repeat releases with xkb method in
+//           // constructor
+//           // so just process it
+//           kbd->on_key_release(mv_key);
+//         }
+//         break;
+//       }
+//     case Expose:
+//       {
+//         break;
+//       }
+//     case ClientMessage:
+//       {
+//         std::cout << "[+] Exit requested" << std::endl;
+//         running = false;
+//         break;
+//       }
+//     default: // Unhandled events do nothing
+//       {
+//         break;
+//       }
+//   } // End of switch
+//   return;
+// }

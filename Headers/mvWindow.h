@@ -1,20 +1,15 @@
 #ifndef HEADERS_MVWINDOW_H_
 #define HEADERS_MVWINDOW_H_
 
-#include <X11/XF86keysym.h>
-#include <X11/XKBlib.h>
-#include <X11/Xatom.h>
-#include <X11/Xlib-xcb.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/cursorfont.h>
-#include <X11/extensions/XInput2.h>
+// clang-format off
+#include <vulkan/vulkan.hpp>
+#include <GLFW/glfw3.h>
+// clang-format on
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
-#include <vulkan/vulkan.hpp>
 
 #include "mvDevice.h"
 #include "mvKeyboard.h"
@@ -31,18 +26,22 @@ constexpr std::array<const char *, 1> requested_validation_layers = {
     "VK_LAYER_KHRONOS_validation",
 };
 
-constexpr std::array<const char *, 3> requested_instance_extensions = {
+constexpr std::array<const char *, 1> req_instance_extensions = {
     "VK_EXT_debug_utils",
-    "VK_KHR_surface",
-    "VK_KHR_xlib_surface",
 };
 
-constexpr std::array<const char *, 2> requested_device_extensions = {
+constexpr std::array<const char *, 3> requested_device_extensions = {
     "VK_KHR_swapchain",
     "VK_KHR_maintenance1",
+    "VK_EXT_extended_dynamic_state",
 };
 
 namespace mv {
+  // GLFW CALLBACKS -- DEFINED IN ENGINE CPP
+  void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
+  void mouse_motion_callback(GLFWwindow *window, double xpos, double ypos);
+  void glfw_err_callback(int error, const char *desc);
+
   class MWindow {
   public:
     // constructor
@@ -51,139 +50,66 @@ namespace mv {
       this->window_height = h;
       this->title = title;
 
-      // connect to x server
-      display = std::make_unique<Display *>(XOpenDisplay(""));
+      glfwInit();
 
-      if (!(*display))
-        throw std::runtime_error("[+] failed to open connection to x server");
-
-      // auto conn = XGetXCBConnection(*display);
-
-      // xcb_screen_t *screen = nullptr;
-      // xcb_screen_iterator_t scr_iter = xcb_setup_roots_iterator(xcb_get_setup(xcb_conn.get()));
-      // for (; scr_iter.rem; xcb_scr_num--, xcb_screen_next(&scr_iter)) {
-      //   std::cout << "screen => " << scr_iter.index << "\n";
-      //   if (xcb_scr_num <= 0) {
-      //     screen = scr_iter.data;
-      //     break;
-      //   }
-      // }
-
-      // create window
-      screen = DefaultScreen(*display);
-
-      // clang-format off
-
-      // create window
-      window = XCreateSimpleWindow(*display,
-                                  RootWindow(*display, screen),
-                                  10, 10,
-                                  window_width, window_height,
-                                  1,
-                                  WhitePixel(*display, screen),
-                                  BlackPixel(*display, screen));
-      // clang-format on
+      uint32_t count = 0;
+      const char **extensions = glfwGetRequiredInstanceExtensions(&count);
+      if (!extensions)
+        throw std::runtime_error("Failed to get required instance extensions");
 
 
-      // remove window border
-      // struct {
-      //   unsigned long flags = 0;
-      //   unsigned long functions = 0;
-      //   unsigned long decorations = 0;
-      //   long input_mode = 0;
-      //   unsigned long status = 0;
-      // } hints;
-      // hints.flags = 2;
-      // hints.decorations = 0;
-
-      // Atom borders_atom = XInternAtom(display, "_MOTIF_WM_HINTS", 1);
-      // // ensure we got the atom
-      // if (!borders_atom) {
-      //   throw std::runtime_error("Failed to fetch motif window manager hints atom");
-      // }
-
-      // Atom del_window = XInternAtom(display, "WM_DELETE_WINDOW", 0);
-      // XSetWMProtocols(display, window, &del_window, 1);
-
-      // // remove decorations
-      // XChangeProperty(display, window, borders_atom, borders_atom, 32, PropModeReplace,
-      //                 (unsigned char *)&hints, 5);
-
-      // clang-format off
-      long evt_mask = EnterWindowMask         |
-                      LeaveWindowMask         |
-                      FocusChangeMask         |
-                      ButtonPressMask         |
-                      ButtonReleaseMask       |
-                      ExposureMask            |
-                      KeyPressMask            |
-                      KeyReleaseMask          |
-                      NoExpose                |
-                      SubstructureNotifyMask;
-      // clang-format on
-
-      // configure events
-
-      // regular events
-      XSelectInput(*display, window, evt_mask);
-
-      // xinput events
-      int xi_major_rt = 0; // xinput opcode
-      int xi_event_rt = 0;
-      int xi_error_rt = 0;
-      auto q_rt =
-          XQueryExtension(*display, "XInputExtension", &xi_major_rt, &xi_event_rt, &xi_error_rt);
-      if (!q_rt)
-        throw std::runtime_error("failed to query xinput version");
-
-      xinput_opcode = xi_major_rt;
-      std::cout << "xinput major opcode => " << +xi_major_rt << "\n";
-
-      int major = 2;
-      int minor = 0;
-      auto xi_q = XIQueryVersion(*display, &major, &minor);
-      if (xi_q == BadRequest)
-        throw std::runtime_error("system using outdate xinput, need at least Xinput2");
-      else
-        std::cout << "[+] xinput is at least version 2\n";
-
-      XIEventMask eventmask;
-      unsigned char mask[3] = {0, 0, 0};
-      eventmask.deviceid = XIAllMasterDevices;
-      eventmask.mask_len = sizeof(mask);
-      eventmask.mask = mask;
-      XISetMask(mask, XI_RawMotion);
-      auto select_rt = XISelectEvents(*display, DefaultRootWindow(*display), &eventmask, 1);
-      if (select_rt != Success)
-        throw std::runtime_error("Failed to set event masks for xinput2");
-
-      // change window title
-      XStoreName(*display, window, title.c_str());
-
-
-      // Display window
-      XMapWindow(*display, window);
-      XFlush(*display);
-
-      // TODO
-      // Check if auto repeat disabled so that if this fails, the user can do it themselves and
-      // reboot the app
-
-      // disable synthetic key release events
-      int rs = 0;
-      auto detectable_result = XkbSetDetectableAutoRepeat(*display, true, &rs);
-
-      if (rs != 1 && !detectable_result) {
-        throw std::runtime_error("Could not disable auto repeat");
+      std::vector<std::string> req_ext;
+      for (const auto &req : req_instance_extensions) {
+        req_ext.push_back(req);
+      }
+      std::vector<std::string> glfw_requested;
+      for (uint32_t i = 0; i < count; i++) {
+        glfw_requested.push_back(extensions[i]);
       }
 
-      std::cout << "detectable repeat status => " << rs << "\n";
+      // iterate glfw requested
+      for (const auto &glfw_req : glfw_requested) {
+        bool found = false;
+
+        // iterate already requested list
+        for (const auto &req : req_ext) {
+          if (glfw_req == req) {
+            found = true;
+          }
+        }
+
+        // if not found, add to final list
+        if (!found)
+          f_req.push_back(glfw_req);
+      }
+      // concat existing requests with glfw requests into final list
+      f_req.insert(f_req.end(), req_ext.begin(), req_ext.end());
+
+      glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+      window = glfwCreateWindow(window_width, window_height, title.c_str(), nullptr, nullptr);
+      if (!window)
+        throw std::runtime_error("Failed to create window");
+
+      // set keyboard callback
+      glfwSetKeyCallback(window, mv::key_callback);
+
+      // set mouse motion callback
+      glfwSetCursorPosCallback(window, mv::mouse_motion_callback);
+
+      auto is_raw_supp = glfwRawMouseMotionSupported();
+
+      if (!is_raw_supp) {
+        throw std::runtime_error("Raw mouse motion not supported");
+      } else {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, true);
+      }
 
       /*
         Initialize kbd & mouse handler
       */
-      kbd = std::make_unique<mv::keyboard>();
-      mouse = std::make_unique<mv::mouse>();
+      kbd = std::make_unique<mv::keyboard>(window);
+      mouse = std::make_unique<mv::mouse>(window);
 
       // initialize smart pointers
       swapchain = std::make_unique<mv::Swap>();
@@ -276,10 +202,9 @@ namespace mv {
         instance.reset();
       }
 
-      if (display && window)
-        XDestroyWindow(*display, window);
-      if (display)
-        XCloseDisplay(*display);
+      if (window)
+        glfwDestroyWindow(window);
+      glfwTerminate();
       return;
     } // end destructor
 
@@ -294,10 +219,6 @@ namespace mv {
 
     // calls all other initialization functions
     void prepare(void);
-
-    // produces mouse/keyboard handler events
-    // based on xcb events
-    void handle_x_event();
 
   protected:
     void init_vulkan(void);
@@ -324,11 +245,20 @@ namespace mv {
     std::unique_ptr<mv::mouse> mouse;
     std::unique_ptr<mv::keyboard> kbd;
 
+    std::unique_ptr<mv::Device> mv_device;
+
   protected:
-    std::unique_ptr<Display *> display;
-    Window window;
-    int screen;
-    int xinput_opcode = 0;
+    /*
+      Instance/Device extension functions
+    */
+    PFN_vkCmdSetPrimitiveTopologyEXT pfn_vkCmdSetPrimitiveTopology;
+
+
+    // Glfw
+    GLFWwindow *window = nullptr;
+
+    // final list of requested instance extensions
+    std::vector<std::string> f_req;
 
     bool running = true;
 
@@ -338,8 +268,6 @@ namespace mv {
 
     std::unique_ptr<vk::Instance> instance;
     std::unique_ptr<vk::PhysicalDevice> physical_device;
-    // contains logical device & graphics queue
-    std::unique_ptr<mv::Device> mv_device;
     std::unique_ptr<vk::CommandPool> command_pool;
     std::unique_ptr<vk::RenderPass> render_pass;
 
@@ -368,8 +296,11 @@ namespace mv {
       vk::ImageView view;
     };
     std::unique_ptr<struct depth_stencil_struct> depth_stencil;
-  }; // namespace mv
-};   // end namespace mv
+
+  public:
+  }; // end window
+
+}; // end namespace mv
 
 VKAPI_ATTR
 VkBool32 VKAPI_CALL

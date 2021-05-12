@@ -5,10 +5,12 @@
 // #define WHEEL_DELTA 120
 #define WHEEL_DELTA 1
 
-#include <X11/Xcursor/Xcursor.h>
-#include <X11/Xlib.h>
-#include <X11/extensions/XInput2.h>
+// clang-format off
+#include <vulkan/vulkan.hpp>
+#include <GLFW/glfw3.h>
+// clang-format on
 
+#include <iostream>
 #include <memory>
 #include <queue>
 #include <stdexcept>
@@ -90,39 +92,10 @@ namespace mv {
     mouse(mouse &&) = default;
     mouse &operator=(mouse &&) = default;
 
-    mouse(void) {
-
-      // this->deviceid = deviceid;
-      deviceid = 0;
-
-      if (deviceid < 0) {
-        throw std::runtime_error("Invalid device id passed to mouse handler => id < 0");
-      }
-
-      // create hidden cursor image
-      // XcursorImage *cur = XcursorImageCreate(16, 16);
-      // if (!cur)
-      // {
-      //     throw std::runtime_error("Failed to create cursor");
-      // }
-      // cur->xhot = 0;
-      // cur->yhot = 0;
-      // unsigned char pixels[16 * 16 * 4] = {0}; // empty pixel array(hidden cursor duh)
-
-      // unsigned char *pixel_ptr = static_cast<unsigned char *>(pixels);
-      // XcursorPixel *target = cur->pixels; // our x11 cursor
-
-      // for (int i = 0; i < 16 * 16; i++, target++, pixel_ptr += 4)
-      // {
-      //     unsigned int alpha = pixel_ptr[3];
-      //     *target = (alpha << 24) |
-      //               ((unsigned char)((pixel_ptr[0] * alpha) / 255) << 16) |
-      //               ((unsigned char)((pixel_ptr[1] * alpha) / 255) << 8) |
-      //               ((unsigned char)((pixel_ptr[2] * alpha) / 255) << 0);
-      // }
-
-      // this->hidden_cursor = XcursorImageLoadCursor(display, cur);
-      // XcursorImageDestroy(cur);
+    mouse(GLFWwindow *window) {
+      if (!window)
+        throw std::runtime_error("Invalid window handle passed to mouse handler");
+      this->window = window;
     }
     ~mouse() {
     }
@@ -134,6 +107,8 @@ namespace mv {
     int window_height = 0;
     int center_x = 0;
     int center_y = 0;
+
+    GLFWwindow *window = nullptr;
 
   public:
     int last_x = 0;
@@ -164,13 +139,6 @@ namespace mv {
     float stored_pitch = 0.0f;
     float stored_orbit = 0.0f;
 
-    // don't change this unless you know what
-    // you're doing
-    int deviceid = -1;
-
-    // used when hiding cursor
-    // Cursor hidden_cursor;
-
     // how is delta_x/y calculated
     delta_calc_style delta_style = delta_calc_style::from_last;
     std::queue<mouse::event> mouse_buffer;
@@ -184,48 +152,6 @@ namespace mv {
       drag_delta_y = 0;
       return;
     }
-
-    inline void process_device_event(XIDeviceEvent *event) {
-      // ignore mouse wheels -- normal deltas never get this high
-      if (event->event_x == 15 && event->event_y == 15)
-        return;
-      if (event->event_x == -15 && event->event_y == -15)
-        return;
-      delta_x = event->event_x;
-      delta_y = event->event_y;
-      if (is_dragging) {
-        drag_delta_x += delta_x;
-        drag_delta_y += delta_y;
-      }
-      return;
-    }
-
-    // inline void query_pointer(void) {
-    //   if (display == nullptr) {
-    //         throw std::runtime_error("Attempted to query mouse pointer but no valid x11 display
-    //         handle was given to mouse handler");
-    //   }
-    //   if (window == nullptr) {
-    //         throw std::runtime_error("Attempted to query mouse pointer but no x11 window has been
-    //         given to mouse handler");
-    //   }
-
-    //   Window root, child;
-    //   int gx, gy;
-    //   unsigned int buttons;
-
-    //   int mx = 0;
-    //   int my = 0;
-    //   XQueryPointer(display, (*window), &root, &child, &gx, &gy, &mx, &my, &buttons);
-
-    //   last_x = current_x;
-    //   last_y = current_y;
-    //   current_x = mx;
-    //   current_y = my;
-
-    //   calculate_delta();
-    //   return;
-    // }
 
     inline mouse::event read(void) noexcept {
       event e(mouse::event::etype::invalid, 0, 0, false, false, false);

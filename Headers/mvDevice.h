@@ -17,13 +17,14 @@ namespace mv {
   struct Buffer;
   struct Device {
     Device(const vk::PhysicalDevice &p_dvc, std::vector<std::string> &requested_device_exts) {
-      requested_physical_device_exts = requested_device_exts;
-
       this->requested_physical_device_exts = requested_device_exts;
 
       // fetch infos -- should prob just receive by reference from mv::MWindow
       physical_properties = p_dvc.getProperties();
       physical_features = p_dvc.getFeatures();
+      physical_features2 = p_dvc.getFeatures2();
+      extendedFeatures.extendedDynamicState = VK_TRUE;
+      physical_features2.pNext = &extendedFeatures;
       physical_memory_properties = p_dvc.getMemoryProperties();
       queue_family_properties = p_dvc.getQueueFamilyProperties();
 
@@ -40,6 +41,7 @@ namespace mv {
         bool e = false;
         for (const auto &supp_ext : physical_device_exts) {
           if (strcmp(supp_ext.extensionName, requested_ext.c_str()) == 0) {
+            std::cout << "\t\tFound device extension => " << supp_ext.extensionName << "\n";
             e = true;
             break;
           }
@@ -81,6 +83,8 @@ namespace mv {
 
     // info structures
     vk::PhysicalDeviceFeatures physical_features;
+    vk::PhysicalDeviceFeatures2 physical_features2;
+    vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT extendedFeatures;
     vk::PhysicalDeviceProperties physical_properties;
     vk::PhysicalDeviceMemoryProperties physical_memory_properties;
     std::vector<vk::ExtensionProperties> physical_device_exts;

@@ -13,6 +13,8 @@ find_package(Vulkan REQUIRED)
 find_package(X11 REQUIRED)
 
 set(HEADERS
+    Headers/imgui-1.82/imgui.h
+    Headers/imgui-1.82/backends/imgui_impl_vulkan.h
     Headers/mvWindow.h
     Headers/mvCollection.h
     Headers/mvImage.h
@@ -28,6 +30,12 @@ set(HEADERS
     Headers/mvMouse.h)
 
 set(SOURCES
+    Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp
+    Headers/imgui-1.82/imgui.cpp
+    Headers/imgui-1.82/imgui_tables.cpp
+    Headers/imgui-1.82/imgui_draw.cpp
+    Headers/imgui-1.82/imgui_widgets.cpp
+    Headers/imgui-1.82/imgui_demo.cpp
     mvImage.cpp
     mvTimer.cpp
     mvCamera.cpp
@@ -45,6 +53,6 @@ add_compile_options(-Wall -Wextra -std=c++20 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 
-target_include_directories(main PUBLIC Headers/)
+target_include_directories(main PUBLIC Headers/ Headers/imgui-1.82/ Headers/imgui-1.82/backends/)
 
-target_link_libraries(main gcc vulkan dl stdc++fs assimp ${X11_LIBRARIES} Xi)
+target_link_libraries(main gcc vulkan dl stdc++fs assimp glfw)

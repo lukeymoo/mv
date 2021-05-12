@@ -20,9 +20,13 @@ void mv::Device::create_logical_device(const vk::PhysicalDevice &p_dvc) {
     e_ext.push_back(req.c_str());
   }
   vk::DeviceCreateInfo device_create_info;
+  device_create_info.pNext = &physical_features2;
   device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
   device_create_info.pQueueCreateInfos = queue_create_infos.data();
-  device_create_info.pEnabledFeatures = &physical_features;
+
+  // if pnext is phys features2, must be nullptr
+  // device_create_info.pEnabledFeatures = &physical_features;
+
   device_create_info.enabledExtensionCount = static_cast<uint32_t>(e_ext.size());
   device_create_info.ppEnabledExtensionNames = e_ext.data();
 

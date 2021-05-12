@@ -1,9 +1,10 @@
 #ifndef HEADERS_MVSWAP_H_
 #define HEADERS_MVSWAP_H_
 
-#define VK_USE_PLATFORM_XLIB_KHR
-#include <X11/Xlib.h>
+// clang-format off
 #include <vulkan/vulkan.hpp>
+#include <GLFW/glfw3.h>
+// clang-format on
 
 #include <cassert>
 #include <iostream>
@@ -31,8 +32,7 @@ namespace mv {
     ~Swap() {
     }
     // creates vulkan surface & retreives basic info such as graphics queue index
-    void init(Display *display, Window window, const vk::Instance &inst,
-              const vk::PhysicalDevice &p_dvc);
+    void init(GLFWwindow *window, const vk::Instance &inst, const vk::PhysicalDevice &p_dvc);
 
     // map our swapchain interface with main engine class
     // void map(vk::Instance &instance, vk::PhysicalDevice &physical_device, mv::Device &mv_device);
