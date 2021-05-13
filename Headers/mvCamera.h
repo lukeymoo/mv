@@ -103,11 +103,9 @@ namespace mv
             first_person,
             third_person
         };
-        float pitch = 40.0f;
-        float orbit_angle = 0.0f;
-        float zoom_level = 10.0f;
         mv::Object *target = nullptr;
         camera_type type = free_look;
+        float zoom_level = 10.0f;
 
         // -- free look --
         // movement
@@ -118,13 +116,13 @@ namespace mv
         static constexpr float move_friction = move_step * 0.3f;
 
         // -- third person --
-        // orbit
-        float orbit_accel = 0.0f;
-        static constexpr float orbit_step = 0.25f;
-        static constexpr float min_orbit = 0.0f;
-        static constexpr float max_orbit = 359.9f;
-        static constexpr float max_orbit_speed = 4.0f;
-        static constexpr float orbit_friction = orbit_step * 0.75f;
+        float pitch = 40.0f;
+        float target_pitch = 40.0f;
+
+        float orbit_angle = 0.0f;
+        float target_orbit = 0.0f;
+        static constexpr float orbit_smoothness = 0.7f;
+        static constexpr float pitch_smoothness = 0.7f;
 
         // camera zoom
         float zoom_accel = 0.0f;
@@ -197,26 +195,23 @@ namespace mv
                     }
                 }
                 /*
-                  Orbit Implementation
+                  Orbit Linear Interpolation
                 */
-                if (orbit_accel)
+                if (orbit_angle != target_orbit)
                 {
-                    orbit_angle += orbit_accel;
-
-                    // Orbit friction implementation
-                    if (orbit_accel > 0.0f)
-                    {
-                        orbit_accel -= orbit_friction;
-                    }
-                    else if (orbit_accel < 0.0f)
-                    {
-                        orbit_accel += orbit_friction;
-                    }
-                    // clamp
-                    if (fabs(orbit_accel) < 0.05f)
-                    {
-                        orbit_accel = 0.0f;
-                    }
+                    orbit_angle = orbit_angle * (1 - orbit_smoothness) + target_orbit * orbit_smoothness;
+                }
+                else
+                {
+                    realign_orbit(orbit_angle);
+                    realign_orbit(target_orbit);
+                }
+                /*
+                  Pitch Linear Interpolation
+                */
+                if (pitch != target_pitch)
+                {
+                    pitch = pitch * (1 - pitch_smoothness) + target_pitch * pitch_smoothness;
                 }
             }
 
@@ -317,42 +312,44 @@ namespace mv
             }
             return;
         }
+        inline void adjust_pitch(float &val)
+        {
+            if (val > 89.9f)
+            {
+                val = 89.9f;
+            }
+            else if (val < -89.9f)
+            {
+                val = -89.9f;
+            }
+            return;
+        }
+
         inline void adjust_orbit(float delta, float start_orbit)
         {
+            constexpr float orbit_step = 0.125f;
             orbit_angle = start_orbit + (orbit_step * delta);
             return;
         }
-        enum PositiveNegative
+        inline void adjust_orbit(float delta)
         {
-            negative = 0,
-            positive = 1,
-        };
-        inline void adjust_orbit(PositiveNegative pos_or_neg)
-        {
-            if (pos_or_neg == positive)
-            {
-                if ((orbit_accel + orbit_step) < max_orbit_speed)
-                {
-                    orbit_accel += orbit_step;
-                }
-                else
-                {
-                    orbit_accel = max_orbit_speed;
-                }
-            }
-            else if (pos_or_neg == negative)
-            {
-                if ((orbit_accel - orbit_step) > -max_orbit_speed)
-                {
-                    orbit_accel -= orbit_step;
-                }
-                else
-                {
-                    orbit_accel = -max_orbit_speed;
-                }
-            }
+            orbit_angle += delta;
             return;
         }
+
+        inline void lerp_orbit(float delta)
+        {
+            target_orbit += delta;
+            // realign_orbit(target_orbit);
+            return;
+        }
+        inline void lerp_pitch(float delta)
+        {
+            target_pitch += delta;
+            adjust_pitch(target_pitch);
+            return;
+        }
+
         inline void realign_orbit(void)
         {
             if (orbit_angle > 359.9f)
@@ -362,6 +359,18 @@ namespace mv
             else if (orbit_angle < 0.0f)
             {
                 orbit_angle = 359.9f - abs(orbit_angle);
+            }
+            return;
+        }
+        inline void realign_orbit(float &angle)
+        {
+            if (angle > 359.9f)
+            {
+                angle = abs(angle) - 359.9f;
+            }
+            else if (angle < 0.0f)
+            {
+                angle = 359.9f - abs(angle);
             }
             return;
         }

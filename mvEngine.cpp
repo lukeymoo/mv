@@ -1,5 +1,59 @@
 #include "mvEngine.h"
 
+mv::Engine::Engine(int w, int h, const char *title) : MWindow(w, h, title)
+{
+    pipelines = std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
+    pipeline_layouts = std::make_unique<std::unordered_map<std::string, vk::PipelineLayout>>();
+    return;
+}
+
+mv::Engine::~Engine()
+{
+    if (!mv_device)
+        return;
+
+    mv_device->logical_device->waitIdle();
+
+    if (pipelines)
+    {
+        for (auto &pipeline : *pipelines)
+        {
+            if (pipeline.second)
+                mv_device->logical_device->destroyPipeline(pipeline.second);
+        }
+        pipelines.reset();
+    }
+
+    if (pipeline_layouts)
+    {
+        for (auto &layout : *pipeline_layouts)
+        {
+            if (layout.second)
+                mv_device->logical_device->destroyPipelineLayout(layout.second);
+        }
+        pipeline_layouts.reset();
+    }
+
+    /*
+      DEBUGGING CLEANUP
+    */
+    if (reticle_mesh.vertex_buffer)
+    {
+        mv_device->logical_device->destroyBuffer(reticle_mesh.vertex_buffer);
+        mv_device->logical_device->freeMemory(reticle_mesh.vertex_memory);
+    }
+    if (reticle_obj.uniform_buffer.buffer)
+    {
+        reticle_obj.uniform_buffer.destroy(*mv_device);
+    }
+
+    // collection struct will handle cleanup of models & objs
+    if (collection_handler)
+    {
+        collection_handler->cleanup(*mv_device, *descriptor_allocator);
+    }
+}
+
 void mv::Engine::cleanup_swapchain(void)
 {
     // destroy command buffers
@@ -173,44 +227,46 @@ void mv::Engine::go(void)
     std::chrono::nanoseconds accumulated(0ns);
     auto start_time = chrono::now();
 
-    // /*
-    //   IMGUI Params
-    // */
-    // IMGUI_CHECKVERSION();
-    // ImGui::CreateContext();
-    // [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
+    /*
+      IMGUI Params
+    */
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
+    (void)io;
 
-    // ImGui::StyleColorsDark();
+    ImGui::StyleColorsDark();
 
-    // bool hello_world_active = true;
+    bool hello_world_active = true;
 
-    // ImGui_ImplVulkan_InitInfo init_info{
-    //     .Instance = *instance,
-    //     .PhysicalDevice = *physical_device,
-    //     .Device = *mv_device->logical_device,
-    //     .QueueFamily = mv_device->queue_idx.graphics,
-    //     .Queue = *mv_device->graphics_queue,
-    //     .PipelineCache = nullptr,
-    //     .DescriptorPool = descriptor_allocator->get()->pool,
-    //     .MinImageCount = static_cast<uint32_t>(swapchain->images->size()),
-    //     .ImageCount = static_cast<uint32_t>(swapchain->images->size()),
-    //     .Allocator = nullptr,
-    //     .CheckVkResultFn = nullptr,
-    // };
-    // ImGui_ImplVulkan_Init(&init_info, *render_pass);
+    ImGui_ImplVulkan_InitInfo init_info{
+        .Instance = *instance,
+        .PhysicalDevice = *physical_device,
+        .Device = *mv_device->logical_device,
+        .QueueFamily = mv_device->queue_idx.graphics,
+        .Queue = *mv_device->graphics_queue,
+        .PipelineCache = nullptr,
+        .DescriptorPool = descriptor_allocator->get()->pool,
+        .MinImageCount = static_cast<uint32_t>(swapchain->images->size()),
+        .ImageCount = static_cast<uint32_t>(swapchain->images->size()),
+        .Allocator = nullptr,
+        .CheckVkResultFn = nullptr,
+    };
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+    ImGui_ImplVulkan_Init(&init_info, *render_pass);
 
-    // /*
-    //   Upload ImGui render fonts
-    // */
-    // {
-    //   vk::CommandBuffer gui_font = Engine::begin_command_buffer();
+    /*
+      Upload ImGui render fonts
+    */
+    {
+        vk::CommandBuffer gui_font = Engine::begin_command_buffer();
 
-    //   ImGui_ImplVulkan_CreateFontsTexture(gui_font);
+        ImGui_ImplVulkan_CreateFontsTexture(gui_font);
 
-    //   Engine::end_command_buffer(gui_font);
+        Engine::end_command_buffer(gui_font);
 
-    //   ImGui_ImplVulkan_DestroyFontUploadObjects();
-    // }
+        ImGui_ImplVulkan_DestroyFontUploadObjects();
+    }
 
     while (!glfwWindowShouldClose(window))
     {
@@ -246,20 +302,14 @@ void mv::Engine::go(void)
                 */
                 if (mouse_event.type == mv::Mouse::event::etype::r_down)
                 {
-                    // XDefineCursor(display, window, mouse.hidden_cursor);
-
                     if (mouse.is_dragging)
                     {
-                        // camera->realign_orbit();
-                        std::cout << "Ending drag\n";
+                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
                         mouse.end_drag();
-                        // XUngrabPointer(*display, CurrentTime);
                     }
                     else
                     {
-                        std::cout << "Starting drag\n";
-                        // XGrabPointer(*display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None,
-                        //              CurrentTime);
+                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                         mouse.start_drag(camera->orbit_angle, camera->pitch);
                     }
                 }
@@ -273,38 +323,31 @@ void mv::Engine::go(void)
                 // if drag enabled check for release
                 if (mouse.is_dragging)
                 {
-                    std::cout << "Drag delta x => " << mouse.drag_delta_x << "\n";
-                    std::cout << "Drag delta y => " << mouse.drag_delta_y << "\n";
                     // camera orbit
                     if (mouse.drag_delta_x > 0)
                     {
-                        // camera->adjust_orbit(-abs(mouse.drag_delta_x), mouse.stored_orbit);
-                        camera->adjust_orbit(Camera::PositiveNegative::negative);
+                        camera->lerp_orbit(-abs(mouse.drag_delta_x));
                     }
                     else if (mouse.drag_delta_x < 0)
                     {
-                        // camera->adjust_orbit(abs(mouse.drag_delta_x), mouse.stored_orbit);
-                        camera->adjust_orbit(Camera::PositiveNegative::positive);
+                        camera->adjust_orbit(abs(mouse.drag_delta_x));
+                        camera->lerp_orbit(abs(mouse.drag_delta_x));
                     }
 
                     // camera pitch
                     if (mouse.drag_delta_y > 0)
                     {
-                        camera->adjust_pitch(abs(mouse.drag_delta_y), mouse.stored_pitch);
+                        camera->lerp_pitch(abs(mouse.drag_delta_y));
                     }
                     else if (mouse.drag_delta_y < 0)
                     {
-                        camera->adjust_pitch(-abs(mouse.drag_delta_y), mouse.stored_pitch);
+                        camera->lerp_pitch(-abs(mouse.drag_delta_y));
                     }
 
                     camera->target->rotate_to_face(camera->orbit_angle);
-                    camera->realign_orbit();
 
                     mouse.stored_orbit = camera->orbit_angle;
                     mouse.stored_pitch = camera->pitch;
-                    // XIWarpPointer(*display, mouse.deviceid, None, window, 0, 0, 0, 0, mouse_centerx,
-                    //               mouse_centery);
-                    // XFlush(*display);
                     mouse.clear();
                 }
 
@@ -451,14 +494,15 @@ void mv::Engine::go(void)
                                collection_handler->models->at(1).objects->at(0).position.z});
         }
 
-        // ImGui_ImplVulkan_NewFrame();
-        // ImGui::NewFrame();
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-        // // Render imgui
-        // if (hello_world_active)
-        //   ImGui::ShowDemoWindow(&hello_world_active);
+        // Render imgui
+        if (hello_world_active)
+            ImGui::ShowDemoWindow(&hello_world_active);
 
-        // ImGui::Render();
+        ImGui::Render();
 
         // TODO
         // Add alpha to render
@@ -467,8 +511,8 @@ void mv::Engine::go(void)
     }
 
     // Cleanup IMGUI
-    // ImGui_ImplVulkan_Shutdown();
-    // ImGui::DestroyContext();
+    ImGui_ImplVulkan_Shutdown();
+    ImGui::DestroyContext();
 
     int total_object_count = 0;
     for (const auto &model : *collection_handler->models)
@@ -752,13 +796,6 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
       END DEBUG RENDER METHODS
     */
 
-    /*
-     IMGUI RENDER
-    */
-    /*
-      END IMGUI RENDER
-    */
-
     for (auto &model : *collection_handler->models)
     {
         // for each model select the appropriate pipeline
@@ -801,6 +838,13 @@ void mv::Engine::record_command_buffer(uint32_t image_index)
             }
         }
     }
+
+    /*
+     IMGUI RENDER
+    */
+    /*
+      END IMGUI RENDER
+    */
 
     command_buffers->at(image_index).endRenderPass();
 
@@ -956,7 +1000,7 @@ inline void mv::Engine::go_setup(void)
       LOAD MODELS
     */
     collection_handler->load_model(*mv_device, *descriptor_allocator, "models/_viking_room.fbx");
-    collection_handler->load_model(*mv_device, *descriptor_allocator, "models/Male.obj");
+    collection_handler->load_model(*mv_device, *descriptor_allocator, "models/Security2.fbx");
 
     /*
       CREATE OBJECTS
@@ -965,9 +1009,10 @@ inline void mv::Engine::go_setup(void)
     collection_handler->models->at(0).objects->at(0).position = glm::vec3(0.0f, 0.0f, -5.0f);
     collection_handler->models->at(0).objects->at(0).rotation = glm::vec3(0.0f, 90.0f, 0.0f);
 
-    collection_handler->create_object(*mv_device, *descriptor_allocator, "models/Male.obj");
+    collection_handler->create_object(*mv_device, *descriptor_allocator, "models/Security2.fbx");
     collection_handler->models->at(1).objects->at(0).rotation = glm::vec3(0.0f, 0.0f, 0.0f);
     collection_handler->models->at(1).objects->at(0).position = glm::vec3(0.0f, 0.0f, 0.0f);
+    collection_handler->models->at(1).objects->at(0).scale_factor = 0.0125f;
 
     /*
       CREATE DEBUG POINTS
@@ -1062,7 +1107,6 @@ void mv::mouse_button_callback(GLFWwindow *window, int button, int action, int m
             }
         case GLFW_MOUSE_BUTTON_3: // MMB
             {
-
                 if (action == GLFW_PRESS)
                 {
                     engine->mouse.on_middle_press();
@@ -1079,7 +1123,6 @@ void mv::mouse_button_callback(GLFWwindow *window, int button, int action, int m
 
 void mv::key_callback(GLFWwindow *window, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods)
 {
-    std::cout << "key\n";
     // get get pointer
     auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(window));
 

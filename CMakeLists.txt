@@ -13,8 +13,9 @@ find_package(Vulkan REQUIRED)
 find_package(X11 REQUIRED)
 
 set(HEADERS
-    # Headers/imgui-1.82/imgui.h
-    # Headers/imgui-1.82/backends/imgui_impl_vulkan.h
+    Headers/imgui-1.82/imgui.h
+    Headers/imgui-1.82/backends/imgui_impl_glfw.h
+    Headers/imgui-1.82/backends/imgui_impl_vulkan.h
     Headers/mvInput.h
     Headers/mvWindow.h
     Headers/mvCollection.h
@@ -29,12 +30,13 @@ set(HEADERS
     Headers/mvDevice.h)
 
 set(SOURCES
-    # Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp
-    # Headers/imgui-1.82/imgui.cpp
-    # Headers/imgui-1.82/imgui_tables.cpp
-    # Headers/imgui-1.82/imgui_draw.cpp
-    # Headers/imgui-1.82/imgui_widgets.cpp
-    # Headers/imgui-1.82/imgui_demo.cpp
+    Headers/imgui-1.82/backends/imgui_impl_glfw.cpp
+    Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp
+    Headers/imgui-1.82/imgui_tables.cpp
+    Headers/imgui-1.82/imgui_widgets.cpp
+    Headers/imgui-1.82/imgui_draw.cpp
+    Headers/imgui-1.82/imgui_demo.cpp
+    Headers/imgui-1.82/imgui.cpp
     mvInput.cpp
     mvImage.cpp
     mvTimer.cpp
@@ -47,7 +49,7 @@ set(SOURCES
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -Wextra -std=c++20 -m64 -g)
+add_compile_options(-Wall -Wextra -std=c++20 -O2 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 

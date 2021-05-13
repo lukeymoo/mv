@@ -13,112 +13,65 @@
 
 #include "mvBuffer.h"
 
-namespace mv {
-  struct Buffer;
-  struct Device {
-    Device(const vk::PhysicalDevice &p_dvc, std::vector<std::string> &requested_device_exts) {
-      this->requested_physical_device_exts = requested_device_exts;
+namespace mv
+{
+    struct Buffer;
+    struct Device
+    {
+        Device(const vk::PhysicalDevice &p_dvc, std::vector<std::string> &requested_device_exts);
+        ~Device();
 
-      // fetch infos -- should prob just receive by reference from mv::MWindow
-      physical_properties = p_dvc.getProperties();
-      physical_features = p_dvc.getFeatures();
-      physical_features2 = p_dvc.getFeatures2();
-      extendedFeatures.extendedDynamicState = VK_TRUE;
-      physical_features2.pNext = &extendedFeatures;
-      physical_memory_properties = p_dvc.getMemoryProperties();
-      queue_family_properties = p_dvc.getQueueFamilyProperties();
+        // do not allow assignment
+        Device &operator=(const Device &) = delete;
 
-      if (queue_family_properties.size() < 1)
-        throw std::runtime_error("Failed to find any queue family properties :: logical handler");
+        // allow move
+        Device(Device &&) = default;
+        Device &operator=(Device &&) = default;
 
-      // get supported physical device extensions
-      physical_device_exts = p_dvc.enumerateDeviceExtensionProperties();
+        // owns
+        std::unique_ptr<vk::Device> logicalDevice;
+        std::unique_ptr<vk::Queue> graphicsQueue;
+        std::unique_ptr<vk::CommandPool> commandPool;
 
-      if (physical_device_exts.size() < 1 && !requested_physical_device_exts.empty())
-        throw std::runtime_error("Failed to find device extensions :: logical handler");
+        // info structures
+        // clang-format off
+        std::vector<std::string>                          requestedPhysicalDeviceExts;
+        vk::PhysicalDeviceFeatures                        physicalFeatures;
+        vk::PhysicalDeviceFeatures2                       physicalFeatures2;
+        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT extendedFeatures;
+        vk::PhysicalDeviceProperties                      physicalProperties;
+        vk::PhysicalDeviceMemoryProperties                physicalMemoryProperties;
+        std::vector<vk::ExtensionProperties>              physicalDeviceExts;
+        std::vector<vk::QueueFamilyProperties>            queueFamilyProperties;
+        // clang-format on
 
-      auto check_if_supported = [&, this](const std::string requested_ext) {
-        bool e = false;
-        for (const auto &supp_ext : physical_device_exts) {
-          if (strcmp(supp_ext.extensionName, requested_ext.c_str()) == 0) {
-            std::cout << "\t\tFound device extension => " << supp_ext.extensionName << "\n";
-            e = true;
-            break;
-          }
-        }
-        return e;
-      };
+        struct
+        {
+            uint32_t graphics = UINT32_MAX;
+            uint32_t compute = UINT32_MAX;
+            uint32_t transfer = UINT32_MAX;
+        } queueIdx;
 
-      bool all_exist = std::all_of(requested_physical_device_exts.begin(),
-                                   requested_physical_device_exts.end(), check_if_supported);
+        void createLogicalDevice(const vk::PhysicalDevice &p_dvc);
+        vk::CommandPool createCommandPool(uint32_t queue_index, vk::CommandPoolCreateFlags create_flags =
+                                                                    vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
 
-      if (!all_exist)
-        throw std::runtime_error("Failed to find all requested device extensions");
+        uint32_t getMemoryType(uint32_t type_bits, vk::MemoryPropertyFlags properties,
+                               vk::Bool32 *mem_type_found = nullptr) const;
 
-      return;
-    }
-    ~Device() {
-      if (command_pool) {
-        logical_device->destroyCommandPool(*command_pool);
-        command_pool.reset();
-      }
-      if (logical_device) {
-        logical_device->destroy();
-        logical_device.reset();
-      }
-      return;
-    }
+        uint32_t getQueueFamilyIndex(vk::QueueFlagBits queue_flag_bit) const;
 
-    // do not allow assignment
-    Device &operator=(const Device &) = delete;
+        vk::Format getSupportedDepthFormat(const vk::PhysicalDevice &p_dvc);
 
-    // allow move
-    Device(Device &&) = default;
-    Device &operator=(Device &&) = default;
+        // create buffer with Vulkan objects
+        void createBuffer(vk::BufferUsageFlags usage_flags, vk::MemoryPropertyFlags memory_property_flags,
+                          vk::DeviceSize size, vk::Buffer *buffer, vk::DeviceMemory *memory,
+                          void *data = nullptr) const;
 
-    // owns
-    std::unique_ptr<vk::Device> logical_device;
-    std::unique_ptr<vk::Queue> graphics_queue;
-    std::unique_ptr<vk::CommandPool> command_pool;
-
-    // info structures
-    vk::PhysicalDeviceFeatures physical_features;
-    vk::PhysicalDeviceFeatures2 physical_features2;
-    vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT extendedFeatures;
-    vk::PhysicalDeviceProperties physical_properties;
-    vk::PhysicalDeviceMemoryProperties physical_memory_properties;
-    std::vector<vk::ExtensionProperties> physical_device_exts;
-    std::vector<vk::QueueFamilyProperties> queue_family_properties;
-    std::vector<std::string> requested_physical_device_exts;
-
-    struct {
-      uint32_t graphics = UINT32_MAX;
-      uint32_t compute = UINT32_MAX;
-      uint32_t transfer = UINT32_MAX;
-    } queue_idx;
-
-    void create_logical_device(const vk::PhysicalDevice &p_dvc);
-    vk::CommandPool create_command_pool(uint32_t queue_index,
-                                        vk::CommandPoolCreateFlags create_flags =
-                                            vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
-
-    uint32_t get_memory_type(uint32_t type_bits, vk::MemoryPropertyFlags properties,
-                             vk::Bool32 *mem_type_found = nullptr) const;
-
-    uint32_t get_queue_family_index(vk::QueueFlagBits queue_flag_bit) const;
-
-    vk::Format get_supported_depth_format(const vk::PhysicalDevice &p_dvc);
-
-    // create buffer with Vulkan objects
-    void create_buffer(vk::BufferUsageFlags usage_flags,
-                       vk::MemoryPropertyFlags memory_property_flags, vk::DeviceSize size,
-                       vk::Buffer *buffer, vk::DeviceMemory *memory, void *data = nullptr) const;
-
-    // create buffer with custom mv::Buffer interface
-    void create_buffer(vk::BufferUsageFlags usage_flags,
-                       vk::MemoryPropertyFlags memory_property_flags, mv::Buffer *buffer,
-                       vk::DeviceSize size, void *data = nullptr) const;
-  };
+        // create buffer with custom mv::Buffer interface
+        void createBuffer(vk::BufferUsageFlags usage_flags, vk::MemoryPropertyFlags memory_property_flags,
+                          mv::Buffer *buffer, vk::DeviceSize size, void *data = nullptr) const;
+    };
 }; // namespace mv
 
 #endif

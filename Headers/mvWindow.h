@@ -39,54 +39,54 @@ constexpr std::array<const char *, 3> requested_device_extensions = {
 namespace mv
 {
     // GLFW CALLBACKS -- DEFINED IN ENGINE CPP
-    void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
-    void mouse_motion_callback(GLFWwindow *window, double xpos, double ypos);
-    void mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
-    void glfw_err_callback(int error, const char *desc);
+    void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
+    void mouseMotionCallback(GLFWwindow *window, double xpos, double ypos);
+    void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
+    void glfwErrCallback(int error, const char *desc);
 
-    class MWindow
+    class Window
     {
       public:
         // delete copy operations
-        MWindow(const MWindow &) = delete;
-        MWindow &operator=(const MWindow &) = delete;
+        Window(const Window &) = delete;
+        Window &operator=(const Window &) = delete;
         // delete move operations
-        MWindow(MWindow &&) = delete;
-        MWindow &operator=(MWindow &&) = delete;
+        Window(Window &&) = delete;
+        Window &operator=(Window &&) = delete;
 
-        MWindow(int w, int h, std::string title);
-        ~MWindow();
+        Window(int w, int h, std::string title);
+        ~Window();
 
-        void create_instance(void);
+        void createInstance(void);
 
         // calls all other initialization functions
         void prepare(void);
 
       protected:
-        void init_vulkan(void);
-        void check_validation_support(void);
-        void check_instance_ext(void);
-        void create_command_buffers(void);
-        void create_synchronization_primitives(void);
-        void setup_depth_stencil(void);
-        void setup_render_pass(void);
+        void initVulkan(void);
+        void checkValidationSupport(void);
+        void checkInstanceExt(void);
+        void createCommandBuffers(void);
+        void createSynchronizationPrimitives(void);
+        void setupDepthStencil(void);
+        void setupRenderPass(void);
         // TODO re implement
         // void create_pipeline_cache(void);
-        void setup_framebuffer(void);
+        void setupFramebuffer(void);
 
-        std::vector<char> read_file(std::string filename);
-        vk::ShaderModule create_shader_module(const std::vector<char> &code);
+        std::vector<char> readFile(std::string filename);
+        vk::ShaderModule createShaderModule(const std::vector<char> &code);
 
       public:
         Timer timer;
         Timer fps;
         bool good_init = true;
-        vk::ClearColorValue default_clear_color = std::array<float, 4>({{0.0f, 0.0f, 0.0f, 1.0f}});
+        vk::ClearColorValue defaultClearColor = std::array<float, 4>({{0.0f, 0.0f, 0.0f, 1.0f}});
 
         // handlers
         Mouse mouse;
         Keyboard keyboard;
-        std::unique_ptr<mv::Device> mv_device;
+        std::unique_ptr<mv::Device> mvDevice;
 
       protected:
         // Instance/Device extension functions -- must be loaded
@@ -95,46 +95,49 @@ namespace mv
         // Glfw
         GLFWwindow *window = nullptr;
         std::string title;
-        uint32_t window_width = 0;
-        uint32_t window_height = 0;
+        uint32_t windowWidth = 0;
+        uint32_t windowHeight = 0;
 
         // final list of requested instance extensions
-        std::vector<std::string> f_req;
+        std::vector<std::string> fReq;
 
         // owns
         std::unique_ptr<vk::Instance> instance;
-        std::unique_ptr<vk::PhysicalDevice> physical_device;
-        std::unique_ptr<vk::CommandPool> command_pool;
-        std::unique_ptr<vk::RenderPass> render_pass;
+        std::unique_ptr<vk::PhysicalDevice> physicalDevice;
+        std::unique_ptr<vk::CommandPool> commandPool;
+        std::unique_ptr<vk::RenderPass> renderPass;
 
         std::unique_ptr<mv::Swap> swapchain;
 
-        std::unique_ptr<std::vector<vk::CommandBuffer>> command_buffers;
-        std::unique_ptr<std::vector<vk::Framebuffer>> frame_buffers;
-        std::unique_ptr<std::vector<vk::Fence>> in_flight_fences;
-        std::unique_ptr<std::vector<vk::Fence>> wait_fences; // not allocated
+        std::unique_ptr<std::vector<vk::CommandBuffer>> commandBuffers;
+        std::unique_ptr<std::vector<vk::Framebuffer>> coreFramebuffers; // core engine frame buffers
+        std::unique_ptr<std::vector<vk::Framebuffer>> guiFramebuffers;  // ImGui frame buffers
+        std::unique_ptr<std::vector<vk::Fence>> inFlightFences;
+        std::unique_ptr<std::vector<vk::Fence>> waitFences; // not allocated
 
-        struct semaphores_struct
+        struct SemaphoresStruct
         {
-            vk::Semaphore present_complete;
-            vk::Semaphore render_complete;
+            vk::Semaphore presentComplete;
+            vk::Semaphore renderComplete;
         };
-        std::unique_ptr<struct semaphores_struct> semaphores;
+        std::unique_ptr<struct SemaphoresStruct> semaphores;
 
-        struct depth_stencil_struct
+        struct DepthStencilStruct
         {
             vk::Image image;
             vk::DeviceMemory mem;
             vk::ImageView view;
         };
-        std::unique_ptr<struct depth_stencil_struct> depth_stencil;
+        std::unique_ptr<struct DepthStencilStruct> depthStencil;
 
+        // clang-format off
         // info structures
-        vk::Format depth_format;
-        vk::PhysicalDeviceFeatures physical_features;
-        vk::PhysicalDeviceProperties physical_properties;
-        vk::PhysicalDeviceMemoryProperties physical_memory_properties;
-        vk::PipelineStageFlags stage_flags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+        vk::Format                          depthFormat;
+        vk::PipelineStageFlags              stageFlags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+        vk::PhysicalDeviceFeatures          physicalFeatures;
+        vk::PhysicalDeviceProperties        physicalProperties;
+        vk::PhysicalDeviceMemoryProperties  physicalMemoryProperties;
+        // clang-format on
     }; // end window
 
 }; // end namespace mv

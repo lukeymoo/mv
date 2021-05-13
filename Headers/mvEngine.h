@@ -8,6 +8,9 @@
 #include <random>
 #include <unordered_map>
 
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
+
 #include "mvAllocator.h"
 #include "mvCamera.h"
 #include "mvCollection.h"
@@ -49,60 +52,8 @@ namespace mv
         std::unique_ptr<std::unordered_map<std::string, vk::Pipeline>> pipelines;
         std::unique_ptr<std::unordered_map<std::string, vk::PipelineLayout>> pipeline_layouts;
 
-        // Init
-        Engine(int w, int h, const char *title) : MWindow(w, h, title)
-        {
-            pipelines = std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
-            pipeline_layouts = std::make_unique<std::unordered_map<std::string, vk::PipelineLayout>>();
-            return;
-        }
-        // Cleanup
-        ~Engine()
-        {
-            if (!mv_device)
-                return;
-
-            mv_device->logical_device->waitIdle();
-
-            if (pipelines)
-            {
-                for (auto &pipeline : *pipelines)
-                {
-                    if (pipeline.second)
-                        mv_device->logical_device->destroyPipeline(pipeline.second);
-                }
-                pipelines.reset();
-            }
-
-            if (pipeline_layouts)
-            {
-                for (auto &layout : *pipeline_layouts)
-                {
-                    if (layout.second)
-                        mv_device->logical_device->destroyPipelineLayout(layout.second);
-                }
-                pipeline_layouts.reset();
-            }
-
-            /*
-              DEBUGGING CLEANUP
-            */
-            if (reticle_mesh.vertex_buffer)
-            {
-                mv_device->logical_device->destroyBuffer(reticle_mesh.vertex_buffer);
-                mv_device->logical_device->freeMemory(reticle_mesh.vertex_memory);
-            }
-            if (reticle_obj.uniform_buffer.buffer)
-            {
-                reticle_obj.uniform_buffer.destroy(*mv_device);
-            }
-
-            // collection struct will handle cleanup of models & objs
-            if (collection_handler)
-            {
-                collection_handler->cleanup(*mv_device, *descriptor_allocator);
-            }
-        }
+        Engine(int w, int h, const char *title);
+        ~Engine();
 
         void add_new_model(mv::Allocator::Container *pool, const char *filename);
 
@@ -191,6 +142,7 @@ namespace mv
 
             // free buffer
             mv_device->logical_device->freeCommandBuffers(*mv_device->command_pool, buffer);
+            return;
         }
 
       protected:

@@ -1,189 +1,267 @@
 #include "mvDevice.h"
 
-void mv::Device::create_logical_device(const vk::PhysicalDevice &p_dvc) {
-  std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
+mv::Device::Device(const vk::PhysicalDevice &p_dvc, std::vector<std::string> &requested_device_exts)
+{
+    this->requested_physical_device_exts = requested_device_exts;
 
-  constexpr float def_queue_prio = 0.0f;
+    // fetch infos -- should prob just receive by reference from mv::MWindow
+    physical_properties = p_dvc.getProperties();
+    physical_features = p_dvc.getFeatures();
+    physical_features2 = p_dvc.getFeatures2();
+    extendedFeatures.extendedDynamicState = VK_TRUE;
+    physical_features2.pNext = &extendedFeatures;
+    physical_memory_properties = p_dvc.getMemoryProperties();
+    queue_family_properties = p_dvc.getQueueFamilyProperties();
 
-  // Look for graphics queue
-  queue_idx.graphics = get_queue_family_index(vk::QueueFlagBits::eGraphics);
+    if (queue_family_properties.size() < 1)
+        throw std::runtime_error("Failed to find any queue family properties :: logical handler");
 
-  vk::DeviceQueueCreateInfo queue_info;
-  queue_info.queueCount = 1;
-  queue_info.queueFamilyIndex = queue_idx.graphics;
-  queue_info.pQueuePriorities = &def_queue_prio;
+    // get supported physical device extensions
+    physical_device_exts = p_dvc.enumerateDeviceExtensionProperties();
 
-  queue_create_infos.push_back(queue_info);
+    if (physical_device_exts.size() < 1 && !requested_physical_device_exts.empty())
+        throw std::runtime_error("Failed to find device extensions :: logical handler");
 
-  std::vector<const char *> e_ext;
-  for (const auto &req : requested_physical_device_exts) {
-    e_ext.push_back(req.c_str());
-  }
-  vk::DeviceCreateInfo device_create_info;
-  device_create_info.pNext = &physical_features2;
-  device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
-  device_create_info.pQueueCreateInfos = queue_create_infos.data();
+    auto check_if_supported = [&, this](const std::string requested_ext) {
+        bool e = false;
+        for (const auto &supp_ext : physical_device_exts)
+        {
+            if (strcmp(supp_ext.extensionName, requested_ext.c_str()) == 0)
+            {
+                std::cout << "\t\tFound device extension => " << supp_ext.extensionName << "\n";
+                e = true;
+                break;
+            }
+        }
+        return e;
+    };
 
-  // if pnext is phys features2, must be nullptr
-  // device_create_info.pEnabledFeatures = &physical_features;
+    bool all_exist =
+        std::all_of(requested_physical_device_exts.begin(), requested_physical_device_exts.end(), check_if_supported);
 
-  device_create_info.enabledExtensionCount = static_cast<uint32_t>(e_ext.size());
-  device_create_info.ppEnabledExtensionNames = e_ext.data();
+    if (!all_exist)
+        throw std::runtime_error("Failed to find all requested device extensions");
 
-  // create logical device
-  logical_device = std::make_unique<vk::Device>(p_dvc.createDevice(device_create_info));
-
-  // Create command pool with graphics queue family
-  command_pool = std::make_unique<vk::CommandPool>(create_command_pool(queue_idx.graphics));
-
-  // retreive graphics queue
-  graphics_queue = std::make_unique<vk::Queue>(logical_device->getQueue(queue_idx.graphics, 0));
-
-  return;
+    return;
 }
 
-uint32_t mv::Device::get_queue_family_index(vk::QueueFlagBits queue_flag_bit) const {
-  for (const auto &queue_property : queue_family_properties) {
-    if ((queue_property.queueFlags & queue_flag_bit)) {
-      return (&queue_property - &queue_family_properties[0]);
+mv::Device::~Device()
+{
+    if (command_pool)
+    {
+        logical_device->destroyCommandPool(*command_pool);
+        command_pool.reset();
     }
-  }
-
-  throw std::runtime_error("Could not find requested queue family");
+    if (logical_device)
+    {
+        logical_device->destroy();
+        logical_device.reset();
+    }
+    return;
 }
 
-vk::CommandPool mv::Device::create_command_pool(uint32_t queue_index,
-                                                vk::CommandPoolCreateFlags create_flags) {
-  vk::CommandPoolCreateInfo pool_info;
-  pool_info.flags = create_flags;
-  pool_info.queueFamilyIndex = queue_index;
+void mv::Device::create_logical_device(const vk::PhysicalDevice &p_dvc)
+{
+    std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
 
-  return logical_device->createCommandPool(pool_info);
+    constexpr float def_queue_prio = 0.0f;
+
+    // Look for graphics queue
+    queue_idx.graphics = get_queue_family_index(vk::QueueFlagBits::eGraphics);
+
+    vk::DeviceQueueCreateInfo queue_info;
+    queue_info.queueCount = 1;
+    queue_info.queueFamilyIndex = queue_idx.graphics;
+    queue_info.pQueuePriorities = &def_queue_prio;
+
+    queue_create_infos.push_back(queue_info);
+
+    std::vector<const char *> e_ext;
+    for (const auto &req : requested_physical_device_exts)
+    {
+        e_ext.push_back(req.c_str());
+    }
+    vk::DeviceCreateInfo device_create_info;
+    device_create_info.pNext = &physical_features2;
+    device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
+    device_create_info.pQueueCreateInfos = queue_create_infos.data();
+
+    // if pnext is phys features2, must be nullptr
+    // device_create_info.pEnabledFeatures = &physical_features;
+
+    device_create_info.enabledExtensionCount = static_cast<uint32_t>(e_ext.size());
+    device_create_info.ppEnabledExtensionNames = e_ext.data();
+
+    // create logical device
+    logical_device = std::make_unique<vk::Device>(p_dvc.createDevice(device_create_info));
+
+    // Create command pool with graphics queue
+    command_pool = std::make_unique<vk::CommandPool>(create_command_pool(queue_idx.graphics));
+
+    // retreive graphics queue
+    graphics_queue = std::make_unique<vk::Queue>(logical_device->getQueue(queue_idx.graphics, 0));
+
+    return;
+}
+
+uint32_t mv::Device::get_queue_family_index(vk::QueueFlagBits queue_flag_bit) const
+{
+    for (const auto &queue_property : queue_family_properties)
+    {
+        if ((queue_property.queueFlags & queue_flag_bit))
+        {
+            return (&queue_property - &queue_family_properties[0]);
+        }
+    }
+
+    throw std::runtime_error("Could not find requested queue family");
+}
+
+vk::CommandPool mv::Device::create_command_pool(uint32_t queue_index, vk::CommandPoolCreateFlags create_flags)
+{
+    vk::CommandPoolCreateInfo pool_info;
+    pool_info.flags = create_flags;
+    pool_info.queueFamilyIndex = queue_index;
+
+    return logical_device->createCommandPool(pool_info);
 }
 
 uint32_t mv::Device::get_memory_type(uint32_t type_bits, vk::MemoryPropertyFlags properties,
-                                     vk::Bool32 *mem_type_found) const {
-  for (uint32_t i = 0; i < physical_memory_properties.memoryTypeCount; i++) {
-    if ((type_bits & 1) == 1) {
-      if ((physical_memory_properties.memoryTypes[i].propertyFlags & properties)) {
-        if (mem_type_found) {
-          *mem_type_found = true;
+                                     vk::Bool32 *mem_type_found) const
+{
+    for (uint32_t i = 0; i < physical_memory_properties.memoryTypeCount; i++)
+    {
+        if ((type_bits & 1) == 1)
+        {
+            if ((physical_memory_properties.memoryTypes[i].propertyFlags & properties))
+            {
+                if (mem_type_found)
+                {
+                    *mem_type_found = true;
+                }
+                return i;
+            }
         }
-        return i;
-      }
+        type_bits >>= 1;
     }
-    type_bits >>= 1;
-  }
 
-  if (mem_type_found) {
-    *mem_type_found = false;
-    return 0;
-  } else {
-    throw std::runtime_error("Could not find a matching memory type");
-  }
-}
-
-vk::Format mv::Device::get_supported_depth_format(const vk::PhysicalDevice &p_dvc) {
-
-  std::vector<vk::Format> depth_formats = {vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat,
-                                           vk::Format::eD24UnormS8Uint, vk::Format::eD16UnormS8Uint,
-                                           vk::Format::eD16Unorm};
-
-  for (auto &format : depth_formats) {
-    vk::FormatProperties format_properties = p_dvc.getFormatProperties(format);
-    if (format_properties.optimalTilingFeatures &
-        vk::FormatFeatureFlagBits::eDepthStencilAttachment) {
-      if (!(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage)) {
-        continue;
-      }
+    if (mem_type_found)
+    {
+        *mem_type_found = false;
+        return 0;
     }
-    return format;
-  }
-  throw std::runtime_error("Failed to find good format");
+    else
+    {
+        throw std::runtime_error("Could not find a matching memory type");
+    }
 }
 
-void mv::Device::create_buffer(vk::BufferUsageFlags usage_flags,
-                               vk::MemoryPropertyFlags memory_property_flags, vk::DeviceSize size,
-                               vk::Buffer *buffer, vk::DeviceMemory *memory, void *data) const {
-  std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(size) << std::endl;
-  vk::BufferCreateInfo buffer_info;
-  buffer_info.usage = usage_flags;
-  buffer_info.size = size;
-  buffer_info.sharingMode = vk::SharingMode::eExclusive;
+vk::Format mv::Device::get_supported_depth_format(const vk::PhysicalDevice &p_dvc)
+{
 
-  // create vulkan buffer
-  *buffer = logical_device->createBuffer(buffer_info);
+    std::vector<vk::Format> depth_formats = {vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat,
+                                             vk::Format::eD24UnormS8Uint, vk::Format::eD16UnormS8Uint,
+                                             vk::Format::eD16Unorm};
 
-  // allocate memory for buffer
-  vk::MemoryRequirements memreqs;
-  vk::MemoryAllocateInfo alloc_info;
-
-  memreqs = logical_device->getBufferMemoryRequirements(*buffer);
-
-  alloc_info.allocationSize = memreqs.size;
-  alloc_info.memoryTypeIndex = get_memory_type(memreqs.memoryTypeBits, memory_property_flags);
-
-  // Allocate memory
-  *memory = logical_device->allocateMemory(alloc_info);
-
-  // Bind newly allocated memory to buffer
-  logical_device->bindBufferMemory(*buffer, *memory, 0);
-
-  // If data was passed to creation, load it
-  if (data != nullptr) {
-    void *mapped = logical_device->mapMemory(*memory, 0, size);
-
-    memcpy(mapped, data, size);
-
-    logical_device->unmapMemory(*memory);
-  }
-
-  return;
+    for (auto &format : depth_formats)
+    {
+        vk::FormatProperties format_properties = p_dvc.getFormatProperties(format);
+        if (format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
+        {
+            if (!(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage))
+            {
+                continue;
+            }
+        }
+        return format;
+    }
+    throw std::runtime_error("Failed to find good format");
 }
 
-void mv::Device::create_buffer(vk::BufferUsageFlags usage_flags,
-                               vk::MemoryPropertyFlags memory_property_flags, mv::Buffer *buffer,
-                               vk::DeviceSize size, void *data) const {
+void mv::Device::create_buffer(vk::BufferUsageFlags usage_flags, vk::MemoryPropertyFlags memory_property_flags,
+                               vk::DeviceSize size, vk::Buffer *buffer, vk::DeviceMemory *memory, void *data) const
+{
+    std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(size) << std::endl;
+    vk::BufferCreateInfo buffer_info;
+    buffer_info.usage = usage_flags;
+    buffer_info.size = size;
+    buffer_info.sharingMode = vk::SharingMode::eExclusive;
 
-  std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(size) << std::endl;
+    // create vulkan buffer
+    *buffer = logical_device->createBuffer(buffer_info);
 
-  // create buffer
-  vk::BufferCreateInfo buffer_info;
-  buffer_info.usage = usage_flags;
-  buffer_info.size = size;
-  buffer_info.sharingMode = vk::SharingMode::eExclusive;
+    // allocate memory for buffer
+    vk::MemoryRequirements memreqs;
+    vk::MemoryAllocateInfo alloc_info;
 
-  buffer->buffer = std::make_unique<vk::Buffer>(logical_device->createBuffer(buffer_info));
+    memreqs = logical_device->getBufferMemoryRequirements(*buffer);
 
-  vk::MemoryRequirements memreqs;
-  vk::MemoryAllocateInfo alloc_info;
+    alloc_info.allocationSize = memreqs.size;
+    alloc_info.memoryTypeIndex = get_memory_type(memreqs.memoryTypeBits, memory_property_flags);
 
-  memreqs = logical_device->getBufferMemoryRequirements(*buffer->buffer);
+    // Allocate memory
+    *memory = logical_device->allocateMemory(alloc_info);
 
-  alloc_info.allocationSize = memreqs.size;
-  alloc_info.memoryTypeIndex = get_memory_type(memreqs.memoryTypeBits, memory_property_flags);
+    // Bind newly allocated memory to buffer
+    logical_device->bindBufferMemory(*buffer, *memory, 0);
 
-  // allocate memory
-  *buffer->memory = logical_device->allocateMemory(alloc_info);
+    // If data was passed to creation, load it
+    if (data != nullptr)
+    {
+        void *mapped = logical_device->mapMemory(*memory, 0, size);
 
-  buffer->alignment = memreqs.alignment;
-  buffer->size = size;
-  buffer->usage_flags = usage_flags;
-  buffer->memory_property_flags = memory_property_flags;
+        memcpy(mapped, data, size);
 
-  // bind buffer & memory
-  buffer->bind(*this);
+        logical_device->unmapMemory(*memory);
+    }
 
-  buffer->setup_descriptor();
+    return;
+}
 
-  // copy if necessary
-  if (data != nullptr) {
-    buffer->map(*this);
+void mv::Device::create_buffer(vk::BufferUsageFlags usage_flags, vk::MemoryPropertyFlags memory_property_flags,
+                               mv::Buffer *buffer, vk::DeviceSize size, void *data) const
+{
 
-    memcpy(buffer->mapped, data, size);
+    std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(size) << std::endl;
 
-    buffer->unmap(*this);
-  }
+    // create buffer
+    vk::BufferCreateInfo buffer_info;
+    buffer_info.usage = usage_flags;
+    buffer_info.size = size;
+    buffer_info.sharingMode = vk::SharingMode::eExclusive;
 
-  return;
+    buffer->buffer = std::make_unique<vk::Buffer>(logical_device->createBuffer(buffer_info));
+
+    vk::MemoryRequirements memreqs;
+    vk::MemoryAllocateInfo alloc_info;
+
+    memreqs = logical_device->getBufferMemoryRequirements(*buffer->buffer);
+
+    alloc_info.allocationSize = memreqs.size;
+    alloc_info.memoryTypeIndex = get_memory_type(memreqs.memoryTypeBits, memory_property_flags);
+
+    // allocate memory
+    *buffer->memory = logical_device->allocateMemory(alloc_info);
+
+    buffer->alignment = memreqs.alignment;
+    buffer->size = size;
+    buffer->usage_flags = usage_flags;
+    buffer->memory_property_flags = memory_property_flags;
+
+    // bind buffer & memory
+    buffer->bind(*this);
+
+    buffer->setup_descriptor();
+
+    // copy if necessary
+    if (data != nullptr)
+    {
+        buffer->map(*this);
+
+        memcpy(buffer->mapped, data, size);
+
+        buffer->unmap(*this);
+    }
+
+    return;
 }
