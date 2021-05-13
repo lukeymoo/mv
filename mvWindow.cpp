@@ -13,16 +13,21 @@ mv::Window::Window(int w, int h, std::string title)
     if (!extensions)
         throw std::runtime_error("Failed to get required instance extensions");
 
-    std::vector<std::string> req_ext;
-    for (const auto &req : req_instance_extensions)
+    // Get our own list of requested extensions
+    for (const auto &req : requestedInstanceExtensions)
     {
-        req_ext.push_back(req);
+        instanceExtensions.push_back(req);
     }
+
+    // Get GLFW requested extensions
     std::vector<std::string> glfw_requested;
     for (uint32_t i = 0; i < count; i++)
     {
         glfw_requested.push_back(extensions[i]);
     }
+
+    // temp container for missing extensions
+    std::vector<std::string> tmp;
 
     // iterate glfw requested
     for (const auto &glfw_req : glfw_requested)
@@ -30,9 +35,9 @@ mv::Window::Window(int w, int h, std::string title)
         bool found = false;
 
         // iterate already requested list
-        for (const auto &req : req_ext)
+        for (const auto &extensionName : instanceExtensions)
         {
-            if (glfw_req == req)
+            if (glfw_req == extensionName)
             {
                 found = true;
             }
@@ -40,10 +45,8 @@ mv::Window::Window(int w, int h, std::string title)
 
         // if not found, add to final list
         if (!found)
-            fReq.push_back(glfw_req);
+            instanceExtensions.push_back(glfw_req);
     }
-    // concat existing requests with glfw requests into final list
-    fReq.insert(fReq.end(), req_ext.begin(), req_ext.end());
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window = glfwCreateWindow(windowWidth, windowHeight, title.c_str(), nullptr, nullptr);
@@ -268,10 +271,10 @@ void mv::Window::initVulkan(void)
     physicalMemoryProperties = physicalDevice->getMemoryProperties();
 
     std::vector<std::string> tmp;
-    for (const auto &l : requested_device_extensions)
+    for (const auto &extensionName : requestedDeviceExtensions)
     {
-        std::cout << "\t[-] Requesting device extension => " << l << "\n";
-        tmp.push_back(l);
+        std::cout << "\t[-] Requesting device extension => " << extensionName << "\n";
+        tmp.push_back(extensionName);
     }
 
     // create logical device handler mv::Device
@@ -326,14 +329,14 @@ void mv::Window::createInstance(void)
     debuggerSettings.pUserData = nullptr;
 
     // convert string request to const char*
-    std::vector<const char *> req_layer;
-    for (auto &layer : requested_validation_layers)
+    std::vector<const char *> req_layers;
+    for (auto &layerName : requestedValidationLayers)
     {
-        std::cout << "\t[-] Requesting layer => " << layer << "\n";
-        req_layer.push_back(layer);
+        std::cout << "\t[-] Requesting layer => " << layerName << "\n";
+        req_layers.push_back(layerName);
     }
     std::vector<const char *> req_inst_ext;
-    for (auto &ext : fReq)
+    for (auto &ext : instanceExtensions)
     {
         std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
         req_inst_ext.push_back(ext.c_str());
@@ -342,20 +345,20 @@ void mv::Window::createInstance(void)
     vk::InstanceCreateInfo createInfo;
     createInfo.pNext = &debuggerSettings;
     createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledLayerCount = static_cast<uint32_t>(req_layer.size());
-    createInfo.ppEnabledLayerNames = req_layer.data();
+    createInfo.enabledLayerCount = static_cast<uint32_t>(req_layers.size());
+    createInfo.ppEnabledLayerNames = req_layers.data();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
     createInfo.ppEnabledExtensionNames = req_inst_ext.data();
 #endif
 #ifdef NDEBUG /* Debugging disabled */
     std::vector<const char *> req_inst_ext;
-    for (auto &ext : fReq)
+    for (auto &ext : instanceExtensions)
     {
         std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
         req_inst_ext.push_back(ext.c_str());
     }
 
-    vk::InstanceCreateInfo createInfo = {};
+    vk::InstanceCreateInfo createInfo;
     createInfo.pApplicationInfo = &appInfo;
     createInfo.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
     createInfo.ppEnabledExtensionNames = req_inst_ext.data();
@@ -603,20 +606,20 @@ void mv::Window::setupFramebuffer(void)
 
 void mv::Window::checkValidationSupport(void)
 {
-    std::vector<vk::LayerProperties> inst_layers = vk::enumerateInstanceLayerProperties();
+    std::vector<vk::LayerProperties> enumeratedInstLayers = vk::enumerateInstanceLayerProperties();
 
-    if (inst_layers.size() == 0 && !requested_validation_layers.empty())
+    if (enumeratedInstLayers.size() == 0 && !requestedValidationLayers.empty())
         throw std::runtime_error("No supported validation layers found");
 
     // look for missing requested layers
     std::string prelude = "The following instance layers were not found...\n";
     std::string failed;
-    for (const auto &requested_layer : requested_validation_layers)
+    for (const auto &reqLayerName : requestedValidationLayers)
     {
         bool match = false;
-        for (const auto &layer : inst_layers)
+        for (const auto &layer : enumeratedInstLayers)
         {
-            if (strcmp(requested_layer, layer.layerName) == 0)
+            if (strcmp(reqLayerName, layer.layerName) == 0)
             {
                 match = true;
                 break;
@@ -624,7 +627,7 @@ void mv::Window::checkValidationSupport(void)
         }
         if (!match)
         {
-            failed += requested_layer;
+            failed += reqLayerName;
             failed += "\n";
         }
     }
@@ -643,20 +646,20 @@ void mv::Window::checkValidationSupport(void)
 
 void mv::Window::checkInstanceExt(void)
 {
-    std::vector<vk::ExtensionProperties> inst_extensions = vk::enumerateInstanceExtensionProperties();
+    std::vector<vk::ExtensionProperties> enumeratedInstExtensions = vk::enumerateInstanceExtensionProperties();
 
     // use f_req vector for instance extensions
-    if (inst_extensions.size() < 1 && !fReq.empty())
+    if (enumeratedInstExtensions.size() < 1 && !requestedInstanceExtensions.empty())
         throw std::runtime_error("No instance extensions found");
 
     std::string prelude = "The following instance extensions were not found...\n";
     std::string failed;
-    for (const auto &requested_extension : fReq)
+    for (const auto &reqInstExtensionName : requestedInstanceExtensions)
     {
         bool match = false;
-        for (const auto &available_extension : inst_extensions)
+        for (const auto &availableExtension : enumeratedInstExtensions)
         {
-            if (strcmp(requested_extension.c_str(), available_extension.extensionName) == 0)
+            if (strcmp(reqInstExtensionName, availableExtension.extensionName) == 0)
             {
                 match = true;
                 break;
@@ -664,7 +667,7 @@ void mv::Window::checkInstanceExt(void)
         }
         if (!match)
         {
-            failed += requested_extension;
+            failed += reqInstExtensionName;
             failed += "\n";
         }
     }
@@ -677,52 +680,56 @@ void mv::Window::checkInstanceExt(void)
     return;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                                                       [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT message_type,
-                                                       const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-                                                       [[maybe_unused]] void *user_data)
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
+                                                       [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
+                                                       const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
+                                                       [[maybe_unused]] void *p_UserData)
 {
-    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+    {
+        std::ostringstream oss;
+        oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
+            << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
+    }
+    if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
         std::ostringstream oss;
         oss << std::endl
-            << "Warning: " << callback_data->messageIdNumber << ", " << callback_data->pMessageIdName << std::endl
-            << callback_data->pMessage << std::endl
-            << std::endl;
+            << "Warning: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
     }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT && (1 == 2)) // skip verbose messages
+    // else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
+    // {
+    //     // Disabled by the impossible statement
+    //     std::ostringstream oss;
+    //     oss << std::endl
+    //         << "Verbose message : " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName
+    //         << std::endl
+    //         << p_CallbackData->pMessage << "\n\n";
+    //     std::cout << oss.str();
+    // }
+    else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
     {
-        // Disabled by the impossible statement
         std::ostringstream oss;
         oss << std::endl
-            << "Verbose message : " << callback_data->messageIdNumber << ", " << callback_data->pMessageIdName
-            << std::endl
-            << callback_data->pMessage << std::endl
-            << std::endl;
+            << "Error: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
     }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-    {
-        std::ostringstream oss;
-        oss << std::endl
-            << "Error: " << callback_data->messageIdNumber << ", " << callback_data->pMessageIdName << std::endl
-            << callback_data->pMessage << std::endl
-            << std::endl;
-        std::cout << oss.str();
-    }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
-    {
-        std::ostringstream oss;
-        oss << std::endl
-            << "Info: " << callback_data->messageIdNumber << ", " << callback_data->pMessageIdName << std::endl
-            << callback_data->pMessage << std::endl
-            << std::endl;
-    }
+    // else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+    // {
+    //     std::ostringstream oss;
+    //     oss << std::endl
+    //         << "Info: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
+    //         << p_CallbackData->pMessage << "\n\n";
+    //     std::cout << oss.str();
+    // }
     return false;
 }
 
-std::vector<char> mv::Window::readFile(std::string filename)
+std::vector<char> mv::Window::readFile(std::string p_Filename)
 {
     size_t fileSize;
     std::ifstream file;
@@ -731,13 +738,13 @@ std::vector<char> mv::Window::readFile(std::string filename)
     // check if file exists
     try
     {
-        std::filesystem::exists(filename);
-        file.open(filename, std::ios::ate | std::ios::binary);
+        std::filesystem::exists(p_Filename);
+        file.open(p_Filename, std::ios::ate | std::ios::binary);
 
         if (!file.is_open())
         {
             std::ostringstream oss;
-            oss << "Failed to open file " << filename;
+            oss << "Failed to open file " << p_Filename;
             throw std::runtime_error(oss.str());
         }
 
@@ -775,11 +782,11 @@ std::vector<char> mv::Window::readFile(std::string filename)
     return buffer;
 }
 
-vk::ShaderModule mv::Window::createShaderModule(const std::vector<char> &code)
+vk::ShaderModule mv::Window::createShaderModule(const std::vector<char> &p_ShaderCharBuffer)
 {
     vk::ShaderModuleCreateInfo moduleInfo;
-    moduleInfo.codeSize = code.size();
-    moduleInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
+    moduleInfo.codeSize = p_ShaderCharBuffer.size();
+    moduleInfo.pCode = reinterpret_cast<const uint32_t *>(p_ShaderCharBuffer.data());
 
     vk::ShaderModule module = mvDevice->logicalDevice->createShaderModule(moduleInfo);
 

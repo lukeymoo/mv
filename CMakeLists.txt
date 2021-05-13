@@ -37,6 +37,7 @@ set(SOURCES
     Headers/imgui-1.82/imgui_draw.cpp
     Headers/imgui-1.82/imgui_demo.cpp
     Headers/imgui-1.82/imgui.cpp
+    mvAllocator.cpp
     mvInput.cpp
     mvImage.cpp
     mvTimer.cpp

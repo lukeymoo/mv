@@ -14,51 +14,45 @@
 
 #include "mvDevice.h"
 
-namespace mv {
-  // container for swap chain image
-  // contains swap image + a view into it
-  struct swapchain_buffer {
-    vk::Image image;
-    vk::ImageView view;
-  };
+namespace mv
+{
+    // container for swap chain image
+    // contains swap image + a view into it
+    struct SwapchainBuffer
+    {
+        vk::Image image;
+        vk::ImageView view;
+    };
 
-  struct Swap {
-  public:
-    Swap(void) {
-      // initialize containers
-      buffers = std::make_unique<std::vector<swapchain_buffer>>();
-      images = std::make_unique<std::vector<vk::Image>>();
-    }
-    ~Swap() {
-    }
-    // creates vulkan surface & retreives basic info such as graphics queue index
-    void init(GLFWwindow *window, const vk::Instance &inst, const vk::PhysicalDevice &p_dvc);
+    struct Swap
+    {
+      public:
+        Swap(void);
+        ~Swap();
+        // creates vulkan surface & retreives basic info such as graphics queue index
+        void init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance, const vk::PhysicalDevice &p_PhysicalDevice);
 
-    // map our swapchain interface with main engine class
-    // void map(vk::Instance &instance, vk::PhysicalDevice &physical_device, mv::Device &mv_device);
+        // create vulkan swap chain, retrieve images & create views into them
+        void create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Device &p_MvDevice, uint32_t &p_WindowWidth,
+                    uint32_t &p_WindowHeight);
 
-    // create vulkan swap chain, retrieve images & create views into them
-    void create(const vk::PhysicalDevice &p_dvc, const mv::Device &m_dvc, uint32_t &w, uint32_t &h);
+        // destroy resources owned by this interface
+        void cleanup(const vk::Instance &p_Instance, const mv::Device &p_MvDevice, bool p_ShouldDestroySurface = true);
 
-    // destroy resources owned by this interface
-    void cleanup(const vk::Instance &inst, const mv::Device &m_dvc,
-                 bool should_destroy_surface = true);
-
-  public:
-    // owns
-    std::unique_ptr<vk::SurfaceKHR> surface;
-    std::unique_ptr<vk::SwapchainKHR> swapchain;
-    std::unique_ptr<std::vector<swapchain_buffer>> buffers; // image handles + views
-    std::unique_ptr<std::vector<vk::Image>> images;         // swap image handles
-
-    // surface info structures
-    vk::Format color_format;
-    vk::Extent2D swap_extent;
-    vk::ColorSpaceKHR color_space;
-
-    // graphics queue index
-    uint32_t graphics_index = UINT32_MAX;
-  };
+      public:
+        // Owned resources
+        // clang-format off
+        std::unique_ptr<vk::SurfaceKHR>                       surface;
+        std::unique_ptr<vk::SwapchainKHR>                     swapchain;
+        std::unique_ptr<std::vector<struct SwapchainBuffer>>  buffers; // image handles + views
+        // std::unique_ptr<std::vector<vk::Image>>               images;  // swap image handles
+        // Info
+        uint32_t                                              graphicsIndex = UINT32_MAX;
+        vk::Format                                            colorFormat;
+        vk::ColorSpaceKHR                                     colorSpace;
+        vk::Extent2D                                          swapExtent;
+        // clang-format on
+    };
 }; // namespace mv
 
 #endif

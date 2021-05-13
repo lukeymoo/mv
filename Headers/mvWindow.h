@@ -22,15 +22,15 @@ const size_t MAX_IN_FLIGHT = 3;
 #define WINDOW_WIDTH 1920
 #define WINDOW_HEIGHT 1080
 
-constexpr std::array<const char *, 1> requested_validation_layers = {
+constexpr std::array<const char *, 1> requestedValidationLayers = {
     "VK_LAYER_KHRONOS_validation",
 };
 
-constexpr std::array<const char *, 1> req_instance_extensions = {
+constexpr std::array<const char *, 1> requestedInstanceExtensions = {
     "VK_EXT_debug_utils",
 };
 
-constexpr std::array<const char *, 3> requested_device_extensions = {
+constexpr std::array<const char *, 3> requestedDeviceExtensions = {
     "VK_KHR_swapchain",
     "VK_KHR_maintenance1",
     "VK_EXT_extended_dynamic_state",
@@ -54,7 +54,7 @@ namespace mv
         Window(Window &&) = delete;
         Window &operator=(Window &&) = delete;
 
-        Window(int w, int h, std::string title);
+        Window(int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle);
         ~Window();
 
         void createInstance(void);
@@ -74,8 +74,8 @@ namespace mv
         // void create_pipeline_cache(void);
         void setupFramebuffer(void);
 
-        std::vector<char> readFile(std::string filename);
-        vk::ShaderModule createShaderModule(const std::vector<char> &code);
+        std::vector<char> readFile(std::string p_Filename);
+        vk::ShaderModule createShaderModule(const std::vector<char> &p_ShaderCharBuffer);
 
       public:
         Timer timer;
@@ -98,8 +98,8 @@ namespace mv
         uint32_t windowWidth = 0;
         uint32_t windowHeight = 0;
 
-        // final list of requested instance extensions
-        std::vector<std::string> fReq;
+        // Final list of extensions/layers
+        std::vector<std::string> instanceExtensions;
 
         // owns
         std::unique_ptr<vk::Instance> instance;

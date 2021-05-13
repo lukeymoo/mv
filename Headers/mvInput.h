@@ -17,53 +17,53 @@ namespace mv
     class Keyboard
     {
       public:
-        struct event
+        struct Event
         {
-            enum etype
+            enum Type
             {
-                press,
-                release,
-                invalid
+                eInvalid = 0,
+                ePress,
+                eRelease,
             };
-            event(etype type, int code) noexcept
+            Event(Type p_Type, int p_Code) noexcept
             {
                 this->type = type;
                 this->code = code;
             }
-            ~event()
+            ~Event()
             {
             }
-            etype type = etype::invalid;
+            Type type = Event::Type::eInvalid;
             int code = GLFW_KEY_UNKNOWN;
 
-            inline bool is_press(void) const noexcept
+            inline bool isPress(void) const noexcept
             {
-                return type == etype::press;
+                return type == Type::ePress;
             }
-            inline bool is_release(void) const noexcept
+            inline bool isRelease(void) const noexcept
             {
-                return type == etype::release;
+                return type == Type::eRelease;
             }
-            inline bool is_valid(void) const noexcept
+            inline bool isValid(void) const noexcept
             {
-                return type != etype::invalid;
+                return type != Type::eInvalid;
             }
         }; // end event structure
 
-        const uint32_t max_buffer_size = 24;
+        const uint32_t maxBufferSize = 24;
 
-        std::bitset<350> key_states;
-        std::queue<struct mv::Keyboard::event> key_buffer;
+        std::bitset<350> keyStates;
+        std::queue<struct mv::Keyboard::Event> keyBuffer;
 
-        template <typename T> void trim_buffer(std::queue<T> buffer, uint32_t max_size);
+        template <typename T> void trimBuffer(std::queue<T> &p_Buffer, uint32_t p_MaxSize);
 
-        mv::Keyboard::event read(void);
+        struct mv::Keyboard::Event read(void);
 
-        void on_key_press(int code);
-        void on_key_release(int code);
-        void clear_state(void);
-        bool is_keystate(int code);
-        bool is_key(GLFWwindow *window, int code);
+        void onKeyPress(int p_Code);
+        void onKeyRelease(int p_Code);
+        void clearState(void);
+        bool isKeyState(int p_Code);
+        bool isKey(GLFWwindow *p_GLFWwindow, int p_Code);
 
     }; // namespace keyboard
 };     // namespace mv
@@ -74,102 +74,103 @@ namespace mv
     class Mouse
     {
       public:
-        struct event
+        struct Event
         {
-            enum etype
+            enum Type
             {
-                l_down,
-                l_release,
-                r_down,
-                r_release,
-                m_down, // middle
-                m_release,
-                wheel_up,
-                wheel_down,
-                move,  // mouse move
-                leave, // leave client area
-                enter, // enter client area
-                invalid
+                eInvalid = 0,
+                eLeftDown,
+                eLeftRelease,
+                eRightDown,
+                eRightRelease,
+                eMiddleDown,
+                eMiddleRelease,
+                eWheelUp,
+                eWheelDown,
+                eMove,
+                eEnter,
+                eLeave,
             };
 
-            event(etype type, int x, int y, bool l_button, bool m_button, bool r_button) noexcept
-            {
-                this->type = type;
-                this->x = x;
-                this->y = y;
-                this->is_left_pressed = l_button;
-                this->is_middle_pressed = m_button;
-                this->is_right_pressed = r_button;
-                return;
-            }
-            ~event()
-            {
-            }
+            // Event(Type p_EventType, int p_CursorX, int p_CursorY, bool p_LeftButtonStatus, bool p_MiddleButtonStatus,
+            //       bool p_RightButtonStatus) noexcept
+            // {
+            //     this->type = p_EventType;
+            //     this->x = p_CursorX;
+            //     this->y = p_CursorY;
+            //     this->isLeftPressed = p_LeftButtonStatus;
+            //     this->isMiddlePressed = p_MiddleButtonStatus;
+            //     this->isRightPressed = p_RightButtonStatus;
+            //     return;
+            // }
+            // ~Event()
+            // {
+            // }
 
-            etype type = etype::invalid;
+            Type type = Type::eInvalid;
             int x = 0;
             int y = 0;
 
-            bool is_left_pressed = false;
-            bool is_middle_pressed = false;
-            bool is_right_pressed = false;
+            bool isLeftPressed = false;
+            bool isMiddlePressed = false;
+            bool isRightPressed = false;
 
-            inline bool is_valid(void) const noexcept
+            inline bool isValid(void) const noexcept
             {
-                return (type != etype::invalid);
+                return (type != Type::eInvalid);
             }
         }; // end event
 
-        template <typename T> void trim_buffer(std::queue<T> buffer, uint32_t max_size);
+        template <typename T> void trimBuffer(std::queue<T> &p_Buffer, uint32_t p_MaxSize);
 
-        const uint32_t max_buffer_size = 24;
-        std::queue<struct mv::Mouse::event> mouse_buffer;
+        const uint32_t maxBufferSize = 24;
+        std::queue<struct mv::Mouse::Event> mouseBuffer;
 
-        enum delta_styles
+        enum DeltaStyles
         {
-            from_center = 0,
-            from_last
+            eFromCenter = 0,
+            eFromLastPosition
         };
-        delta_styles delta_style = delta_styles::from_center;
+        DeltaStyles deltaStyle = DeltaStyles::eFromCenter;
 
-        int last_x = 0;
-        int last_y = 0;
-        int current_x = 0;
-        int current_y = 0;
-        int delta_x = 0;
-        int delta_y = 0;
-        int center_x = 0;
-        int center_y = 0;
+        int lastX = 0;
+        int lastY = 0;
+        int currentX = 0;
+        int currentY = 0;
+        int deltaX = 0;
+        int deltaY = 0;
+        int centerX = 0;
+        int centerY = 0;
 
-        bool is_left_pressed = false;
-        bool is_middle_pressed = false;
-        bool is_right_pressed = false;
+        bool isLeftPressed = false;
+        bool isMiddlePressed = false;
+        bool isRightPressed = false;
 
-        bool is_dragging = false;
-        int drag_startx = 0;
-        int drag_starty = 0;
-        int drag_delta_x = 0;
-        int drag_delta_y = 0;
+        bool isDragging = false;
+        int dragStartx = 0;
+        int dragStarty = 0;
+        int dragDeltaX = 0;
+        int dragDeltaY = 0;
 
-        float stored_orbit = 0.0f;
-        float stored_pitch = 0.0f;
+        float storedOrbit = 0.0f;
+        float storedPitch = 0.0f;
 
-        Mouse::event read(void) noexcept;
-        void update(int nx, int ny) noexcept;
+        struct Mouse::Event read(void) noexcept;
+        void update(int p_NewX, int p_NewY) noexcept;
 
-        void on_left_press(void) noexcept;
-        void on_left_release(void) noexcept;
-        void on_right_press(void) noexcept;
-        void on_right_release(void) noexcept;
-        void on_middle_press(void) noexcept;
-        void on_middle_release(void) noexcept;
+        void onLeftPress(void) noexcept;
+        void onLeftRelease(void) noexcept;
+        void onRightPress(void) noexcept;
+        void onRightRelease(void) noexcept;
+        void onMiddlePress(void) noexcept;
+        void onMiddleRelease(void) noexcept;
 
-        void on_wheel_up(int nx, int ny) noexcept;
-        void on_wheel_down(int nx, int ny) noexcept;
-        void calculate_delta(void) noexcept;
-        void start_drag(void) noexcept;
-        void start_drag(float orbit, float pitch) noexcept;
-        void end_drag(void) noexcept;
+        void onWheelUp(int p_NewX, int p_NewY) noexcept;
+        void onWheelDown(int p_NewX, int p_NewY) noexcept;
+        void calculateDelta(void) noexcept;
+        void startDrag(void) noexcept;
+        void startDrag(float p_StartOrbit, float p_StartPitch) noexcept;
+        void endDrag(void) noexcept;
         void clear(void) noexcept;
     }; // namespace mouse
 };     // namespace mv

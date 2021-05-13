@@ -7,56 +7,59 @@
 
 #include "mvDevice.h"
 
-namespace mv {
+namespace mv
+{
 
-  struct Device;
+    // Forward decl
+    struct Device;
+    struct Buffer
+    {
+        Buffer()
+        {
+            buffer = std::make_unique<vk::Buffer>();
+            memory = std::make_unique<vk::DeviceMemory>();
+        }
+        ~Buffer()
+        {
+        }
 
-  struct Buffer {
-    Buffer() {
-      buffer = std::make_unique<vk::Buffer>();
-      memory = std::make_unique<vk::DeviceMemory>();
-    }
-    ~Buffer() {
-    }
+        Buffer(const Buffer &) = delete;
+        Buffer &operator=(const Buffer &) = delete;
 
-    Buffer(const Buffer &) = delete;
-    Buffer &operator=(const Buffer &) = delete;
+        Buffer(Buffer &&) = default;
+        Buffer &operator=(Buffer &&) = default;
 
-    Buffer(Buffer &&) = default;
-    Buffer &operator=(Buffer &&) = default;
+        // owns
+        std::unique_ptr<vk::Buffer> buffer;
+        std::unique_ptr<vk::DeviceMemory> memory;
 
-    // owns
-    std::unique_ptr<vk::Buffer> buffer;
-    std::unique_ptr<vk::DeviceMemory> memory;
+        // info structures
+        // clang-format off
+        vk::DeviceSize            size;
+        vk::DeviceSize            alignment;
+        vk::DescriptorBufferInfo  descriptor;
+        vk::BufferUsageFlags      usageFlags;
+        vk::MemoryPropertyFlags   memoryPropertyFlags;
+        void *                    mapped = nullptr;
+        // clang-format on
 
-    // info structures
-    vk::DeviceSize size;
-    vk::DeviceSize alignment;
-    vk::DescriptorBufferInfo descriptor;
+        void map(const mv::Device &p_MvDevice, vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE,
+                 vk::DeviceSize p_MemoryStartOffset = 0);
 
-    vk::BufferUsageFlags usage_flags;
-    vk::MemoryPropertyFlags memory_property_flags;
+        void unmap(const mv::Device &p_MvDevice);
 
-    // ptr to mapped memory for host visible/coherent buffers
-    void *mapped = nullptr;
+        void bind(const mv::Device &p_MvDevice, vk::DeviceSize p_MemoryOffset = 0);
 
-    void map(const mv::Device &m_dvc, vk::DeviceSize size = VK_WHOLE_SIZE,
-             vk::DeviceSize offset = 0);
+        void setupDescriptor(vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE, vk::DeviceSize p_MemoryOffset = 0);
 
-    void unmap(const mv::Device &m_dvc);
+        void copyFrom(void *p_SourceData, vk::DeviceSize p_MemoryCopySize);
 
-    void bind(const mv::Device &m_dvc, vk::DeviceSize offset = 0);
+        // TODO
+        // flush buffer
+        // invalidate buffer
 
-    void setup_descriptor(vk::DeviceSize size = VK_WHOLE_SIZE, vk::DeviceSize offset = 0);
-
-    void copy_from(void *data, vk::DeviceSize size);
-
-    // TODO
-    // flush buffer
-    // invalidate buffer
-
-    void destroy(const mv::Device &m_dvc);
-  };
+        void destroy(const mv::Device &p_MvDevice);
+    };
 
 }; // namespace mv
 

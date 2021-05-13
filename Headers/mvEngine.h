@@ -21,7 +21,7 @@ using namespace std::chrono_literals;
 namespace mv
 {
 
-    class Engine : public mv::MWindow
+    class Engine : public mv::Window
     {
       public:
         // delete copy
@@ -32,61 +32,61 @@ namespace mv
           DEBUG RENDER JOBS
           these will be removed for release versions
         */
-        std::unordered_map<std::string, bool> to_render_map = {
+        std::unordered_map<std::string, bool> toRenderMap = {
             std::pair<std::string, bool>{"reticle_raycast", true},
         };
 
-        struct mv::_Mesh reticle_mesh; // Vertex buffer & memory
-        mv::Object reticle_obj;        // Uniform object(model matrix, updated via push constants)
-        void *reticle_mapped = nullptr;
+        struct mv::Mesh reticleMesh; // Vertex buffer & memory
+        mv::Object reticleObj;       // Uniform object(model matrix, updated via push constants)
+        void *reticleMapped = nullptr;
         /*
-          DEBUG RENDER JOBS
+          END DEBUG RENDER JOBS
         */
 
         // Owns
-        std::unique_ptr<Allocator> descriptor_allocator; // descriptor pool/set manager
-        std::unique_ptr<Collection> collection_handler;  // model/obj manager
-        std::unique_ptr<Camera> camera;                  // camera manager(view/proj matrix handler)
+        std::unique_ptr<Allocator> descriptorAllocator; // descriptor pool/set manager
+        std::unique_ptr<Collection> collectionHandler;  // model/obj manager
+        std::unique_ptr<Camera> camera;                 // camera manager(view/proj matrix handler)
 
         // Containers for pipelines
         std::unique_ptr<std::unordered_map<std::string, vk::Pipeline>> pipelines;
-        std::unique_ptr<std::unordered_map<std::string, vk::PipelineLayout>> pipeline_layouts;
+        std::unique_ptr<std::unordered_map<std::string, vk::PipelineLayout>> pipelineLayouts;
 
         Engine(int w, int h, const char *title);
         ~Engine();
 
-        void add_new_model(mv::Allocator::Container *pool, const char *filename);
+        void addNewModel(mv::Allocator::Container *pool, const char *filename);
 
-        void recreate_swapchain(void);
+        void recreateSwapchain(void);
 
         void go(void);
         // all the initial descriptor allocator & collection handler calls
-        inline void go_setup(void);
-        void record_command_buffer(uint32_t imageIndex);
+        inline void goSetup(void);
+        void recordCommandBuffer(uint32_t imageIndex);
         void draw(size_t &current_frame, uint32_t &current_image_index);
 
         /*
           Helper methods
         */
         // Create quick one time submit command buffer
-        inline vk::CommandBuffer begin_command_buffer(void)
+        inline vk::CommandBuffer beginCommandBuffer(void)
         {
             // sanity check
-            if (!mv_device)
+            if (!mvDevice)
                 throw std::runtime_error("attempted to create one time submit command buffer but mv device "
                                          "handler not initialized\n");
 
-            if (!mv_device->command_pool)
+            if (!mvDevice->commandPool)
                 throw std::runtime_error("attempted to create one time submit command buffer but command "
                                          "pool is not initialized\n");
 
-            vk::CommandBufferAllocateInfo alloc_info;
-            alloc_info.level = vk::CommandBufferLevel::ePrimary;
-            alloc_info.commandPool = *mv_device->command_pool;
-            alloc_info.commandBufferCount = 1;
+            vk::CommandBufferAllocateInfo allocInfo;
+            allocInfo.level = vk::CommandBufferLevel::ePrimary;
+            allocInfo.commandPool = *mvDevice->commandPool;
+            allocInfo.commandBufferCount = 1;
 
             // allocate command buffer
-            std::vector<vk::CommandBuffer> cmdbuf = mv_device->logical_device->allocateCommandBuffers(alloc_info);
+            std::vector<vk::CommandBuffer> cmdbuf = mvDevice->logicalDevice->allocateCommandBuffers(allocInfo);
 
             if (cmdbuf.size() < 1)
                 throw std::runtime_error("Failed to create one time submit command buffer");
@@ -95,35 +95,35 @@ namespace mv
             // shouldn't happen
             if (cmdbuf.size() > 1)
             {
-                std::vector<vk::CommandBuffer> to_destroy;
+                std::vector<vk::CommandBuffer> toDestroy;
                 for (auto &buf : cmdbuf)
                 {
                     if (&buf - &cmdbuf[0] > 0)
                     {
-                        to_destroy.push_back(buf);
+                        toDestroy.push_back(buf);
                     }
                 }
-                mv_device->logical_device->freeCommandBuffers(*mv_device->command_pool, to_destroy);
+                mvDevice->logicalDevice->freeCommandBuffers(*mvDevice->commandPool, toDestroy);
             }
 
-            vk::CommandBufferBeginInfo begin_info;
-            begin_info.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+            vk::CommandBufferBeginInfo beginInfo;
+            beginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
 
-            cmdbuf.at(0).begin(begin_info);
+            cmdbuf.at(0).begin(beginInfo);
 
             return cmdbuf.at(0);
         }
 
-        inline void end_command_buffer(vk::CommandBuffer buffer)
+        inline void endCommandBuffer(vk::CommandBuffer buffer)
         {
             // sanity check
-            if (!mv_device)
+            if (!mvDevice)
                 throw std::runtime_error("attempted to end command buffer recording but mv device handler is nullptr");
 
-            if (!mv_device->command_pool)
+            if (!mvDevice->commandPool)
                 throw std::runtime_error("attempted to end command buffer recording but command pool is nullptr");
 
-            if (!mv_device->graphics_queue)
+            if (!mvDevice->graphicsQueue)
                 throw std::runtime_error("attempted to end command buffer recording but graphics queue is nullptr");
 
             if (!buffer)
@@ -132,71 +132,70 @@ namespace mv
 
             buffer.end();
 
-            vk::SubmitInfo submit_info;
-            submit_info.commandBufferCount = 1;
-            submit_info.pCommandBuffers = &buffer;
+            vk::SubmitInfo submitInfo;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &buffer;
 
             // submit buffer
-            mv_device->graphics_queue->submit(submit_info);
-            mv_device->graphics_queue->waitIdle();
+            mvDevice->graphicsQueue->submit(submitInfo);
+            mvDevice->graphicsQueue->waitIdle();
 
             // free buffer
-            mv_device->logical_device->freeCommandBuffers(*mv_device->command_pool, buffer);
+            mvDevice->logicalDevice->freeCommandBuffers(*mvDevice->commandPool, buffer);
             return;
         }
 
       protected:
-        void prepare_uniforms(void);
+        void prepareUniforms(void);
 
         // void create_descriptor_sets(GlobalUniforms *view_proj_ubo_container, bool
         // should_create_layout = true);
-        void prepare_pipeline(void);
+        void preparePipeline(void);
 
-        void cleanup_swapchain(void);
+        void cleanupSwapchain(void);
     };
 
     /*
         DEBUG FUNCTIONS
       */
     // dont know how to do this..use tan ?
-    static inline void generate_ray(void)
+    static inline void generateRay(void)
     {
         return;
     }
 
     // set vertex 1 of reticle mesh to position
-    static inline void raycast_p1(const mv::Engine &engine, glm::vec3 pos)
+    static inline void raycastP1(const mv::Engine &engine, glm::vec3 pos)
     {
         Vertex e;
         e.position = {pos, 1.0f};
         e.color = {0.0f, 0.0f, 1.0f, 1.0f};
         // Map vertex 2 -- stays with object 1
-        void *reticle_mapped = nullptr;
-        reticle_mapped =
-            engine.mv_device->logical_device->mapMemory(engine.reticle_mesh.vertex_memory, 0, sizeof(Vertex));
-        if (!reticle_mapped)
+        void *reticleMapped = nullptr;
+        reticleMapped = engine.mvDevice->logicalDevice->mapMemory(engine.reticleMesh.vertexMemory, 0, sizeof(Vertex));
+        if (!reticleMapped)
             throw std::runtime_error("Failed to map reticle mesh vertex memory VERTEX 2");
 
-        memcpy(reticle_mapped, &e, sizeof(Vertex));
-        engine.mv_device->logical_device->unmapMemory(engine.reticle_mesh.vertex_memory);
+        memcpy(reticleMapped, &e, sizeof(Vertex));
+        engine.mvDevice->logicalDevice->unmapMemory(engine.reticleMesh.vertexMemory);
         return;
     }
 
     // set vertex 2 of reticle mesh to position
-    static inline void raycast_p2(const mv::Engine &engine, glm::vec3 pos)
+    static inline void raycastP2(const mv::Engine &engine, glm::vec3 pos)
     {
         Vertex e;
         e.position = {pos, 1.0f};
         e.color = {0.0f, 0.0f, 1.0f, 1.0f};
         // Map vertex 2 -- stays with object 1
-        void *reticle_mapped = nullptr;
-        reticle_mapped = engine.mv_device->logical_device->mapMemory(engine.reticle_mesh.vertex_memory, sizeof(Vertex),
-                                                                     sizeof(Vertex));
-        if (!reticle_mapped)
+        void *reticleMapped = nullptr;
+        reticleMapped =
+            engine.mvDevice->logicalDevice->mapMemory(engine.reticleMesh.vertexMemory, sizeof(Vertex), sizeof(Vertex));
+        if (!reticleMapped)
             throw std::runtime_error("Failed to map reticle mesh vertex memory VERTEX 2");
 
-        memcpy(reticle_mapped, &e, sizeof(Vertex));
-        engine.mv_device->logical_device->unmapMemory(engine.reticle_mesh.vertex_memory);
+        memcpy(reticleMapped, &e, sizeof(Vertex));
+        engine.mvDevice->logicalDevice->unmapMemory(engine.reticleMesh.vertexMemory);
         return;
     }
 

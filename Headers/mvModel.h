@@ -24,439 +24,239 @@
 
 static constexpr float MOVESPEED = 0.05f;
 
-namespace mv {
-  struct _Texture {
-    std::string type;
-    std::string path;
-    mv::Image mv_image;
-    vk::DescriptorSet descriptor;
-  };
+namespace mv
+{
+    struct Texture
+    {
+        std::string type;
+        std::string path;
+        mv::Image mvImage;
+        vk::DescriptorSet descriptor;
+    };
 
-  struct Object {
-    Object(glm::vec3 position, glm::vec3 rotation) {
-      this->position = position;
-      this->rotation = rotation;
-    }
-    Object(void) {
-    }
-    ~Object() {
-    }
-
-    // allow move
-    Object(Object &&) = default;
-    Object &operator=(Object &&) = default;
-
-    // delete copy
-    Object(const Object &) = delete;
-    Object &operator=(const Object &) = delete;
-
-    struct Matrices {
-      alignas(16) glm::mat4 model;
-      // uv, normals implemented as Vertex attributes
-    } matrices;
-
-    vk::DescriptorSet model_descriptor;
-    vk::DescriptorSet texture_descriptor;
-    mv::Buffer uniform_buffer;
-    glm::vec3 rotation = {0.0f, 0.0f, 0.0f};
-    glm::vec3 position = {0.0f, 0.0f, 0.0f};
-    uint32_t model_index;
-    glm::vec3 front_face;
-    float scale_factor = 1.0f;
-
-    void update(void) {
-      glm::mat4 translation_matrix = glm::translate(glm::mat4(1.0), position);
-
-      glm::mat4 rotation_matrix = glm::mat4(1.0);
-      rotation_matrix =
-          glm::rotate(rotation_matrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-      rotation_matrix =
-          glm::rotate(rotation_matrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-      rotation_matrix =
-          glm::rotate(rotation_matrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-      glm::mat4 scale_matrix = glm::scale(glm::mat4(1.0), glm::vec3(scale_factor));
-
-      matrices.model = translation_matrix * rotation_matrix * scale_matrix;
-
-      // update obj uniform
-      memcpy(uniform_buffer.mapped, &matrices.model, sizeof(matrices));
-    }
-
-    inline void rotate_to_face(float angle) {
-      rotation.y = angle;
-      return;
-    }
-
-    void get_front_face(void) {
-      glm::vec3 fr;
-      fr.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
-      fr.y = sin(glm::radians(rotation.x));
-      fr.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
-      fr = -glm::normalize(fr);
-
-      front_face = fr;
-      return;
-    }
-
-    inline void move(float orbit_angle, glm::vec4 axis) {
-      position += rotate_vector(orbit_angle, axis) * MOVESPEED;
-      return;
-    }
-
-    void move_left(float orbit_angle) {
-      // position -= glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) *
-      // MOVESPEED;
-      position += rotate_vector(orbit_angle, glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f)) * MOVESPEED;
-      return;
-    }
-    void move_right(float orbit_angle) {
-      // position += glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f))) *
-      // MOVESPEED;
-      position += rotate_vector(orbit_angle, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)) * MOVESPEED;
-      return;
-    }
-    void move_forward(float orbit_angle) {
-      // position += camera_front * MOVESPEED;
-      position += rotate_vector(orbit_angle, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f)) * MOVESPEED;
-      return;
-    }
-    void move_backward(float orbit_angle) {
-      position += rotate_vector(orbit_angle, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)) * MOVESPEED;
-      return;
-    }
-
-    // w component should be 1.0f
-    inline glm::vec3 rotate_vector(float orbit_angle, glm::vec4 target_axis) {
-      // target_axis is our default directional vector
-
-      // construct rotation matrix from orbit angle
-      glm::mat4 rot_mat = glm::mat4(1.0);
-      rot_mat = glm::rotate(rot_mat, glm::radians(orbit_angle), glm::vec3(0.0f, 1.0f, 0.0f));
-
-      // multiply our def vec
-
-      glm::vec4 x_col = {0.0f, 0.0f, 0.0f, 0.0f};
-      glm::vec4 y_col = {0.0f, 0.0f, 0.0f, 0.0f};
-      glm::vec4 z_col = {0.0f, 0.0f, 0.0f, 0.0f};
-      glm::vec4 w_col = {0.0f, 0.0f, 0.0f, 0.0f};
-
-      // x * x_column
-      x_col.x = target_axis.x * rot_mat[0][0];
-      x_col.y = target_axis.x * rot_mat[0][1];
-      x_col.z = target_axis.x * rot_mat[0][2];
-      x_col.w = target_axis.x * rot_mat[0][3];
-
-      // y * y_column
-      y_col.x = target_axis.y * rot_mat[1][0];
-      y_col.y = target_axis.y * rot_mat[1][1];
-      y_col.z = target_axis.y * rot_mat[1][2];
-      y_col.w = target_axis.y * rot_mat[1][3];
-
-      // z * z_column
-      z_col.x = target_axis.z * rot_mat[2][0];
-      z_col.y = target_axis.z * rot_mat[2][1];
-      z_col.z = target_axis.z * rot_mat[2][2];
-      z_col.w = target_axis.z * rot_mat[2][3];
-
-      // w * w_column
-      w_col.x = target_axis.w * rot_mat[3][0];
-      w_col.y = target_axis.w * rot_mat[3][1];
-      w_col.z = target_axis.w * rot_mat[3][2];
-      w_col.w = target_axis.w * rot_mat[3][3];
-
-      glm::vec4 f = x_col + y_col + z_col + w_col;
-
-      // extract relevant data & return
-      return {f.x, f.y, f.z};
-    }
-  };
-
-  struct Vertex {
-    glm::vec4 position;
-    glm::vec4 uv;
-    glm::vec4 color;
-
-    static vk::VertexInputBindingDescription get_binding_description() {
-      vk::VertexInputBindingDescription binding_description;
-      binding_description.binding = 0;
-      binding_description.stride = sizeof(Vertex);
-      binding_description.inputRate = vk::VertexInputRate::eVertex;
-      return binding_description;
-    }
-
-    static std::array<vk::VertexInputAttributeDescription, 3> get_attribute_descriptions() {
-      // Temp container to be returned
-      std::array<vk::VertexInputAttributeDescription, 3> attribute_descriptions{};
-
-      // position
-      attribute_descriptions[0].binding = 0;
-      attribute_descriptions[0].location = 0;
-      attribute_descriptions[0].format = vk::Format::eR32G32B32A32Sfloat;
-      attribute_descriptions[0].offset = offsetof(Vertex, position);
-
-      // texture uv coordinates
-      attribute_descriptions[1].binding = 0;
-      attribute_descriptions[1].location = 1;
-      attribute_descriptions[1].format = vk::Format::eR32G32B32A32Sfloat;
-      attribute_descriptions[1].offset = offsetof(Vertex, uv);
-
-      // color
-      attribute_descriptions[2].binding = 0;
-      attribute_descriptions[2].location = 2;
-      attribute_descriptions[2].format = vk::Format::eR32G32B32A32Sfloat;
-      attribute_descriptions[2].offset = offsetof(Vertex, color);
-
-      return attribute_descriptions;
-    }
-  };
-
-  // Collection of data that makes up the various components of a model
-  struct _Mesh {
-    // we should remove this data after everything is loaded
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-    std::vector<_Texture> textures;
-
-    // TODO
-    // Consider linking all related mesh objects into a single buffer.
-    // Will use offsets to access data relevant to particular mesh the
-    // application is drawing
-    vk::Buffer vertex_buffer;
-    vk::Buffer index_buffer;
-
-    vk::DeviceMemory vertex_memory;
-    vk::DeviceMemory index_memory;
-
-    void bindBuffers(vk::CommandBuffer &command_buffer) {
-      vk::DeviceSize offsets = 0;
-      command_buffer.bindVertexBuffers(0, 1, &vertex_buffer, &offsets);
-      command_buffer.bindIndexBuffer(index_buffer, 0, vk::IndexType::eUint32);
-      return;
-    }
-
-    void cleanup(const mv::Device &m_dvc) {
-      if (vertex_buffer) {
-        m_dvc.logical_device->destroyBuffer(vertex_buffer);
-        vertex_buffer = nullptr;
-      }
-
-      if (vertex_memory) {
-        m_dvc.logical_device->freeMemory(vertex_memory);
-        vertex_memory = nullptr;
-      }
-
-      if (index_buffer) {
-        m_dvc.logical_device->destroyBuffer(index_buffer);
-        index_buffer = nullptr;
-      }
-      if (index_memory) {
-        m_dvc.logical_device->freeMemory(index_memory);
-        index_memory = nullptr;
-      }
-
-      // cleanup textures
-      if (!textures.empty()) {
-        for (auto &texture : textures) {
-          texture.mv_image.destroy(m_dvc);
+    struct Object
+    {
+        Object(glm::vec3 p_Position, glm::vec3 p_Rotation)
+        {
+            this->position = position;
+            this->rotation = rotation;
         }
-      }
-      return;
-    }
-  };
-
-  class Model {
-  public:
-    // remove copy operations
-    Model(const Model &) = delete;
-    Model &operator=(const Model &) = delete;
-
-    // allow move operations
-    Model(Model &&) = default;
-    Model &operator=(Model &&) = default;
-
-    Model(void) {
-      std::cout << "[+] Model container created\n";
-      objects = std::make_unique<std::vector<mv::Object>>();
-      _meshes = std::make_unique<std::vector<_Mesh>>();
-      _loaded_textures = std::make_unique<std::vector<_Texture>>();
-      std::cout << "\t-- Objects container size => " << objects->size() << "\n";
-      std::cout << "\t-- _meshes container size => " << _meshes->size() << "\n";
-      std::cout << "\t-- _loaded_textures container size => " << _loaded_textures->size() << "\n";
-    }
-    ~Model() {
-    }
-
-    std::string model_name;
-    bool has_texture = false; // do not assume model has texture
-
-    // owns
-    std::unique_ptr<std::vector<mv::Object>> objects;
-    std::unique_ptr<std::vector<_Mesh>> _meshes;
-    std::unique_ptr<std::vector<_Texture>> _loaded_textures;
-
-    void _load(const mv::Device &m_dvc, mv::Allocator &m_alloc, const char *filename) {
-
-      model_name = filename;
-
-      Assimp::Importer importer;
-      const aiScene *ai_scene =
-          importer.ReadFile(filename, aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs);
-
-      if (!ai_scene) {
-        throw std::runtime_error("Assimp failed to load model");
-      }
-
-      // process model data
-      _process_node(m_dvc, ai_scene->mRootNode, ai_scene);
-
-      // Create buffer for each mesh
-      for (auto &mesh : *_meshes) {
-        // if the model required textures
-        // create the descriptor sets for them
-        if (!mesh.textures.empty()) {
-          has_texture = true;
-
-          vk::DescriptorSetLayout sampler_layout = m_alloc.get_layout("sampler_layout");
-          for (auto &texture : mesh.textures) {
-            m_alloc.allocate_set(m_dvc, m_alloc.get(), sampler_layout, texture.descriptor);
-            m_alloc.update_set(m_dvc, m_alloc.get(), texture.mv_image.descriptor,
-                               texture.descriptor, 0);
-          }
+        Object(void)
+        {
         }
-        // create vertex buffer and load vertices
-        m_dvc.create_buffer(vk::BufferUsageFlagBits::eVertexBuffer,
-                            vk::MemoryPropertyFlagBits::eHostCoherent |
-                                vk::MemoryPropertyFlagBits::eHostVisible,
-                            mesh.vertices.size() * sizeof(Vertex), &mesh.vertex_buffer,
-                            &mesh.vertex_memory, mesh.vertices.data());
-
-        // create index buffer, load indices data into it
-        m_dvc.create_buffer(vk::BufferUsageFlagBits::eIndexBuffer,
-                            vk::MemoryPropertyFlagBits::eHostCoherent |
-                                vk::MemoryPropertyFlagBits::eHostVisible,
-                            mesh.indices.size() * sizeof(uint32_t), &mesh.index_buffer,
-                            &mesh.index_memory, mesh.indices.data());
-      }
-
-      std::cout << "\t :: Loaded model => " << filename << "\n";
-      std::cout << "\t\t Meshes => " << _meshes->size() << "\n";
-      std::cout << "\t\t Textures => " << _loaded_textures->size() << "\n";
-      return;
-    }
-
-    void _process_node(const mv::Device &m_dvc, aiNode *node, const aiScene *scene) {
-      for (uint32_t i = 0; i < node->mNumMeshes; i++) {
-        aiMesh *l_mesh = scene->mMeshes[node->mMeshes[i]];
-        _meshes->push_back(_process_mesh(m_dvc, l_mesh, scene));
-      }
-
-      // recall function for children of this node
-      for (uint32_t i = 0; i < node->mNumChildren; i++) {
-        _process_node(m_dvc, node->mChildren[i], scene);
-      }
-      return;
-    }
-
-    _Mesh _process_mesh(const mv::Device &m_dvc, aiMesh *mesh, const aiScene *scene) {
-      std::vector<Vertex> verts;
-      std::vector<uint32_t> inds;
-      std::vector<_Texture> texs;
-
-      for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
-        Vertex v = {};
-
-        // get vertices
-        v.position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z, 1.0f};
-
-        // get uv
-        if (mesh->mTextureCoords[0]) {
-          v.uv = {// uv
-                  (float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y,
-                  0.0f, // fill last 2 float as ubo padding
-                  0.0f};
+        ~Object()
+        {
         }
 
-        aiColor4D cc;
-        aiGetMaterialColor(scene->mMaterials[mesh->mMaterialIndex], AI_MATKEY_COLOR_DIFFUSE, &cc);
-        v.color = {cc.r, cc.g, cc.b, cc.a};
+        // allow move
+        Object(Object &&) = default;
+        Object &operator=(Object &&) = default;
 
-        verts.push_back(v);
-      }
+        // delete copy
+        Object(const Object &) = delete;
+        Object &operator=(const Object &) = delete;
 
-      for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
-        aiFace face = mesh->mFaces[i];
+        struct Matrix
+        {
+            alignas(16) glm::mat4 model;
+            // uv, normals implemented as Vertex attributes
+        } matrix;
 
-        for (uint32_t j = 0; j < face.mNumIndices; j++) {
-          // get indices
-          inds.push_back(face.mIndices[j]);
-        }
-      }
+        // clang-format off
+        float               scaleFactor = 1.0f;
+        uint32_t            modelIndex = 0;
+        glm::vec3           rotation = {0.0f, 0.0f, 0.0f};
+        glm::vec3           position = {0.0f, 0.0f, 0.0f};
+        glm::vec3           frontFace = {0.0f, 0.0f, 0.0f};
+        mv::Buffer          uniformBuffer;
+        vk::DescriptorSet   meshDescriptor;
+        vk::DescriptorSet   textureDescriptor;
+        // clang-format on
 
-      // get material textures
-      if (mesh->mMaterialIndex >= 0) {
-        aiMaterial *mat = scene->mMaterials[mesh->mMaterialIndex];
-        std::vector<_Texture> diffuse_maps =
-            _load_material_textures(m_dvc, mat, aiTextureType_DIFFUSE, "texture_diffuse", scene);
-        texs.insert(texs.end(), std::make_move_iterator(diffuse_maps.begin()),
-                    std::make_move_iterator(diffuse_maps.end()));
-      }
-
-      // construct _Mesh then return
-      _Mesh m;
-      m.vertices = verts;
-      m.indices = inds;
-      m.textures = std::move(texs);
-      return m;
-    }
-
-    std::vector<_Texture> _load_material_textures(const mv::Device &m_dvc, aiMaterial *mat,
-                                                  aiTextureType type,
-                                                  [[maybe_unused]] std::string type_name,
-                                                  [[maybe_unused]] const aiScene *scene) {
-      std::vector<_Texture> textures;
-      for (uint32_t i = 0; i < mat->GetTextureCount(type); i++) {
-        aiString t_name;
-        mat->GetTexture(type, i, &t_name);
-        bool skip = false;
-        // check if this material texture has already been loaded
-        for (uint32_t j = 0; j < _loaded_textures->size(); j++) {
-          if (strcmp(_loaded_textures->at(j).path.c_str(), t_name.C_Str()) == 0) {
-            textures.push_back(std::move(_loaded_textures->at(j)));
-            skip = true;
-            break;
-          }
+        inline void rotateToAngle(float angle)
+        {
+            rotation.y = angle;
+            return;
         }
 
-        // if not already loaded, load it
-        if (!skip) {
-          _Texture tex;
-          // TODO
-          // if embedded compressed texture type
-          std::string filename = std::string(t_name.C_Str());
-          filename = "models/" + filename;
-          std::replace(filename.begin(), filename.end(), '\\', '/');
+        void getFrontFace(void)
+        {
+            glm::vec3 fr;
+            fr.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
+            fr.y = sin(glm::radians(rotation.x));
+            fr.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
+            fr = -glm::normalize(fr);
 
-          tex.path = filename;
-          tex.type = type;
-          mv::Image::ImageCreateInfo create_info;
-          create_info.format = vk::Format::eR8G8B8A8Srgb;
-          create_info.memory_properties = vk::MemoryPropertyFlagBits::eDeviceLocal;
-          create_info.tiling = vk::ImageTiling::eOptimal;
-          create_info.usage =
-              vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
-
-          // load texture
-          tex.mv_image.create(m_dvc, create_info, filename);
-          // add to vector for return
-          textures.push_back(std::move(tex));
-          // add to loaded_textures to save processing time in event of duplicate
-          _loaded_textures->push_back(std::move(tex));
+            frontFace = fr;
+            return;
         }
-      }
-      return textures;
-    }
-  };
+
+        inline void move(float p_OrbitAngle, glm::vec4 p_UnitVectorAxis)
+        {
+            position += rotateVector(p_OrbitAngle, p_UnitVectorAxis) * MOVESPEED;
+            return;
+        }
+
+        // w component should be 1.0f
+        inline glm::vec3 rotateVector(float p_OrbitAngle, glm::vec4 p_TargetAxii)
+        {
+            // target_axis is our default directional vector
+
+            // construct rotation matrix from orbit angle
+            glm::mat4 rotationMatrix = glm::mat4(1.0);
+            rotationMatrix = glm::rotate(rotationMatrix, glm::radians(p_OrbitAngle), glm::vec3(0.0f, 1.0f, 0.0f));
+
+            // multiply our def vec
+
+            glm::vec4 x_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 y_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 z_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 w_col = {0.0f, 0.0f, 0.0f, 0.0f};
+
+            // x * x_column
+            x_col.x = p_TargetAxii.x * rotationMatrix[0][0];
+            x_col.y = p_TargetAxii.x * rotationMatrix[0][1];
+            x_col.z = p_TargetAxii.x * rotationMatrix[0][2];
+            x_col.w = p_TargetAxii.x * rotationMatrix[0][3];
+
+            // y * y_column
+            y_col.x = p_TargetAxii.y * rotationMatrix[1][0];
+            y_col.y = p_TargetAxii.y * rotationMatrix[1][1];
+            y_col.z = p_TargetAxii.y * rotationMatrix[1][2];
+            y_col.w = p_TargetAxii.y * rotationMatrix[1][3];
+
+            // z * z_column
+            z_col.x = p_TargetAxii.z * rotationMatrix[2][0];
+            z_col.y = p_TargetAxii.z * rotationMatrix[2][1];
+            z_col.z = p_TargetAxii.z * rotationMatrix[2][2];
+            z_col.w = p_TargetAxii.z * rotationMatrix[2][3];
+
+            // w * w_column
+            w_col.x = p_TargetAxii.w * rotationMatrix[3][0];
+            w_col.y = p_TargetAxii.w * rotationMatrix[3][1];
+            w_col.z = p_TargetAxii.w * rotationMatrix[3][2];
+            w_col.w = p_TargetAxii.w * rotationMatrix[3][3];
+
+            glm::vec4 f = x_col + y_col + z_col + w_col;
+
+            // extract relevant data & return
+            return {f.x, f.y, f.z};
+        }
+
+        inline void update(void)
+        {
+            glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0), position);
+
+            glm::mat4 rotationMatrix = glm::mat4(1.0);
+            rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+            glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0), glm::vec3(scaleFactor));
+
+            matrix.model = translationMatrix * rotationMatrix * scaleMatrix;
+
+            // update obj uniform
+            memcpy(uniformBuffer.mapped, &matrix.model, sizeof(struct Object::Matrix));
+        }
+    };
+
+    struct Vertex
+    {
+        glm::vec4 uv = {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4 color = {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4 position = {0.0f, 0.0f, 0.0f, 0.0f};
+
+        static vk::VertexInputBindingDescription getBindingDescription()
+        {
+            vk::VertexInputBindingDescription bindingDescription;
+            bindingDescription.binding = 0;
+            bindingDescription.stride = sizeof(Vertex);
+            bindingDescription.inputRate = vk::VertexInputRate::eVertex;
+            return bindingDescription;
+        }
+
+        static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions()
+        {
+            std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions;
+
+            // position
+            attributeDescriptions[0].binding = 0;
+            attributeDescriptions[0].location = 0;
+            attributeDescriptions[0].format = vk::Format::eR32G32B32A32Sfloat;
+            attributeDescriptions[0].offset = offsetof(Vertex, position);
+
+            // texture uv coordinates
+            attributeDescriptions[1].binding = 0;
+            attributeDescriptions[1].location = 1;
+            attributeDescriptions[1].format = vk::Format::eR32G32B32A32Sfloat;
+            attributeDescriptions[1].offset = offsetof(Vertex, uv);
+
+            // color
+            attributeDescriptions[2].binding = 0;
+            attributeDescriptions[2].location = 2;
+            attributeDescriptions[2].format = vk::Format::eR32G32B32A32Sfloat;
+            attributeDescriptions[2].offset = offsetof(Vertex, color);
+
+            return attributeDescriptions;
+        }
+    };
+
+    // Collection of data that makes up the various components of a model
+    struct Mesh
+    {
+        // we should remove this data after everything is loaded
+        std::vector<uint32_t> indices;
+        std::vector<struct Vertex> vertices;
+        std::vector<struct Texture> textures;
+
+        // TODO
+        // Consider linking all related mesh objects into a single buffer.
+        // Will use offsets to access data relevant to particular mesh the
+        // application is drawing
+        vk::Buffer vertexBuffer;
+        vk::Buffer indexBuffer;
+
+        vk::DeviceMemory vertexMemory;
+        vk::DeviceMemory indexMemory;
+
+        // Bind vertex & index buffers if exist
+        void bindBuffers(vk::CommandBuffer &p_CommandBuffer);
+        void cleanup(const mv::Device &p_MvDevice);
+    };
+
+    class Model
+    {
+      public:
+        // remove copy operations
+        Model(const Model &) = delete;
+        Model &operator=(const Model &) = delete;
+
+        // allow move operations
+        Model(Model &&) = default;
+        Model &operator=(Model &&) = default;
+
+        Model(void);
+        ~Model();
+
+        std::string modelName;
+        bool hasTexture = false; // do not assume model has texture
+
+        // owns
+        std::unique_ptr<std::vector<struct Object>> objects;
+        std::unique_ptr<std::vector<struct Mesh>> loadedMeshes;
+        std::unique_ptr<std::vector<struct Texture>> loadedTextures;
+
+        void load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator, const char *p_Filename);
+
+        void processNode(const mv::Device &p_MvDevice, aiNode *p_Node, const aiScene *p_Scene);
+
+        mv::Mesh processMesh(const mv::Device &p_MvDevice, aiMesh *p_Mesh, const aiScene *p_Scene);
+
+        std::vector<struct Texture> loadMaterialTextures(const mv::Device &p_MvDevice, aiMaterial *p_Material,
+                                                         aiTextureType p_Type, [[maybe_unused]] std::string p_TypeName,
+                                                         [[maybe_unused]] const aiScene *p_Scene);
+    };
 }; // namespace mv
 
 #endif

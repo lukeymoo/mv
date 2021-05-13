@@ -339,6 +339,33 @@ main.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+mvAllocator.o: mvAllocator.cpp.o
+
+.PHONY : mvAllocator.o
+
+# target to build an object file
+mvAllocator.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvAllocator.cpp.o
+.PHONY : mvAllocator.cpp.o
+
+mvAllocator.i: mvAllocator.cpp.i
+
+.PHONY : mvAllocator.i
+
+# target to preprocess a source file
+mvAllocator.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvAllocator.cpp.i
+.PHONY : mvAllocator.cpp.i
+
+mvAllocator.s: mvAllocator.cpp.s
+
+.PHONY : mvAllocator.s
+
+# target to generate assembly for a file
+mvAllocator.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvAllocator.cpp.s
+.PHONY : mvAllocator.cpp.s
+
 mvBuffer.o: mvBuffer.cpp.o
 
 .PHONY : mvBuffer.o
@@ -642,6 +669,9 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... mvAllocator.o"
+	@echo "... mvAllocator.i"
+	@echo "... mvAllocator.s"
 	@echo "... mvBuffer.o"
 	@echo "... mvBuffer.i"
 	@echo "... mvBuffer.s"

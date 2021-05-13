@@ -15,10 +15,11 @@
 
 namespace mv
 {
+    // Forward decl
     struct Buffer;
     struct Device
     {
-        Device(const vk::PhysicalDevice &p_dvc, std::vector<std::string> &requested_device_exts);
+        Device(const vk::PhysicalDevice &p_PhysicalDevice, std::vector<std::string> &p_RequestedDeviceExtensions);
         ~Device();
 
         // do not allow assignment
@@ -35,13 +36,13 @@ namespace mv
 
         // info structures
         // clang-format off
-        std::vector<std::string>                          requestedPhysicalDeviceExts;
+        std::vector<std::string>                          requestedPhysicalDeviceExtensions;
         vk::PhysicalDeviceFeatures                        physicalFeatures;
         vk::PhysicalDeviceFeatures2                       physicalFeatures2;
         vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT extendedFeatures;
         vk::PhysicalDeviceProperties                      physicalProperties;
         vk::PhysicalDeviceMemoryProperties                physicalMemoryProperties;
-        std::vector<vk::ExtensionProperties>              physicalDeviceExts;
+        std::vector<vk::ExtensionProperties>              physicalDeviceExtensions;
         std::vector<vk::QueueFamilyProperties>            queueFamilyProperties;
         // clang-format on
 
@@ -52,25 +53,26 @@ namespace mv
             uint32_t transfer = UINT32_MAX;
         } queueIdx;
 
-        void createLogicalDevice(const vk::PhysicalDevice &p_dvc);
-        vk::CommandPool createCommandPool(uint32_t queue_index, vk::CommandPoolCreateFlags create_flags =
-                                                                    vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
+        void createLogicalDevice(const vk::PhysicalDevice &p_PhysicalDevice);
+        vk::CommandPool createCommandPool(
+            uint32_t p_QueueIndex,
+            vk::CommandPoolCreateFlags p_CreateFlags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
 
-        uint32_t getMemoryType(uint32_t type_bits, vk::MemoryPropertyFlags properties,
-                               vk::Bool32 *mem_type_found = nullptr) const;
+        uint32_t getMemoryType(uint32_t p_TypeBits, vk::MemoryPropertyFlags p_MemoryPropertyFlags,
+                               vk::Bool32 *p_IsMemoryTypeFound = nullptr) const;
 
-        uint32_t getQueueFamilyIndex(vk::QueueFlagBits queue_flag_bit) const;
+        uint32_t getQueueFamilyIndex(vk::QueueFlagBits p_QueueFlagBit) const;
 
-        vk::Format getSupportedDepthFormat(const vk::PhysicalDevice &p_dvc);
+        vk::Format getSupportedDepthFormat(const vk::PhysicalDevice &p_PhysicalDevice);
 
         // create buffer with Vulkan objects
-        void createBuffer(vk::BufferUsageFlags usage_flags, vk::MemoryPropertyFlags memory_property_flags,
-                          vk::DeviceSize size, vk::Buffer *buffer, vk::DeviceMemory *memory,
-                          void *data = nullptr) const;
+        void createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::MemoryPropertyFlags p_MemoryPropertyFlags,
+                          vk::DeviceSize p_DeviceSize, vk::Buffer *p_VkBuffer, vk::DeviceMemory *p_DeviceMemory,
+                          void *p_InitialData = nullptr) const;
 
         // create buffer with custom mv::Buffer interface
-        void createBuffer(vk::BufferUsageFlags usage_flags, vk::MemoryPropertyFlags memory_property_flags,
-                          mv::Buffer *buffer, vk::DeviceSize size, void *data = nullptr) const;
+        void createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::MemoryPropertyFlags p_MemoryPropertyFlags,
+                          mv::Buffer *p_MvBuffer, vk::DeviceSize p_DeviceSize, void *p_InitialData = nullptr) const;
     };
 }; // namespace mv
 
