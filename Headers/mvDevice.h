@@ -63,7 +63,7 @@ namespace mv
 
         uint32_t getQueueFamilyIndex(vk::QueueFlagBits p_QueueFlagBit) const;
 
-        vk::Format getSupportedDepthFormat(const vk::PhysicalDevice &p_PhysicalDevice);
+        vk::Format getSupportedDepthFormat(const vk::PhysicalDevice &p_PhysicalDevice) const;
 
         // create buffer with Vulkan objects
         void createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::MemoryPropertyFlags p_MemoryPropertyFlags,

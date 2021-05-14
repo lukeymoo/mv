@@ -178,6 +178,9 @@ void mv::Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Devi
         selectedTransform = capabilities.currentTransform;
     }
 
+    // get depth format
+    depthFormat = p_MvDevice.getSupportedDepthFormat(p_PhysicalDevice);
+
     // default ignore alpha(A = 1.0f)
     vk::CompositeAlphaFlagBitsKHR compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
 

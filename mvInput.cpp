@@ -5,7 +5,7 @@
 */
 template <typename T> void mv::Keyboard::trimBuffer(std::queue<T> &p_Buffer, uint32_t p_MaxSize)
 {
-    while (p_Buffer.size() > max_size)
+    while (p_Buffer.size() > p_MaxSize)
     {
         p_Buffer.pop();
     }
@@ -89,7 +89,7 @@ void mv::Mouse::update(int p_NewX, int p_NewY) noexcept
 
 struct mv::Mouse::Event mv::Mouse::read(void) noexcept
 {
-    Mouse::Event e(Mouse::Event::Type::eInvalid, 0, 0, false, false, false);
+    Mouse::Event e;
     if (!mouseBuffer.empty())
     {
         e = mouseBuffer.front();

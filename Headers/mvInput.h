@@ -27,8 +27,8 @@ namespace mv
             };
             Event(Type p_Type, int p_Code) noexcept
             {
-                this->type = type;
-                this->code = code;
+                this->type = p_Type;
+                this->code = p_Code;
             }
             ~Event()
             {

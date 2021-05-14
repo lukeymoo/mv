@@ -38,8 +38,8 @@ namespace mv
     {
         Object(glm::vec3 p_Position, glm::vec3 p_Rotation)
         {
-            this->position = position;
-            this->rotation = rotation;
+            this->position = p_Position;
+            this->rotation = p_Rotation;
         }
         Object(void)
         {

@@ -157,7 +157,7 @@ uint32_t mv::Device::getMemoryType(uint32_t p_MemoryTypeBits, vk::MemoryProperty
     }
 }
 
-vk::Format mv::Device::getSupportedDepthFormat(const vk::PhysicalDevice &p_PhysicalDevice)
+vk::Format mv::Device::getSupportedDepthFormat(const vk::PhysicalDevice &p_PhysicalDevice) const
 {
 
     std::vector<vk::Format> depthFormats = {vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat,
@@ -238,7 +238,7 @@ void mv::Device::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::Memor
     memRequirements = logicalDevice->getBufferMemoryRequirements(*p_MvBuffer->buffer);
 
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = get_memory_type(memRequirements.memoryTypeBits, p_MemoryPropertyFlags);
+    allocInfo.memoryTypeIndex = getMemoryType(memRequirements.memoryTypeBits, p_MemoryPropertyFlags);
 
     // allocate memory
     *p_MvBuffer->memory = logicalDevice->allocateMemory(allocInfo);
@@ -251,7 +251,7 @@ void mv::Device::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::Memor
     // bind buffer & memory
     p_MvBuffer->bind(*this);
 
-    p_MvBuffer->setup_descriptor();
+    p_MvBuffer->setupDescriptor();
 
     // copy if necessary
     if (p_InitialData != nullptr)

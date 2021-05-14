@@ -1,6 +1,16 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "mvImage.h"
 
+mv::Image::Image()
+{
+    return;
+}
+
+mv::Image::~Image()
+{
+    return;
+}
+
 void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_ImageCreateInfo,
                        std::string p_ImageFilename)
 {
@@ -212,7 +222,7 @@ vk::CommandBuffer mv::Image::beginCommandBuffer(const mv::Device &p_MvDevice)
     return cmdBuffers.at(0);
 }
 
-void endCommandBuffer(const mv::Device &p_MvDevice, vk::CommandBuffer p_CommandBuffer)
+void mv::Image::endCommandBuffer(const mv::Device &p_MvDevice, vk::CommandBuffer p_CommandBuffer)
 {
 
     if (!p_MvDevice.commandPool)
@@ -244,7 +254,7 @@ void mv::Image::transitionImageLayout(const mv::Device &p_MvDevice, vk::Image *p
     barrier.newLayout = p_EndingLayout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = *image;
+    barrier.image = *p_TargetImage;
     barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = 1;

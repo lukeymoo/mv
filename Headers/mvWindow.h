@@ -105,7 +105,7 @@ namespace mv
         std::unique_ptr<vk::Instance> instance;
         std::unique_ptr<vk::PhysicalDevice> physicalDevice;
         std::unique_ptr<vk::CommandPool> commandPool;
-        std::unique_ptr<vk::RenderPass> renderPass;
+        std::unique_ptr<std::unordered_map<std::string, vk::RenderPass>> renderPasses;
 
         std::unique_ptr<mv::Swap> swapchain;
 
@@ -132,7 +132,7 @@ namespace mv
 
         // clang-format off
         // info structures
-        vk::Format                          depthFormat;
+        // vk::Format                          depthFormat;
         vk::PipelineStageFlags              stageFlags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
         vk::PhysicalDeviceFeatures          physicalFeatures;
         vk::PhysicalDeviceProperties        physicalProperties;

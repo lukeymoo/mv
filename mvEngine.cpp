@@ -4,6 +4,7 @@ mv::Engine::Engine(int w, int h, const char *title) : Window(w, h, title)
 {
     pipelines = std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
     pipelineLayouts = std::make_unique<std::unordered_map<std::string, vk::PipelineLayout>>();
+    renderPasses = std::make_unique<std::unordered_map<std::string, vk::RenderPass>>();
     return;
 }
 
@@ -139,11 +140,15 @@ void mv::Engine::cleanupSwapchain(void)
     }
 
     // destroy render pass
-    if (renderPass)
+    if (renderPasses)
     {
-        mvDevice->logicalDevice->destroyRenderPass(*renderPass, nullptr);
-        renderPass.reset();
-        renderPass = std::make_unique<vk::RenderPass>();
+        for (auto &pass : *renderPasses)
+        {
+            if (pass.second)
+                mvDevice->logicalDevice->destroyRenderPass(pass.second, nullptr);
+        }
+        renderPasses.reset();
+        renderPasses = std::make_unique<std::unordered_map<std::string, vk::RenderPass>>();
     }
 
     // cleanup command pool
@@ -260,7 +265,7 @@ void mv::Engine::go(void)
         .CheckVkResultFn = nullptr,
     };
     ImGui_ImplGlfw_InitForVulkan(window, true);
-    ImGui_ImplVulkan_Init(&initInfo, *renderPass);
+    ImGui_ImplVulkan_Init(&initInfo, renderPasses->at("gui"));
 
     /*
       Upload ImGui render fonts
@@ -511,6 +516,9 @@ void mv::Engine::go(void)
         draw(currentFrame, imageIndex);
     }
 
+    // Wait for ImGui pipeline
+    mvDevice->logicalDevice->waitIdle();
+
     // Cleanup IMGUI
     ImGui_ImplVulkan_Shutdown();
     ImGui::DestroyContext();
@@ -684,7 +692,7 @@ void mv::Engine::preparePipeline(void)
 
     // create pipeline WITH sampler
     vk::GraphicsPipelineCreateInfo pipelineWSamplerInfo;
-    pipelineWSamplerInfo.renderPass = *renderPass;
+    pipelineWSamplerInfo.renderPass = renderPasses->at("core");
     pipelineWSamplerInfo.layout = pipelineLayouts->at("sampler");
     pipelineWSamplerInfo.pInputAssemblyState = &iaState;
     pipelineWSamplerInfo.pRasterizationState = &rsState;
@@ -726,7 +734,7 @@ void mv::Engine::preparePipeline(void)
 
     // Create pipeline with NO sampler
     vk::GraphicsPipelineCreateInfo pipelineNoSamplerInfo;
-    pipelineNoSamplerInfo.renderPass = *renderPass;
+    pipelineNoSamplerInfo.renderPass = renderPasses->at("core");
     pipelineNoSamplerInfo.layout = pipelineLayouts->at("no_sampler");
     pipelineNoSamplerInfo.pInputAssemblyState = &iaState;
     pipelineNoSamplerInfo.pRasterizationState = &rsState;
@@ -784,7 +792,7 @@ void mv::Engine::recordCommandBuffer(uint32_t p_ImageIndex)
     cls[1].depthStencil = vk::ClearDepthStencilValue{1.0f, 0};
 
     vk::RenderPassBeginInfo passInfo;
-    passInfo.renderPass = *renderPass;
+    passInfo.renderPass = renderPasses->at("core");
     passInfo.framebuffer = coreFramebuffers->at(p_ImageIndex);
     passInfo.renderArea.offset.x = 0;
     passInfo.renderArea.offset.y = 0;
@@ -875,14 +883,28 @@ void mv::Engine::recordCommandBuffer(uint32_t p_ImageIndex)
         }
     }
 
+    commandBuffers->at(p_ImageIndex).endRenderPass();
+
     /*
      IMGUI RENDER
     */
+    vk::RenderPassBeginInfo guiPassInfo;
+    guiPassInfo.renderPass = renderPasses->at("gui");
+    guiPassInfo.framebuffer = guiFramebuffers->at(p_ImageIndex);
+    guiPassInfo.renderArea.offset.x = 0;
+    guiPassInfo.renderArea.offset.y = 0;
+    guiPassInfo.renderArea.extent.width = swapchain->swapExtent.width;
+    guiPassInfo.renderArea.extent.height = swapchain->swapExtent.height;
+
+    commandBuffers->at(p_ImageIndex).beginRenderPass(guiPassInfo, vk::SubpassContents::eInline);
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffers->at(p_ImageIndex));
+
+    commandBuffers->at(p_ImageIndex).endRenderPass();
+
     /*
       END IMGUI RENDER
     */
-
-    commandBuffers->at(p_ImageIndex).endRenderPass();
 
     commandBuffers->at(p_ImageIndex).end();
 
@@ -926,28 +948,28 @@ void mv::Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
     recordCommandBuffer(p_CurrentImageIndex);
 
     // mark in use
-    wait_fences->at(cur_index) = in_flight_fences->at(cur_frame);
+    waitFences->at(p_CurrentImageIndex) = inFlightFences->at(p_CurrentFrame);
 
-    vk::SubmitInfo submit_info;
-    vk::Semaphore waitSemaphores[] = {semaphores->present_complete};
-    vk::PipelineStageFlags wait_stages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-    submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = waitSemaphores;
-    submit_info.pWaitDstStageMask = wait_stages;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &command_buffers->at(cur_index);
-    vk::Semaphore render_semaphores[] = {semaphores->render_complete};
-    submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = render_semaphores;
+    vk::SubmitInfo submitInfo;
+    vk::Semaphore waitSemaphores[] = {semaphores->presentComplete};
+    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffers->at(p_CurrentImageIndex);
+    vk::Semaphore renderSemaphores[] = {semaphores->renderComplete};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = renderSemaphores;
 
-    mv_device->logical_device->resetFences(in_flight_fences->at(cur_frame));
+    mvDevice->logicalDevice->resetFences(inFlightFences->at(p_CurrentFrame));
 
-    result = mv_device->graphics_queue->submit(1, &submit_info, in_flight_fences->at(cur_frame));
+    result = mvDevice->graphicsQueue->submit(1, &submitInfo, inFlightFences->at(p_CurrentFrame));
 
     switch (result)
     {
         case vk::Result::eErrorOutOfDateKHR:
-            recreate_swapchain();
+            recreateSwapchain();
             return;
             break;
         case vk::Result::eSuboptimalKHR:
@@ -960,21 +982,21 @@ void mv::Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
             break;
     }
 
-    vk::PresentInfoKHR present_info;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = render_semaphores;
+    vk::PresentInfoKHR presentInfo;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = renderSemaphores;
     vk::SwapchainKHR swapchains[] = {*swapchain->swapchain};
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = swapchains;
-    present_info.pImageIndices = &cur_index;
-    present_info.pResults = nullptr;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &p_CurrentImageIndex;
+    presentInfo.pResults = nullptr;
 
-    result = mv_device->graphics_queue->presentKHR(&present_info);
+    result = mvDevice->graphicsQueue->presentKHR(&presentInfo);
 
     switch (result)
     {
         case vk::Result::eErrorOutOfDateKHR:
-            recreate_swapchain();
+            recreateSwapchain();
             return;
             break;
         case vk::Result::eSuboptimalKHR:
@@ -986,70 +1008,70 @@ void mv::Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
             throw std::runtime_error("Unhandled error case while presenting");
             break;
     }
-    cur_frame = (cur_frame + 1) % MAX_IN_FLIGHT;
+    p_CurrentFrame = (p_CurrentFrame + 1) % MAX_IN_FLIGHT;
 }
 
 /*
   initialize descriptor allocator, collection handler & camera
 */
-inline void mv::Engine::go_setup(void)
+inline void mv::Engine::goSetup(void)
 {
     /*
       INITIALIZE DESCRIPTOR HANDLER
     */
-    descriptor_allocator = std::make_unique<mv::Allocator>();
-    descriptor_allocator->allocate_pool(*mv_device, 2000);
+    descriptorAllocator = std::make_unique<mv::Allocator>();
+    descriptorAllocator->allocatePool(*mvDevice, 2000);
 
     /*
       MAT4 UNIFORM LAYOUT
     */
-    descriptor_allocator->create_layout(*mv_device, "uniform_layout", vk::DescriptorType::eUniformBuffer, 1,
-                                        vk::ShaderStageFlagBits::eVertex, 0);
+    descriptorAllocator->createLayout(*mvDevice, "uniform_layout", vk::DescriptorType::eUniformBuffer, 1,
+                                      vk::ShaderStageFlagBits::eVertex, 0);
 
     /*
       TEXTURE SAMPLER LAYOUT
     */
-    descriptor_allocator->create_layout(*mv_device, "sampler_layout", vk::DescriptorType::eCombinedImageSampler, 1,
-                                        vk::ShaderStageFlagBits::eFragment, 0);
+    descriptorAllocator->createLayout(*mvDevice, "sampler_layout", vk::DescriptorType::eCombinedImageSampler, 1,
+                                      vk::ShaderStageFlagBits::eFragment, 0);
 
     /*
       INITIALIZE MODEL/OBJECT HANDLER
       CREATES BUFFERS FOR VIEW & PROJECTION MATRICES
     */
-    collection_handler = std::make_unique<Collection>(*mv_device);
+    collectionHandler = std::make_unique<Collection>(*mvDevice);
 
-    vk::DescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
+    vk::DescriptorSetLayout uniformLayout = descriptorAllocator->getLayout("uniform_layout");
     /*
       VIEW MATRIX UNIFORM OBJECT
     */
-    descriptor_allocator->allocate_set(*mv_device, uniform_layout, collection_handler->view_uniform->descriptor);
-    descriptor_allocator->update_set(*mv_device, collection_handler->view_uniform->mv_buffer.descriptor,
-                                     collection_handler->view_uniform->descriptor, 0);
+    descriptorAllocator->allocateSet(*mvDevice, uniformLayout, collectionHandler->viewUniform->descriptor);
+    descriptorAllocator->updateSet(*mvDevice, collectionHandler->viewUniform->mvBuffer.descriptor,
+                                   collectionHandler->viewUniform->descriptor, 0);
 
     /*
       PROJECTION MATRIX UNIFORM OBJECT
     */
-    descriptor_allocator->allocate_set(*mv_device, uniform_layout, collection_handler->projection_uniform->descriptor);
-    descriptor_allocator->update_set(*mv_device, collection_handler->projection_uniform->mv_buffer.descriptor,
-                                     collection_handler->projection_uniform->descriptor, 0);
+    descriptorAllocator->allocateSet(*mvDevice, uniformLayout, collectionHandler->projectionUniform->descriptor);
+    descriptorAllocator->updateSet(*mvDevice, collectionHandler->projectionUniform->mvBuffer.descriptor,
+                                   collectionHandler->projectionUniform->descriptor, 0);
 
     /*
       LOAD MODELS
     */
-    collection_handler->load_model(*mv_device, *descriptor_allocator, "models/_viking_room.fbx");
-    collection_handler->load_model(*mv_device, *descriptor_allocator, "models/Security2.fbx");
+    collectionHandler->loadModel(*mvDevice, *descriptorAllocator, "models/_viking_room.fbx");
+    collectionHandler->loadModel(*mvDevice, *descriptorAllocator, "models/Security2.fbx");
 
     /*
       CREATE OBJECTS
     */
-    collection_handler->create_object(*mv_device, *descriptor_allocator, "models/_viking_room.fbx");
-    collection_handler->models->at(0).objects->at(0).position = glm::vec3(0.0f, 0.0f, -5.0f);
-    collection_handler->models->at(0).objects->at(0).rotation = glm::vec3(0.0f, 90.0f, 0.0f);
+    collectionHandler->createObject(*mvDevice, *descriptorAllocator, "models/_viking_room.fbx");
+    collectionHandler->models->at(0).objects->at(0).position = glm::vec3(0.0f, 0.0f, -5.0f);
+    collectionHandler->models->at(0).objects->at(0).rotation = glm::vec3(0.0f, 90.0f, 0.0f);
 
-    collection_handler->create_object(*mv_device, *descriptor_allocator, "models/Security2.fbx");
-    collection_handler->models->at(1).objects->at(0).rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-    collection_handler->models->at(1).objects->at(0).position = glm::vec3(0.0f, 0.0f, 0.0f);
-    collection_handler->models->at(1).objects->at(0).scale_factor = 0.0125f;
+    collectionHandler->createObject(*mvDevice, *descriptorAllocator, "models/Security2.fbx");
+    collectionHandler->models->at(1).objects->at(0).rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    collectionHandler->models->at(1).objects->at(0).position = glm::vec3(0.0f, 0.0f, 0.0f);
+    collectionHandler->models->at(1).objects->at(0).scaleFactor = 0.0125f;
 
     /*
       CREATE DEBUG POINTS
@@ -1058,46 +1080,45 @@ inline void mv::Engine::go_setup(void)
     p1.position = {0.0f, 0.0f, 0.0f, 1.0f};
     p1.color = {1.0f, 1.0f, 1.0f, 1.0f};
     p1.uv = {0.0f, 0.0f, 0.0f, 0.0f};
-    reticle_mesh.vertices = {p1, p1};
+    reticleMesh.vertices = {p1, p1};
 
     // Create vertex buffer
-    mv_device->create_buffer(vk::BufferUsageFlagBits::eVertexBuffer,
-                             vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
-                             reticle_mesh.vertices.size() * sizeof(mv::Vertex), &reticle_mesh.vertex_buffer,
-                             &reticle_mesh.vertex_memory, reticle_mesh.vertices.data());
+    mvDevice->createBuffer(vk::BufferUsageFlagBits::eVertexBuffer,
+                           vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
+                           reticleMesh.vertices.size() * sizeof(mv::Vertex), &reticleMesh.vertexBuffer,
+                           &reticleMesh.vertexMemory, reticleMesh.vertices.data());
 
     // Create uniform -- not used tbh
-    reticle_obj.position = {0.0f, 0.0f, 0.0f};
-    mv_device->create_buffer(vk::BufferUsageFlagBits::eUniformBuffer,
-                             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                             &reticle_obj.uniform_buffer, sizeof(mv::Object::matrices));
-    reticle_obj.uniform_buffer.map(*mv_device);
-    reticle_obj.update();
+    reticleObj.position = {0.0f, 0.0f, 0.0f};
+    mvDevice->createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,
+                           vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                           &reticleObj.uniformBuffer, sizeof(mv::Object::Matrix));
+    reticleObj.uniformBuffer.map(*mvDevice);
+    reticleObj.update();
     // glm::mat4 nm = glm::mat4(1.0);
     // memcpy(reticle_obj.uniform_buffer.mapped, &nm, sizeof(glm::mat4));
 
     // allocate descriptor for reticle
-    descriptor_allocator->allocate_set(*mv_device, uniform_layout, reticle_obj.model_descriptor);
-    descriptor_allocator->update_set(*mv_device, reticle_obj.uniform_buffer.descriptor, reticle_obj.model_descriptor,
-                                     0);
+    descriptorAllocator->allocateSet(*mvDevice, uniformLayout, reticleObj.meshDescriptor);
+    descriptorAllocator->updateSet(*mvDevice, reticleObj.uniformBuffer.descriptor, reticleObj.meshDescriptor, 0);
 
     /*
       CONFIGURE AND CREATE CAMERA
     */
-    camera_init_struct camera_params;
-    camera_params.fov = 45.0f * ((float)swapchain->swap_extent.width / swapchain->swap_extent.height);
-    camera_params.aspect =
-        static_cast<float>(((float)swapchain->swap_extent.height / (float)swapchain->swap_extent.height));
-    camera_params.nearz = 0.1f;
-    camera_params.farz = 200.0f;
-    camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
-    camera_params.view_uniform_object = collection_handler->view_uniform.get();
-    camera_params.projection_uniform_object = collection_handler->projection_uniform.get();
+    struct CameraInitStruct cameraParams;
+    cameraParams.fov = 45.0f * ((float)swapchain->swapExtent.width / swapchain->swapExtent.height);
+    cameraParams.aspect =
+        static_cast<float>(((float)swapchain->swapExtent.height / (float)swapchain->swapExtent.height));
+    cameraParams.nearz = 0.1f;
+    cameraParams.farz = 200.0f;
+    cameraParams.position = glm::vec3(0.0f, 3.0f, -7.0f);
+    cameraParams.viewUniformObject = collectionHandler->viewUniform.get();
+    cameraParams.projectionUniformObject = collectionHandler->projectionUniform.get();
 
-    camera_params.camera_type = Camera::camera_type::third_person;
-    camera_params.target = &collection_handler->models->at(1).objects->at(0);
+    cameraParams.type = CameraType::eThirdPerson;
+    cameraParams.target = &collectionHandler->models->at(1).objects->at(0);
 
-    camera = std::make_unique<Camera>(camera_params);
+    camera = std::make_unique<Camera>(cameraParams);
     return;
 }
 
@@ -1105,52 +1126,52 @@ inline void mv::Engine::go_setup(void)
   GLFW CALLBACKS
 */
 
-void mv::mouse_motion_callback(GLFWwindow *window, double xpos, double ypos)
+void mv::mouseMotionCallback(GLFWwindow *p_GLFWwindow, double p_XPosition, double p_YPosition)
 {
-    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(window));
-    engine->mouse.update(xpos, ypos);
+    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
+    engine->mouse.update(p_XPosition, p_YPosition);
     return;
 }
 
-void mv::mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
+void mv::mouseButtonCallback(GLFWwindow *p_GLFWwindow, int p_Button, int p_Action, [[maybe_unused]] int p_Modifiers)
 {
-    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(window));
+    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
 
-    switch (button)
+    switch (p_Button)
     {
         case GLFW_MOUSE_BUTTON_1: // LMB
             {
-                if (action == GLFW_PRESS)
+                if (p_Action == GLFW_PRESS)
                 {
-                    engine->mouse.on_left_press();
+                    engine->mouse.onLeftPress();
                 }
-                else if (action == GLFW_RELEASE)
+                else if (p_Action == GLFW_RELEASE)
                 {
-                    engine->mouse.on_left_release();
+                    engine->mouse.onLeftRelease();
                 }
                 break;
             }
         case GLFW_MOUSE_BUTTON_2: // RMB
             {
-                if (action == GLFW_PRESS)
+                if (p_Action == GLFW_PRESS)
                 {
-                    engine->mouse.on_right_press();
+                    engine->mouse.onRightPress();
                 }
-                else if (action == GLFW_RELEASE)
+                else if (p_Action == GLFW_RELEASE)
                 {
-                    engine->mouse.on_right_release();
+                    engine->mouse.onRightRelease();
                 }
                 break;
             }
         case GLFW_MOUSE_BUTTON_3: // MMB
             {
-                if (action == GLFW_PRESS)
+                if (p_Action == GLFW_PRESS)
                 {
-                    engine->mouse.on_middle_press();
+                    engine->mouse.onMiddlePress();
                 }
-                else if (action == GLFW_RELEASE)
+                else if (p_Action == GLFW_RELEASE)
                 {
-                    engine->mouse.on_middle_release();
+                    engine->mouse.onMiddleRelease();
                 }
                 break;
             }
@@ -1158,32 +1179,33 @@ void mv::mouse_button_callback(GLFWwindow *window, int button, int action, int m
     return;
 }
 
-void mv::key_callback(GLFWwindow *window, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods)
+void mv::keyCallback(GLFWwindow *p_GLFWwindow, int p_Key, [[maybe_unused]] int p_ScanCode, int p_Action,
+                     [[maybe_unused]] int p_Modifier)
 {
     // get get pointer
-    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(window));
+    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
 
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    if (p_Key == GLFW_KEY_ESCAPE && p_Action == GLFW_PRESS)
     {
-        glfwSetWindowShouldClose(window, true);
+        glfwSetWindowShouldClose(p_GLFWwindow, true);
         return;
     }
 
-    if (action == GLFW_PRESS)
+    if (p_Action == GLFW_PRESS)
     {
-        engine->keyboard.on_key_press(key);
+        engine->keyboard.onKeyPress(p_Key);
     }
-    else if (action == GLFW_RELEASE)
+    else if (p_Action == GLFW_RELEASE)
     {
-        engine->keyboard.on_key_release(key);
+        engine->keyboard.onKeyRelease(p_Key);
     }
     return;
 }
 
-void mv::glfw_err_callback(int error, const char *desc)
+void mv::glfwErrCallback(int p_Error, const char *p_Description)
 {
     std::cout << "GLFW Error...\n"
-              << "Code => " << error << "\n"
-              << "Message => " << desc << "\n";
+              << "Code => " << p_Error << "\n"
+              << "Message => " << p_Description << "\n";
     return;
 }

@@ -49,6 +49,7 @@ namespace mv
         // Info
         uint32_t                                              graphicsIndex = UINT32_MAX;
         vk::Format                                            colorFormat;
+        vk::Format                                            depthFormat;
         vk::ColorSpaceKHR                                     colorSpace;
         vk::Extent2D                                          swapExtent;
         // clang-format on

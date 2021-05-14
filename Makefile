@@ -420,6 +420,33 @@ mvCamera.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvCamera.cpp.s
 .PHONY : mvCamera.cpp.s
 
+mvCollection.o: mvCollection.cpp.o
+
+.PHONY : mvCollection.o
+
+# target to build an object file
+mvCollection.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvCollection.cpp.o
+.PHONY : mvCollection.cpp.o
+
+mvCollection.i: mvCollection.cpp.i
+
+.PHONY : mvCollection.i
+
+# target to preprocess a source file
+mvCollection.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvCollection.cpp.i
+.PHONY : mvCollection.cpp.i
+
+mvCollection.s: mvCollection.cpp.s
+
+.PHONY : mvCollection.s
+
+# target to generate assembly for a file
+mvCollection.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvCollection.cpp.s
+.PHONY : mvCollection.cpp.s
+
 mvDevice.o: mvDevice.cpp.o
 
 .PHONY : mvDevice.o
@@ -678,6 +705,9 @@ help:
 	@echo "... mvCamera.o"
 	@echo "... mvCamera.i"
 	@echo "... mvCamera.s"
+	@echo "... mvCollection.o"
+	@echo "... mvCollection.i"
+	@echo "... mvCollection.s"
 	@echo "... mvDevice.o"
 	@echo "... mvDevice.i"
 	@echo "... mvDevice.s"
