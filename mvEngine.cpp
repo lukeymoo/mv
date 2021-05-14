@@ -207,13 +207,6 @@ void mv::Engine::go(void)
     // load models & create objects here
     goSetup();
 
-    /*
-      Hard coding settings
-    */
-    camera->zoomLevel = 5.0f;
-    mouse.deltaStyle = Mouse::DeltaStyles::eFromLastPosition;
-    mouse.isDragging = false;
-
     preparePipeline();
 
     // basic check
@@ -279,6 +272,10 @@ void mv::Engine::go(void)
 
         ImGui_ImplVulkan_DestroyFontUploadObjects();
     }
+
+    std::cout << "swap chain width => " << swapchain->swapExtent.width << "\n"
+              << "swapchain height => " << swapchain->swapExtent.height << "\taspect ratio => "
+              << (float)swapchain->swapExtent.width / swapchain->swapExtent.height << "\n";
 
     while (!glfwWindowShouldClose(window))
     {
@@ -705,8 +702,6 @@ void mv::Engine::preparePipeline(void)
     pipelineWSamplerInfo.pVertexInputState = &viState;
     pipelineWSamplerInfo.pDynamicState = nullptr;
 
-    std::cout << "\n[+] Creating graphics pipeline with sampler -- rigid\n";
-
     /* Graphics pipeline with sampler -- NO dynamic states */
     vk::ResultValue result = mvDevice->logicalDevice->createGraphicsPipeline(nullptr, pipelineWSamplerInfo);
     if (result.result != vk::Result::eSuccess)
@@ -719,8 +714,6 @@ void mv::Engine::preparePipeline(void)
 
     pipelineWSamplerInfo.pInputAssemblyState = &debugIaState;
     pipelineWSamplerInfo.pDynamicState = &dynamicInfo;
-
-    std::cout << "\n[+] Creating graphics pipeline with sampler -- dynamic states\n";
 
     /* Graphics pipeline with sampler -- WITH dynamic states */
     result = mvDevice->logicalDevice->createGraphicsPipeline(nullptr, pipelineWSamplerInfo);
@@ -747,8 +740,6 @@ void mv::Engine::preparePipeline(void)
     pipelineNoSamplerInfo.pVertexInputState = &viState;
     pipelineNoSamplerInfo.pDynamicState = nullptr;
 
-    std::cout << "\n[+] Creating graphics pipeline no sampler -- rigid\n";
-
     // Create graphics pipeline NO sampler
     result = mvDevice->logicalDevice->createGraphicsPipeline(nullptr, pipelineNoSamplerInfo);
     if (result.result != vk::Result::eSuccess)
@@ -762,8 +753,6 @@ void mv::Engine::preparePipeline(void)
     // create pipeline no sampler | dynamic state
     pipelineNoSamplerInfo.pInputAssemblyState = &debugIaState;
     pipelineNoSamplerInfo.pDynamicState = &dynamicInfo;
-
-    std::cout << "\n[+] Creating graphics pipeline no sampler -- dynamic states\n";
 
     result = mvDevice->logicalDevice->createGraphicsPipeline(nullptr, pipelineNoSamplerInfo);
     if (result.result != vk::Result::eSuccess)
@@ -1106,9 +1095,8 @@ inline void mv::Engine::goSetup(void)
       CONFIGURE AND CREATE CAMERA
     */
     struct CameraInitStruct cameraParams;
-    cameraParams.fov = 45.0f * ((float)swapchain->swapExtent.width / swapchain->swapExtent.height);
-    cameraParams.aspect =
-        static_cast<float>(((float)swapchain->swapExtent.height / (float)swapchain->swapExtent.height));
+    cameraParams.fov = 60.0f;
+    cameraParams.aspect = (float)swapchain->swapExtent.width / (float)swapchain->swapExtent.height;
     cameraParams.nearz = 0.1f;
     cameraParams.farz = 200.0f;
     cameraParams.position = glm::vec3(0.0f, 3.0f, -7.0f);
@@ -1119,6 +1107,13 @@ inline void mv::Engine::goSetup(void)
     cameraParams.target = &collectionHandler->models->at(1).objects->at(0);
 
     camera = std::make_unique<Camera>(cameraParams);
+
+    /*
+      Hard coding settings
+    */
+    camera->zoomLevel = 7.0f;
+    mouse.deltaStyle = Mouse::DeltaStyles::eFromLastPosition;
+    mouse.isDragging = false;
     return;
 }
 

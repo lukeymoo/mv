@@ -19,6 +19,7 @@ namespace mv
     struct Buffer;
     struct Device
     {
+        bool shouldOutputDebug = false;
         Device(const vk::PhysicalDevice &p_PhysicalDevice, std::vector<std::string> &p_RequestedDeviceExtensions);
         ~Device();
 

@@ -105,15 +105,17 @@ void mv::Allocator::createLayout(const mv::Device &p_MvDevice, std::string p_Lay
         }
         if (layoutAlreadyExists)
         {
-            std::cout << "[-] Request to create descriptor set layout => " << p_LayoutName
-                      << " already exists; Skipping...\n";
+            if (shouldOutputDebug)
+                std::cout << "[-] Request to create descriptor set layout => " << p_LayoutName
+                          << " already exists; Skipping...\n";
             return;
         }
     }
 
     // add to map
     layouts->insert({p_LayoutName, p_MvDevice.logicalDevice->createDescriptorSetLayout(p_CreateInfo)});
-    std::cout << "[+] Descriptor set layout => " << p_LayoutName << " created\n";
+    if (shouldOutputDebug)
+        std::cout << "[+] Descriptor set layout => " << p_LayoutName << " created\n";
     return;
 }
 
@@ -126,7 +128,8 @@ void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, vk::DescriptorSetL
     if (!poolContainer->pool)
         throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
 
-    std::cout << "[-] Allocating descriptor set" << std::endl;
+    if (shouldOutputDebug)
+        std::cout << "[-] Allocating descriptor set" << std::endl;
     if (!p_DescriptorLayout)
     {
         std::ostringstream oss;
@@ -182,7 +185,8 @@ void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, Container *p_PoolC
     if (!p_PoolContainer->pool)
         throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
 
-    std::cout << "[-] Allocating descriptor set" << std::endl;
+    if (shouldOutputDebug)
+        std::cout << "[-] Allocating descriptor set" << std::endl;
     if (!p_DescriptorLayout)
     {
         std::ostringstream oss;
@@ -323,8 +327,8 @@ mv::Allocator::Container::~Container()
 
 struct mv::Allocator::Container *mv::Allocator::allocatePool(const mv::Device &p_MvDevice, uint32_t p_Count)
 {
-
-    std::cout << "[+] Allocating descriptor pool of max sets => " << p_Count << std::endl;
+    if (shouldOutputDebug)
+        std::cout << "[+] Allocating descriptor pool of max sets => " << p_Count << std::endl;
     std::vector<vk::DescriptorPoolSize> poolSizes = {
         {vk::DescriptorType::eSampler, 1000},
         {vk::DescriptorType::eCombinedImageSampler, 1000},

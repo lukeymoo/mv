@@ -33,7 +33,8 @@ void mv::Collection::loadModel(const mv::Device &p_MvDevice, mv::Allocator &p_De
     {
         if (name.compare(p_Filename) == 0) // if same
         {
-            std::cout << "[-] Skipping already loaded model name => " << p_Filename << "\n";
+            if (shouldOutputDebug)
+                std::cout << "[-] Skipping already loaded model name => " << p_Filename << "\n";
             alreadyLoaded = true;
             break;
         }
@@ -41,11 +42,12 @@ void mv::Collection::loadModel(const mv::Device &p_MvDevice, mv::Allocator &p_De
 
     if (!alreadyLoaded)
     {
-        std::cout << "[+] Loading model => " << p_Filename << "\n";
+        if (shouldOutputDebug)
+            std::cout << "[+] Loading model => " << p_Filename << "\n";
         // make space for new model
         models->push_back(mv::Model());
         // call model routine _load
-        models->back().load(p_MvDevice, p_DescriptorAllocator, p_Filename);
+        models->back().load(p_MvDevice, p_DescriptorAllocator, p_Filename, shouldOutputDebug);
 
         // add filename to model_names container
         modelNames.push_back(p_Filename);
@@ -82,12 +84,14 @@ void mv::Collection::createObject(const mv::Device &p_MvDevice, mv::Allocator &p
         throw std::runtime_error(oss.str().c_str());
     }
 
-    std::cout << "[+] Creating object of model type => " << p_ModelName << std::endl;
+    if (shouldOutputDebug)
+        std::cout << "[+] Creating object of model type => " << p_ModelName << std::endl;
 
     // create new object element in specified model
     models->at(modelIndex).objects->push_back(mv::Object());
 
-    std::cout << "\t -- Model type object count is now => " << models->at(modelIndex).objects->size() << "\n";
+    if (shouldOutputDebug)
+        std::cout << "\t -- Model type object count is now => " << models->at(modelIndex).objects->size() << "\n";
 
     // create uniform buffer for object
     p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,

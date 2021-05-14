@@ -15,7 +15,8 @@ mv::Model::~Model()
 {
 }
 
-void mv::Model::load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator, const char *p_Filename)
+void mv::Model::load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator, const char *p_Filename,
+                     bool p_OutputDebug)
 {
 
     modelName = p_Filename;
@@ -59,10 +60,12 @@ void mv::Model::load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAl
                                 mesh.indices.size() * sizeof(uint32_t), &mesh.indexBuffer, &mesh.indexMemory,
                                 mesh.indices.data());
     }
-
-    std::cout << "\t :: Loaded model => " << p_Filename << "\n";
-    std::cout << "\t\t Meshes => " << loadedMeshes->size() << "\n";
-    std::cout << "\t\t Textures => " << loadedTextures->size() << "\n";
+    if (p_OutputDebug)
+    {
+        std::cout << "\t :: Loaded model => " << p_Filename << "\n";
+        std::cout << "\t\t Meshes => " << loadedMeshes->size() << "\n";
+        std::cout << "\t\t Textures => " << loadedTextures->size() << "\n";
+    }
     return;
 }
 

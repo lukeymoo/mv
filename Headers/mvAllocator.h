@@ -15,6 +15,7 @@ namespace mv
 {
     struct Allocator
     {
+        bool shouldOutputDebug = false;
         // forward decl
         struct Container;
 

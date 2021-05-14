@@ -11,13 +11,14 @@ namespace mv
 {
     struct UniformObject
     {
-        alignas(16) glm::mat4 matrix = glm::mat4(1.0);
+        alignas(16) glm::mat4 matrix = glm::mat4(0);
         mv::Buffer mvBuffer;
         vk::DescriptorSet descriptor;
     };
 
     struct Collection
     {
+        bool shouldOutputDebug = false;
         // owns
         std::unique_ptr<std::vector<mv::Model>> models;
 
