@@ -2,53 +2,35 @@
 
 #include <iostream>
 
-int main(int argc, char *argv[])
+int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
 {
-  try
-  {
-    // Create class called Engine for example
-    // configure that class to extend mv::MWindow class
-    // Initialize and call Engine::prepare()
-    // prepare comes from parent class Window
-    // Then call extended class function go() with will contain game loop
-
-    mv::Engine wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
-    //mv::MWindow wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
-    if (wnd.good_init)
+    try
     {
-      // main game loop, define in extended class
-      wnd.go();
+        mv::Engine wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
+        if (wnd.good_init)
+        {
+            wnd.go();
+        }
+        else
+        {
+            std::cout << std::endl << "\t[-] Bad initialization, program ending!" << std::endl;
+        }
     }
-    else
+    catch (std::exception &e)
     {
-      std::cout << std::endl
-                << "\t[-] Bad initialization, program ending!" << std::endl;
+        std::cout << std::endl
+                  << ":: Standard Library Exception :: " << std::endl
+                  << e.what() << std::endl
+                  << std::endl;
+        std::exit(-1);
     }
-  }
-  catch (mv::BException &e)
-  {
-    std::cout << std::endl
-              << ":: Moogine Engine Exception :: From -> " << e.get_type() << std::endl
-              << e.get_error_description() << std::endl
-              << std::endl;
-    std::exit(-1);
-  }
-  catch (std::exception &e)
-  {
-    std::cout << std::endl
-              << ":: Standard Library Exception :: " << std::endl
-              << e.what() << std::endl
-              << std::endl;
-    std::exit(-1);
-  }
-  catch (...)
-  {
-    std::cout << std::endl
-              << ":: Unhandled Exception ::" << std::endl
-              << "Unhandled Exception! No further information available"
-              << std::endl
-              << std::endl;
-    std::exit(-1);
-  }
-  return 0;
+    catch (...)
+    {
+        std::cout << std::endl
+                  << ":: Unhandled Exception ::" << std::endl
+                  << "Unhandled Exception! No further information available" << std::endl
+                  << std::endl;
+        std::exit(-1);
+    }
+    return 0;
 }

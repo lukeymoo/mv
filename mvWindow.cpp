@@ -1,578 +1,670 @@
 #include "mvWindow.h"
 
-mv::MWindow::Exception::Exception(int l, std::string f, std::string description)
-    : BException(l, f, description)
+mv::Window::Window(int w, int h, std::string title)
 {
-    type = "Window Handler Exception";
-    error_description = description;
-    return;
-}
+    this->windowWidth = w;
+    this->windowHeight = h;
+    this->title = title;
 
-mv::MWindow::Exception::~Exception(void)
-{
-    return;
-}
+    glfwInit();
 
-/* Create window and initialize Vulkan */
-mv::MWindow::MWindow(int w, int h, const char *title)
-    : window_width(w), window_height(h)
-{
-    // Connect to x server
-    display = XOpenDisplay(NULL);
-    if (display == NULL)
+    uint32_t count = 0;
+    const char **extensions = glfwGetRequiredInstanceExtensions(&count);
+    if (!extensions)
+        throw std::runtime_error("Failed to get required instance extensions");
+
+    // Get our own list of requested extensions
+    for (const auto &req : requestedInstanceExtensions)
     {
-        throw std::runtime_error("Failed to open x server connection");
+        instanceExtensions.push_back(req);
     }
 
-    // get first screen
-    screen = DefaultScreen(display);
-
-    // Create window
-    window = XCreateSimpleWindow(display,
-                                 RootWindow(display, screen),
-                                 10, 10,
-                                 window_width, window_height,
-                                 1,
-                                 WhitePixel(display, screen),
-                                 BlackPixel(display, screen));
-
-    typedef struct Hints
+    // Get GLFW requested extensions
+    std::vector<std::string> glfwRequested;
+    for (uint32_t i = 0; i < count; i++)
     {
-        unsigned long flags = 0;
-        unsigned long functions = 0;
-        unsigned long decorations = 0;
-        long input_mode = 0;
-        unsigned long status = 0;
-    } Hints;
-
-    Hints hints;
-    hints.flags = 2;
-    hints.decorations = 0;
-
-    Atom borders_atom = XInternAtom(display, "_MOTIF_WM_HINTS", 1);
-    // ensure we got the atom
-    if (!borders_atom)
-    {
-        throw std::runtime_error("Failed to fetch motif window manager hints atom");
+        glfwRequested.push_back(extensions[i]);
     }
 
-    Atom del_window = XInternAtom(display, "WM_DELETE_WINDOW", 0);
-    XSetWMProtocols(display, window, &del_window, 1);
+    // temp container for missing extensions
+    std::vector<std::string> tmp;
 
-    // remove decorations
-    XChangeProperty(display, window, borders_atom, borders_atom, 32, PropModeReplace, (unsigned char *)&hints, 5);
-
-    // Configure event masks
-    XSelectInput(display,
-                 window,
-                 EnterWindowMask |
-                     LeaveWindowMask |
-                     FocusChangeMask |
-                     ButtonPressMask |
-                     ButtonReleaseMask |
-                     ExposureMask |
-                     KeyPressMask |
-                     KeyReleaseMask |
-                     NoExpose |
-                     SubstructureNotifyMask);
-
-    XStoreName(display, window, title);
-
-    // initialize keyboard handler
-    kbd = std::make_unique<mv::keyboard>(display);
-    // initialize mouse handler
-    mouse = std::make_unique<mv::mouse>(display, &window);
-
-    // Display window
-    XMapWindow(display, window);
-    XFlush(display);
-
-    int rs;
-    bool detectable_result;
-
-    /* Request X11 does not send autorepeat signals */
-    std::cout << "[+] Configuring keyboard input" << std::endl;
-    detectable_result = XkbSetDetectableAutoRepeat(display, true, &rs);
-
-    if (!detectable_result)
+    // iterate glfw requested
+    for (const auto &glfw_req : glfwRequested)
     {
-        throw std::runtime_error("Could not disable auto repeat");
-    }
+        bool found = false;
 
-    return;
-}
-
-mv::MWindow::~MWindow(void)
-{
-    vkDeviceWaitIdle(m_device);
-    swapchain.cleanup();
-    destroy_command_buffers();
-
-    for (auto &fence : in_flight_fences)
-    {
-        if (fence != nullptr)
+        // iterate already requested list
+        for (const auto &extensionName : instanceExtensions)
         {
-            vkDestroyFence(m_device, fence, nullptr);
-            fence = nullptr;
-        }
-    }
-
-    if (m_render_pass)
-    {
-        vkDestroyRenderPass(m_device, m_render_pass, nullptr);
-    }
-    if (!frame_buffers.empty())
-    {
-        for (size_t i = 0; i < frame_buffers.size(); i++)
-        {
-            if (frame_buffers[i])
+            if (glfw_req == extensionName)
             {
-                vkDestroyFramebuffer(m_device, frame_buffers[i], nullptr);
-                frame_buffers[i] = nullptr;
+                found = true;
             }
         }
+
+        // if not found, add to final list
+        if (!found)
+            instanceExtensions.push_back(glfw_req);
     }
 
-    cleanup_depth_stencil();
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    window = glfwCreateWindow(windowWidth, windowHeight, title.c_str(), nullptr, nullptr);
+    if (!window)
+        throw std::runtime_error("Failed to create window");
 
-    if (m_pipeline_cache)
-    {
-        vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
-        m_pipeline_cache = nullptr;
-    }
+    // glfwSetWindowPos(window, 0, 0);
 
-    destroy_command_pool();
-    vkDestroySemaphore(m_device, semaphores.render_complete, nullptr);
-    vkDestroySemaphore(m_device, semaphores.present_complete, nullptr);
-    semaphores.present_complete = nullptr;
-    semaphores.render_complete = nullptr;
+    // set keyboard callback
+    glfwSetKeyCallback(window, mv::keyCallback);
 
-    if (device)
-    {
-        delete device;
-    }
+    // set mouse motion callback
+    glfwSetCursorPosCallback(window, mv::mouseMotionCallback);
 
-    if (m_instance)
-    {
-        vkDestroyInstance(m_instance, nullptr);
-        m_instance = nullptr;
-    }
+    // set mouse button callback
+    glfwSetMouseButtonCallback(window, mv::mouseButtonCallback);
 
-    if (display && window)
-    {
-        XDestroyWindow(display, window);
-        XCloseDisplay(display);
-    }
+    auto is_raw_supp = glfwRawMouseMotionSupported();
+
+    if (!is_raw_supp)
+        throw std::runtime_error("Raw mouse motion not supported");
+
+    // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, true);
+
+    // configure callback
+    glfwSetWindowUserPointer(window, this);
+
+    // Mouse and keyboard methods now belong to namespaces
+    // mouse/keyboard respectively
+    // kbd = std::make_unique<mv::keyboard>(window);
+    // mouse = std::make_unique<mv::mouse>(window);
+
+    // initialize smart pointers
+    swapchain = std::make_unique<mv::Swap>();
+    commandBuffers = std::make_unique<std::vector<vk::CommandBuffer>>();
+    coreFramebuffers = std::make_unique<std::vector<vk::Framebuffer>>();
+    guiFramebuffers = std::make_unique<std::vector<vk::Framebuffer>>();
+    inFlightFences = std::make_unique<std::vector<vk::Fence>>();
+    waitFences = std::make_unique<std::vector<vk::Fence>>();
+    semaphores = std::make_unique<struct SemaphoresStruct>();
+    depthStencil = std::make_unique<struct DepthStencilStruct>();
     return;
 }
 
-void mv::MWindow::cleanup_depth_stencil(void)
+mv::Window::~Window()
 {
-    if (depth_stencil.image)
+    if (!mvDevice)
+        return;
+    // ensure gpu not using any resources
+    if (mvDevice->logicalDevice)
     {
-        vkDestroyImage(m_device, depth_stencil.image, nullptr);
-        depth_stencil.image = nullptr;
+        mvDevice->logicalDevice->waitIdle();
     }
-    if (depth_stencil.view)
+
+    // swapchain related resource cleanup
+    swapchain->cleanup(*instance, *mvDevice);
+
+    // cleanup command buffers
+    if (commandBuffers)
     {
-        vkDestroyImageView(m_device, depth_stencil.view, nullptr);
-        depth_stencil.view = nullptr;
+        if (!commandBuffers->empty())
+        {
+            mvDevice->logicalDevice->freeCommandBuffers(*commandPool, *commandBuffers);
+        }
+        commandBuffers.reset();
     }
-    if (depth_stencil.mem)
+
+    // cleanup sync objects
+    if (inFlightFences)
     {
-        vkFreeMemory(m_device, depth_stencil.mem, nullptr);
-        depth_stencil.mem = nullptr;
+        for (auto &fence : *inFlightFences)
+        {
+            if (fence)
+            {
+                mvDevice->logicalDevice->destroyFence(fence, nullptr);
+            }
+        }
+        inFlightFences.reset();
     }
+    // ''
+    if (semaphores)
+    {
+        if (semaphores->presentComplete)
+            mvDevice->logicalDevice->destroySemaphore(semaphores->presentComplete, nullptr);
+        if (semaphores->renderComplete)
+            mvDevice->logicalDevice->destroySemaphore(semaphores->renderComplete, nullptr);
+        semaphores.reset();
+    }
+
+    if (renderPasses)
+    {
+        for (auto &pass : *renderPasses)
+        {
+            if (pass.second)
+                mvDevice->logicalDevice->destroyRenderPass(pass.second, nullptr);
+        }
+        renderPasses.reset();
+    }
+
+    // core engine render framebuffers
+    if (coreFramebuffers)
+    {
+        if (!coreFramebuffers->empty())
+        {
+            for (auto &buffer : *coreFramebuffers)
+            {
+                if (buffer)
+                {
+                    mvDevice->logicalDevice->destroyFramebuffer(buffer, nullptr);
+                }
+            }
+            coreFramebuffers.reset();
+        }
+    }
+
+    // ImGui framebuffers
+    if (guiFramebuffers)
+    {
+        if (!guiFramebuffers->empty())
+        {
+            for (auto &buffer : *guiFramebuffers)
+            {
+                if (buffer)
+                {
+                    mvDevice->logicalDevice->destroyFramebuffer(buffer, nullptr);
+                }
+            }
+            guiFramebuffers.reset();
+        }
+    }
+
+    if (depthStencil)
+    {
+        if (depthStencil->image)
+        {
+            mvDevice->logicalDevice->destroyImage(depthStencil->image, nullptr);
+        }
+        if (depthStencil->view)
+        {
+            mvDevice->logicalDevice->destroyImageView(depthStencil->view, nullptr);
+        }
+        if (depthStencil->mem)
+        {
+            mvDevice->logicalDevice->freeMemory(depthStencil->mem, nullptr);
+        }
+        depthStencil.reset();
+    }
+
+    if (commandPool)
+    {
+        mvDevice->logicalDevice->destroyCommandPool(*commandPool);
+        commandPool.reset();
+    }
+
+    // custom logical device interface/container cleanup
+    if (mvDevice)
+    {
+        mvDevice.reset();
+    }
+
+    if (instance)
+    {
+        instance->destroy();
+        instance.reset();
+    }
+
+    if (window)
+        glfwDestroyWindow(window);
+    glfwTerminate();
     return;
 }
 
-void mv::MWindow::prepare(void)
+void mv::Window::prepare(void)
 {
-    // initialize vulkan
-    if (!init_vulkan())
-    {
-        throw std::runtime_error("Failed to initialize Vulkan");
-    }
+    // creates...
+    // physical device
+    // logical device
+    // swapchain surface
+    // passes... vulkan handles to swapchain handler
+    initVulkan();
 
-    swapchain.init_surface(display, window);
-    m_command_pool = device->create_command_pool(swapchain.queue_index);
-    swapchain.create(&window_width, &window_height);
-    // call after swapchain creation!!!
-    // needed for mouse delta calc when using from_center method
-    mouse->set_window_properties(window_width, window_height);
-    create_command_buffers();
-    create_synchronization_primitives();
-    setup_depth_stencil();
-    setup_render_pass();
-    create_pipeline_cache();
-    setup_framebuffer();
+    swapchain->init(window, *instance, *physicalDevice);
+    commandPool = std::make_unique<vk::CommandPool>(mvDevice->createCommandPool(mvDevice->queueIdx.graphics));
+
+    swapchain->create(*physicalDevice, *mvDevice, windowWidth, windowHeight);
+
+    createCommandBuffers();
+
+    createSynchronizationPrimitives();
+
+    setupDepthStencil();
+
+    setupRenderPass();
+
+    // create_pipeline_cache();
+
+    setupFramebuffer();
+
+    // load device extension functions
+    pfn_vkCmdSetPrimitiveTopology = reinterpret_cast<PFN_vkCmdSetPrimitiveTopologyEXT>(
+        vkGetInstanceProcAddr(*instance, "vkCmdSetPrimitiveTopologyEXT"));
+    if (!pfn_vkCmdSetPrimitiveTopology)
+        throw std::runtime_error("Failed to load extended dynamic state extensions");
     return;
 }
 
-bool mv::MWindow::init_vulkan(void)
+void mv::Window::initVulkan(void)
 {
-    // Create instance
-    if (create_instance() != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create vulkan instance");
-    }
+    // creates vulkan instance with specified instance extensions/layers
+    createInstance();
 
-    uint32_t device_count = 0;
-    if (vkEnumeratePhysicalDevices(m_instance, &device_count, nullptr) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to enumerate physical devices count");
-    }
-    if (device_count == 0)
-    {
-        throw std::runtime_error("No adapters found on system");
-    }
-    std::vector<VkPhysicalDevice> physical_devices(device_count);
-    if (vkEnumeratePhysicalDevices(m_instance, &device_count, physical_devices.data()) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to enumerate physical device list");
-    }
+    std::vector<vk::PhysicalDevice> physicalDevices = instance->enumeratePhysicalDevices();
+
+    if (physicalDevices.size() < 1)
+        throw std::runtime_error("No physical devices found");
 
     // Select device
-    m_physical_device = physical_devices[0];
+    physicalDevice = std::make_unique<vk::PhysicalDevice>(std::move(physicalDevices.at(0)));
+    // resize devices container
+    physicalDevices.erase(physicalDevices.begin());
 
-    // Get device info
-    vkGetPhysicalDeviceProperties(m_physical_device, &properties);
-    vkGetPhysicalDeviceFeatures(m_physical_device, &features);
-    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
+    // get device info
+    physicalProperties = physicalDevice->getProperties();
+    physicalFeatures = physicalDevice->getFeatures();
+    physicalMemoryProperties = physicalDevice->getMemoryProperties();
 
-    device = new mv::Device(m_physical_device);
-    if (device->create_logical_device(features, requested_device_extensions) != VK_SUCCESS)
+    std::vector<std::string> tmp;
+    for (const auto &extensionName : requestedDeviceExtensions)
     {
-        throw std::runtime_error("Failed to create logical device");
+        std::cout << "\t[-] Requesting device extension => " << extensionName << "\n";
+        tmp.push_back(extensionName);
     }
 
-    m_device = device->device;
+    // create logical device handler mv::Device
+    mvDevice = std::make_unique<mv::Device>(*physicalDevice, tmp);
+
+    // create logical device & graphics queue
+    mvDevice->createLogicalDevice(*physicalDevice);
 
     // get format
-    depth_format = device->get_supported_depth_format(m_physical_device);
+    // depthFormat = mvDevice->getSupportedDepthFormat(*physicalDevice);
 
-    // get graphics queue
-    vkGetDeviceQueue(m_device, device->queue_family_indices.graphics, 0, &m_graphics_queue);
-    device->graphics_queue = m_graphics_queue; // ensure device obj has handle to graphics queue
-
-    swapchain.connect(m_instance, m_physical_device, m_device);
+    // no longer pass references to swapchain, pass reference on per function basis now
+    // swapchain->map(std::weak_ptr<vk::Instance>(instance),
+    //                std::weak_ptr<vk::PhysicalDevice>(physical_device),
+    //                std::weak_ptr<mv::Device>(mvDevice));
 
     // Create synchronization objects
-    VkSemaphoreCreateInfo semaphore_info = mv::initializer::semaphore_create_info();
-    if (vkCreateSemaphore(m_device, &semaphore_info, nullptr, &semaphores.present_complete) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create present semaphore");
-    }
-    if (vkCreateSemaphore(m_device, &semaphore_info, nullptr, &semaphores.render_complete) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create render semaphore");
-    }
+    vk::SemaphoreCreateInfo semaphoreInfo;
+    semaphores->presentComplete = mvDevice->logicalDevice->createSemaphore(semaphoreInfo);
+    semaphores->renderComplete = mvDevice->logicalDevice->createSemaphore(semaphoreInfo);
 
-    // submit info obj
-    submit_info = mv::initializer::submit_info();
-    submit_info.pWaitDstStageMask = &stage_flags;
-    submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = &semaphores.present_complete;
-    submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = &semaphores.render_complete;
-
-    return true;
+    return;
 }
 
-VkResult mv::MWindow::create_instance(void)
+void mv::Window::createInstance(void)
 {
     // Ensure we have validation layers
 #ifndef NDEBUG
-    check_validation_support();
+    checkValidationSupport();
 #endif
 
     // Ensure we have all requested instance extensions
-    check_instance_ext();
+    checkInstanceExt();
 
-    VkApplicationInfo app_info = {};
-    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pNext = nullptr;
-    app_info.pApplicationName = "Bloody Day";
-    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    app_info.pEngineName = "Moogin";
-    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    app_info.apiVersion = VK_MAKE_VERSION(1, 2, 0);
+    vk::ApplicationInfo appInfo;
+    appInfo.pApplicationName = "Bloody Day";
+    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.pEngineName = "Moogin";
+    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.apiVersion = VK_MAKE_VERSION(1, 2, 0);
 
 /* If debugging enabled */
 #ifndef NDEBUG
-    VkDebugUtilsMessengerCreateInfoEXT debugger_settings{};
-    debugger_settings.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    debugger_settings.pNext = nullptr;
-    debugger_settings.flags = 0;
-    debugger_settings.messageSeverity =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    debugger_settings.messageType =
-        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    debugger_settings.pfnUserCallback = debug_message_processor;
-    debugger_settings.pUserData = nullptr;
+    vk::DebugUtilsMessengerCreateInfoEXT debuggerSettings;
+    debuggerSettings.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+                                       vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+                                       vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
+    debuggerSettings.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                                   vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+                                   vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+    debuggerSettings.pfnUserCallback = debug_message_processor;
+    debuggerSettings.pUserData = nullptr;
 
-    VkInstanceCreateInfo create_info = {};
-    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    create_info.pNext = &debugger_settings;
-    create_info.flags = 0;
-    create_info.pApplicationInfo = &app_info;
-    create_info.enabledLayerCount = static_cast<uint32_t>(requested_validation_layers.size());
-    create_info.ppEnabledLayerNames = requested_validation_layers.data();
-    create_info.enabledExtensionCount = static_cast<uint32_t>(requested_instance_extensions.size());
-    create_info.ppEnabledExtensionNames = requested_instance_extensions.data();
+    // convert string request to const char*
+    std::vector<const char *> req_layers;
+    for (auto &layerName : requestedValidationLayers)
+    {
+        std::cout << "\t[-] Requesting layer => " << layerName << "\n";
+        req_layers.push_back(layerName);
+    }
+    std::vector<const char *> req_inst_ext;
+    for (auto &ext : instanceExtensions)
+    {
+        std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
+        req_inst_ext.push_back(ext.c_str());
+    }
+
+    vk::InstanceCreateInfo createInfo;
+    createInfo.pNext = &debuggerSettings;
+    createInfo.pApplicationInfo = &appInfo;
+    createInfo.enabledLayerCount = static_cast<uint32_t>(req_layers.size());
+    createInfo.ppEnabledLayerNames = req_layers.data();
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
+    createInfo.ppEnabledExtensionNames = req_inst_ext.data();
 #endif
 #ifdef NDEBUG /* Debugging disabled */
-    VkInstanceCreateInfo create_info = {};
-    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0;
-    create_info.pApplicationInfo = &app_info;
-    create_info.enabledLayerCount = static_cast<uint32_t>(requested_validation_layers.size());
-    create_info.ppEnabledLayerNames = requested_validation_layers.data();
-    create_info.enabledExtensionCount = static_cast<uint32_t>(requested_instance_extensions.size());
-    create_info.ppEnabledExtensionNames = requested_instance_extensions.data();
+    std::vector<const char *> req_inst_ext;
+    for (auto &ext : instanceExtensions)
+    {
+        std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
+        req_inst_ext.push_back(ext.c_str());
+    }
+
+    vk::InstanceCreateInfo createInfo;
+    createInfo.pApplicationInfo = &appInfo;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
+    createInfo.ppEnabledExtensionNames = req_inst_ext.data();
 #endif
 
-    return vkCreateInstance(&create_info, nullptr, &m_instance);
+    instance = std::make_unique<vk::Instance>(vk::createInstance(createInfo));
+    // double check instance(prob a triple check at this point)
+    if (!*instance)
+        throw std::runtime_error("Failed to create vulkan instance");
+
+    return;
 }
 
-void mv::MWindow::create_command_buffers(void)
+void mv::Window::createCommandBuffers(void)
 {
-    command_buffers.resize(swapchain.image_count);
+    commandBuffers->resize(swapchain->buffers->size());
 
-    VkCommandBufferAllocateInfo alloc_info = mv::initializer::command_buffer_allocate_info(m_command_pool,
-                                                                                           VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                                                                           static_cast<uint32_t>(command_buffers.size()));
-    if (vkAllocateCommandBuffers(m_device, &alloc_info, command_buffers.data()) != VK_SUCCESS)
-    {
+    vk::CommandBufferAllocateInfo allocInfo;
+    allocInfo.commandPool = *commandPool;
+    allocInfo.level = vk::CommandBufferLevel::ePrimary;
+    allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers->size());
+
+    *commandBuffers = mvDevice->logicalDevice->allocateCommandBuffers(allocInfo);
+
+    if (commandBuffers->size() < 1)
         throw std::runtime_error("Failed to allocate command buffers");
+    return;
+}
+
+void mv::Window::createSynchronizationPrimitives(void)
+{
+    vk::FenceCreateInfo fenceInfo;
+    fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
+
+    waitFences->resize(swapchain->buffers->size(), nullptr);
+    inFlightFences->resize(MAX_IN_FLIGHT);
+
+    for (auto &fence : *inFlightFences)
+    {
+        fence = mvDevice->logicalDevice->createFence(fenceInfo);
     }
     return;
 }
 
-void mv::MWindow::create_synchronization_primitives(void)
+void mv::Window::setupDepthStencil(void)
 {
-    VkFenceCreateInfo fence_info = mv::initializer::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
-    wait_fences.resize(swapchain.image_count, VK_NULL_HANDLE);
+    vk::ImageCreateInfo imageInfo;
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.format = swapchain->depthFormat;
+    imageInfo.extent = vk::Extent3D{windowWidth, windowHeight, 1};
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = vk::SampleCountFlagBits::e1;
+    imageInfo.tiling = vk::ImageTiling::eOptimal;
+    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
 
-    in_flight_fences.resize(MAX_IN_FLIGHT);
-    for (auto &fence : in_flight_fences)
-    {
-        if (vkCreateFence(m_device, &fence_info, nullptr, &fence) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create in flight fence");
-        }
-    }
-    return;
-}
-
-void mv::MWindow::setup_depth_stencil(void)
-{
-    // Create depth test image
-    VkImageCreateInfo image_ci{};
-    image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_ci.imageType = VK_IMAGE_TYPE_2D;
-    image_ci.format = depth_format;
-    image_ci.extent = {window_width, window_height, 1};
-    image_ci.mipLevels = 1;
-    image_ci.arrayLayers = 1;
-    image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
-    image_ci.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    if (vkCreateImage(m_device, &image_ci, nullptr, &depth_stencil.image) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create depth stencil image");
-    }
+    // create depth stencil testing image
+    depthStencil->image = mvDevice->logicalDevice->createImage(imageInfo);
 
     // Allocate memory for image
-    VkMemoryRequirements mem_req = {};
-    vkGetImageMemoryRequirements(m_device, depth_stencil.image, &mem_req);
+    vk::MemoryRequirements memReq;
+    memReq = mvDevice->logicalDevice->getImageMemoryRequirements(depthStencil->image);
 
-    VkMemoryAllocateInfo alloc_info = {};
-    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    alloc_info.allocationSize = mem_req.size;
-    alloc_info.memoryTypeIndex = device->get_memory_type(mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vk::MemoryAllocateInfo allocInfo;
+    allocInfo.allocationSize = memReq.size;
+    allocInfo.memoryTypeIndex =
+        mvDevice->getMemoryType(memReq.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    if (vkAllocateMemory(m_device, &alloc_info, nullptr, &depth_stencil.mem) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to allocate memory for depth stencil image");
-    }
-    if (vkBindImageMemory(m_device, depth_stencil.image, depth_stencil.mem, 0) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to bind depth stencil image and memory");
-    }
+    // allocate depth stencil image memory
+    depthStencil->mem = mvDevice->logicalDevice->allocateMemory(allocInfo);
 
-    // Create view
-    VkImageViewCreateInfo iv_info = {};
-    iv_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    iv_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    iv_info.image = depth_stencil.image;
-    iv_info.format = depth_format;
-    iv_info.subresourceRange.baseMipLevel = 0;
-    iv_info.subresourceRange.levelCount = 1;
-    iv_info.subresourceRange.baseArrayLayer = 0;
-    iv_info.subresourceRange.layerCount = 1;
-    iv_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    // for stencil + depth formats
-    if (depth_format >= VK_FORMAT_D16_UNORM_S8_UINT)
+    // bind image and memory
+    mvDevice->logicalDevice->bindImageMemory(depthStencil->image, depthStencil->mem, 0);
+
+    // Create view into depth stencil testing image
+    vk::ImageViewCreateInfo viewInfo;
+    viewInfo.viewType = vk::ImageViewType::e2D;
+    viewInfo.image = depthStencil->image;
+    viewInfo.format = swapchain->depthFormat;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+
+    // if physical device supports high enough format add stenciling
+    if (swapchain->depthFormat >= vk::Format::eD16UnormS8Uint)
     {
-        iv_info.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        viewInfo.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
     }
 
-    if (vkCreateImageView(m_device, &iv_info, nullptr, &depth_stencil.view) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create depth stencil image view");
-    }
+    depthStencil->view = mvDevice->logicalDevice->createImageView(viewInfo);
     return;
 }
 
-void mv::MWindow::setup_render_pass(void)
+void mv::Window::setupRenderPass(void)
 {
-    std::array<VkAttachmentDescription, 2> attachments = {};
+    std::array<vk::AttachmentDescription, 2> coreAttachments;
     // Color attachment
-    attachments[0].format = swapchain.color_format;
-    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    coreAttachments[0].format = swapchain->colorFormat;
+    coreAttachments[0].samples = vk::SampleCountFlagBits::e1;
+    coreAttachments[0].loadOp = vk::AttachmentLoadOp::eClear;
+    coreAttachments[0].storeOp = vk::AttachmentStoreOp::eStore;
+    coreAttachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    coreAttachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    coreAttachments[0].initialLayout = vk::ImageLayout::eUndefined;
+    coreAttachments[0].finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
 
     // Depth attachment
-    attachments[1].format = depth_format;
-    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    coreAttachments[1].format = swapchain->depthFormat;
+    coreAttachments[1].samples = vk::SampleCountFlagBits::e1;
+    coreAttachments[1].loadOp = vk::AttachmentLoadOp::eClear;
+    coreAttachments[1].storeOp = vk::AttachmentStoreOp::eDontCare;
+    coreAttachments[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    coreAttachments[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    coreAttachments[1].initialLayout = vk::ImageLayout::eUndefined;
+    coreAttachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
-    VkAttachmentReference color_ref = {};
-    color_ref.attachment = 0;
-    color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    std::array<vk::AttachmentDescription, 1> guiAttachments;
 
-    VkAttachmentReference depth_ref = {};
-    depth_ref.attachment = 1;
-    depth_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    // ImGui attachment
+    guiAttachments[0].format = swapchain->colorFormat;
+    guiAttachments[0].samples = vk::SampleCountFlagBits::e1;
+    guiAttachments[0].loadOp = vk::AttachmentLoadOp::eLoad;
+    guiAttachments[0].storeOp = vk::AttachmentStoreOp::eStore;
+    guiAttachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    guiAttachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    guiAttachments[0].initialLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    guiAttachments[0].finalLayout = vk::ImageLayout::ePresentSrcKHR;
 
-    VkSubpassDescription subpass_desc = {};
-    subpass_desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass_desc.colorAttachmentCount = 1;
-    subpass_desc.pColorAttachments = &color_ref;
-    subpass_desc.pDepthStencilAttachment = &depth_ref;
-    subpass_desc.inputAttachmentCount = 0;
-    subpass_desc.pInputAttachments = nullptr;
-    subpass_desc.preserveAttachmentCount = 0;
-    subpass_desc.pPreserveAttachments = nullptr;
-    subpass_desc.pResolveAttachments = nullptr;
+    /*
+        Core render references
+    */
+    vk::AttachmentReference colorRef;
+    colorRef.attachment = 0;
+    colorRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
 
-    std::array<VkSubpassDependency, 2> dependencies = {};
-    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    vk::AttachmentReference depthRef;
+    depthRef.attachment = 1;
+    depthRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
-    dependencies[1].srcSubpass = 0;
-    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    /*
+        ImGui references
+    */
+    vk::AttachmentReference guiRef;
+    guiRef.attachment = 0;
+    guiRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
 
-    VkRenderPassCreateInfo render_pass_info = {};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-    render_pass_info.pAttachments = attachments.data();
-    render_pass_info.subpassCount = 1;
-    render_pass_info.pSubpasses = &subpass_desc;
-    render_pass_info.dependencyCount = static_cast<uint32_t>(dependencies.size());
-    render_pass_info.pDependencies = dependencies.data();
+    // color attachment and depth testing subpass
+    vk::SubpassDescription corePass;
+    corePass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
+    corePass.colorAttachmentCount = 1;
+    corePass.pColorAttachments = &colorRef;
+    corePass.pDepthStencilAttachment = &depthRef;
 
-    if (vkCreateRenderPass(m_device, &render_pass_info, nullptr, &m_render_pass) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create render pass");
-    }
+    // imgui rendering
+    vk::SubpassDescription guiPass;
+    guiPass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
+    guiPass.colorAttachmentCount = 1;
+    guiPass.pColorAttachments = &guiRef;
+
+    std::vector<vk::SubpassDescription> coreSubpasses = {corePass};
+    std::vector<vk::SubpassDescription> guiSubpasses = {guiPass};
+
+    std::array<vk::SubpassDependency, 1> coreDependencies;
+    // Color + depth subpass
+    coreDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    coreDependencies[0].dstSubpass = 0;
+    coreDependencies[0].srcStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
+    coreDependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    coreDependencies[0].srcAccessMask = vk::AccessFlagBits::eMemoryRead;
+    coreDependencies[0].dstAccessMask =
+        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
+    coreDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
+
+    std::array<vk::SubpassDependency, 1> guiDependencies;
+    // ImGui subpass
+    guiDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    guiDependencies[0].dstSubpass = 0;
+    guiDependencies[0].srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    guiDependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    guiDependencies[0].srcAccessMask =
+        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
+    guiDependencies[0].dstAccessMask =
+        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
+    guiDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
+
+    vk::RenderPassCreateInfo coreRenderPassInfo;
+    coreRenderPassInfo.attachmentCount = static_cast<uint32_t>(coreAttachments.size());
+    coreRenderPassInfo.pAttachments = coreAttachments.data();
+    coreRenderPassInfo.subpassCount = static_cast<uint32_t>(coreSubpasses.size());
+    coreRenderPassInfo.pSubpasses = coreSubpasses.data();
+    coreRenderPassInfo.dependencyCount = static_cast<uint32_t>(coreDependencies.size());
+    coreRenderPassInfo.pDependencies = coreDependencies.data();
+
+    vk::RenderPassCreateInfo guiRenderPassInfo;
+    guiRenderPassInfo.attachmentCount = static_cast<uint32_t>(guiAttachments.size());
+    guiRenderPassInfo.pAttachments = guiAttachments.data();
+    guiRenderPassInfo.subpassCount = static_cast<uint32_t>(guiSubpasses.size());
+    guiRenderPassInfo.pSubpasses = guiSubpasses.data();
+    guiRenderPassInfo.dependencyCount = static_cast<uint32_t>(guiDependencies.size());
+    guiRenderPassInfo.pDependencies = guiDependencies.data();
+
+    std::cout << "Creating render pass for core renderer...\n"
+              << "Attachments => " << coreAttachments.size() << "\n"
+              << "Subpasses => " << coreSubpasses.size() << "\n"
+              << "Dependencies => " << coreDependencies.size() << "\n";
+    vk::RenderPass tempCore = mvDevice->logicalDevice->createRenderPass(coreRenderPassInfo);
+
+    std::cout << "Creating render pass for imgui...\n"
+              << "Attachments => " << guiAttachments.size() << "\n"
+              << "Subpasses => " << guiSubpasses.size() << "\n"
+              << "Dependencies => " << guiDependencies.size() << "\n";
+    vk::RenderPass tempGui = mvDevice->logicalDevice->createRenderPass(guiRenderPassInfo);
+
+    renderPasses->insert({
+        "core",
+        std::move(tempCore),
+    });
+    renderPasses->insert({
+        "gui",
+        std::move(tempGui),
+    });
     return;
 }
 
-void mv::MWindow::create_pipeline_cache(void)
+// TODO
+// Re add call to this method
+// void mv::MWindow::create_pipeline_cache(void)
+// {
+//     vk::PipelineCacheCreateInfo pcinfo;
+//     pipeline_cache =
+//     std::make_shared<vk::PipelineCache>(mvDevice->logical_device->createPipelineCache(pcinfo));
+//     return;
+// }
+
+void mv::Window::setupFramebuffer(void)
 {
-    VkPipelineCacheCreateInfo pcinfo = {};
-    pcinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-    if (vkCreatePipelineCache(m_device, &pcinfo, nullptr, &m_pipeline_cache) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create pipeline cache");
-    }
-    return;
-}
+    // Attachments for core engine rendering
+    std::array<vk::ImageView, 2> coreAttachments;
+    // Attachment for ImGui rendering
+    std::array<vk::ImageView, 1> imguiAttachments;
 
-void mv::MWindow::setup_framebuffer(void)
-{
-    VkImageView attachments[2];
+    if (!depthStencil->view)
+        throw std::runtime_error("Depth stencil view is nullptr");
 
-    attachments[1] = depth_stencil.view;
+    // each frame buffer uses same depth image
+    coreAttachments[1] = depthStencil->view;
 
-    VkFramebufferCreateInfo framebuffer_info = {};
-    framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebuffer_info.renderPass = m_render_pass;
-    framebuffer_info.attachmentCount = 2;
-    framebuffer_info.pAttachments = attachments;
-    framebuffer_info.width = swapchain.swap_extent.width;
-    framebuffer_info.height = swapchain.swap_extent.height;
-    framebuffer_info.layers = 1;
+    // core engine render will use color attachment buffer & depth buffer
+    vk::FramebufferCreateInfo coreFrameInfo;
+    coreFrameInfo.renderPass = renderPasses->at("core");
+    coreFrameInfo.attachmentCount = static_cast<uint32_t>(coreAttachments.size());
+    coreFrameInfo.pAttachments = coreAttachments.data();
+    coreFrameInfo.width = swapchain->swapExtent.width;
+    coreFrameInfo.height = swapchain->swapExtent.height;
+    coreFrameInfo.layers = 1;
+
+    // ImGui must only have 1 attachment
+    vk::FramebufferCreateInfo guiFrameInfo;
+    guiFrameInfo.renderPass = renderPasses->at("gui");
+    guiFrameInfo.attachmentCount = static_cast<uint32_t>(imguiAttachments.size());
+    guiFrameInfo.pAttachments = imguiAttachments.data();
+    guiFrameInfo.width = swapchain->swapExtent.width;
+    guiFrameInfo.height = swapchain->swapExtent.height;
+    guiFrameInfo.layers = 1;
 
     // Framebuffer per swap image
-    frame_buffers.resize(swapchain.image_count);
-    for (size_t i = 0; i < frame_buffers.size(); i++)
+    coreFramebuffers->resize(static_cast<uint32_t>(swapchain->buffers->size()));
+    guiFramebuffers->resize(static_cast<uint32_t>(swapchain->buffers->size()));
+    for (size_t i = 0; i < coreFramebuffers->size(); i++)
     {
-        attachments[0] = swapchain.buffers[i].view;
-        if (vkCreateFramebuffer(m_device, &framebuffer_info, nullptr, &frame_buffers[i]) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create frame buffer");
-        }
+        if (!swapchain->buffers->at(i).image)
+            throw std::runtime_error("Swapchain buffer at index " + std::to_string(i) + " has nullptr image");
+        if (!swapchain->buffers->at(i).view)
+            throw std::runtime_error("Swapchain buffer at index " + std::to_string(i) + " has nullptr view");
+        // Assign each swapchain image to a frame buffer
+        coreAttachments[0] = swapchain->buffers->at(i).view;
+        imguiAttachments[0] = swapchain->buffers->at(i).view;
+
+        coreFramebuffers->at(i) = mvDevice->logicalDevice->createFramebuffer(coreFrameInfo);
+        guiFramebuffers->at(i) = mvDevice->logicalDevice->createFramebuffer(guiFrameInfo);
     }
     return;
 }
 
-void mv::MWindow::check_validation_support(void)
+void mv::Window::checkValidationSupport(void)
 {
-    uint32_t layer_count = 0;
-    if (vkEnumerateInstanceLayerProperties(&layer_count, nullptr) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to query supported instance layer count");
-    }
+    std::vector<vk::LayerProperties> enumeratedInstLayers = vk::enumerateInstanceLayerProperties();
 
-    if (layer_count == 0 && !requested_validation_layers.empty())
-    {
+    if (enumeratedInstLayers.size() == 0 && !requestedValidationLayers.empty())
         throw std::runtime_error("No supported validation layers found");
-    }
 
-    std::vector<VkLayerProperties> available_layers(layer_count);
-    if (vkEnumerateInstanceLayerProperties(&layer_count,
-                                           available_layers.data()) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to query supported instance layer list");
-    }
-
+    // look for missing requested layers
     std::string prelude = "The following instance layers were not found...\n";
     std::string failed;
-    for (const auto &requested_layer : requested_validation_layers)
+    for (const auto &reqLayerName : requestedValidationLayers)
     {
         bool match = false;
-        for (const auto &available_layer : available_layers)
+        for (const auto &layer : enumeratedInstLayers)
         {
-            if (strcmp(requested_layer, available_layer.layerName) == 0)
+            if (strcmp(reqLayerName, layer.layerName) == 0)
             {
                 match = true;
                 break;
@@ -580,11 +672,12 @@ void mv::MWindow::check_validation_support(void)
         }
         if (!match)
         {
-            failed += requested_layer;
+            failed += reqLayerName;
             failed += "\n";
         }
     }
 
+    // report missing layers if necessary
     if (!failed.empty())
     {
         throw std::runtime_error(prelude + failed);
@@ -596,73 +689,30 @@ void mv::MWindow::check_validation_support(void)
     return;
 }
 
-void mv::MWindow::destroy_command_buffers(void)
+void mv::Window::checkInstanceExt(void)
 {
-    if (!command_buffers.empty())
-    {
-        vkFreeCommandBuffers(m_device, m_command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
-        for (auto &buf : command_buffers)
-        {
-            if (buf)
-            {
-                buf = nullptr;
-            }
-        }
-    }
-    return;
-}
+    std::vector<vk::ExtensionProperties> enumeratedInstExtensions = vk::enumerateInstanceExtensionProperties();
 
-void mv::MWindow::destroy_command_pool(void)
-{
-    if (m_command_pool != nullptr)
-    {
-        vkDestroyCommandPool(m_device, m_command_pool, nullptr);
-        m_command_pool = nullptr;
-    }
-    return;
-}
-
-void mv::MWindow::check_instance_ext(void)
-{
-    uint32_t instance_extension_count = 0;
-    if (vkEnumerateInstanceExtensionProperties(nullptr,
-                                               &instance_extension_count,
-                                               nullptr) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to query instance supported extension count");
-    }
-
-    if (instance_extension_count == 0 && !requested_instance_extensions.empty())
-    {
-        throw std::runtime_error("No instance level extensions supported by device");
-    }
-
-    std::vector<VkExtensionProperties> available_instance_extensions(instance_extension_count);
-    if (vkEnumerateInstanceExtensionProperties(nullptr,
-                                               &instance_extension_count,
-                                               available_instance_extensions.data()) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to query instance supported extensions list");
-    }
+    // use f_req vector for instance extensions
+    if (enumeratedInstExtensions.size() < 1 && !requestedInstanceExtensions.empty())
+        throw std::runtime_error("No instance extensions found");
 
     std::string prelude = "The following instance extensions were not found...\n";
     std::string failed;
-    for (const auto &requested_extension : requested_instance_extensions)
+    for (const auto &reqInstExtensionName : requestedInstanceExtensions)
     {
         bool match = false;
-        for (const auto &available_extension : available_instance_extensions)
+        for (const auto &availableExtension : enumeratedInstExtensions)
         {
-            // check if match
-            if (strcmp(requested_extension, available_extension.extensionName) == 0)
+            if (strcmp(reqInstExtensionName, availableExtension.extensionName) == 0)
             {
                 match = true;
                 break;
             }
         }
-
         if (!match)
         {
-            failed += requested_extension;
+            failed += reqInstExtensionName;
             failed += "\n";
         }
     }
@@ -675,80 +725,81 @@ void mv::MWindow::check_instance_ext(void)
     return;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                                                       VkDebugUtilsMessageTypeFlagsEXT message_type,
-                                                       const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-                                                       void *user_data)
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
+                                                       [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
+                                                       const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
+                                                       [[maybe_unused]] void *p_UserData)
 {
-    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+    {
+        std::ostringstream oss;
+        oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
+            << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
+    }
+    if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
         std::ostringstream oss;
         oss << std::endl
-            << "Warning: " << callback_data->messageIdNumber
-            << ", " << callback_data->pMessageIdName << std::endl
-            << callback_data->pMessage << std::endl
-            << std::endl;
+            << "Warning: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
     }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT && 1 == 2)
+    // else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
+    // {
+    //     // Disabled by the impossible statement
+    //     std::ostringstream oss;
+    //     oss << std::endl
+    //         << "Verbose message : " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName
+    //         << std::endl
+    //         << p_CallbackData->pMessage << "\n\n";
+    //     std::cout << oss.str();
+    // }
+    else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
     {
-        // Disabled by the impossible statement
         std::ostringstream oss;
         oss << std::endl
-            << "Verbose message : " << callback_data->messageIdNumber << ", " << callback_data->pMessageIdName
-            << std::endl
-            << callback_data->pMessage << std::endl
-            << std::endl;
+            << "Error: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
     }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-    {
-        std::ostringstream oss;
-        oss << std::endl
-            << "Error: " << callback_data->messageIdNumber
-            << ", " << callback_data->pMessageIdName << std::endl
-            << callback_data->pMessage << std::endl
-            << std::endl;
-        std::cout << oss.str();
-    }
-    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
-    {
-        std::ostringstream oss;
-        oss << std::endl
-            << "Info: " << callback_data->messageIdNumber
-            << ", " << callback_data->pMessageIdName << std::endl
-            << callback_data->pMessage << std::endl
-            << std::endl;
-    }
-    return VK_FALSE;
+    // else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+    // {
+    //     std::ostringstream oss;
+    //     oss << std::endl
+    //         << "Info: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
+    //         << p_CallbackData->pMessage << "\n\n";
+    //     std::cout << oss.str();
+    // }
+    return false;
 }
 
-std::vector<char> mv::MWindow::read_file(std::string filename)
+std::vector<char> mv::Window::readFile(std::string p_Filename)
 {
-    size_t file_size;
+    size_t fileSize;
     std::ifstream file;
     std::vector<char> buffer;
 
     // check if file exists
     try
     {
-        std::filesystem::exists(filename);
-        file.open(filename, std::ios::ate | std::ios::binary);
+        std::filesystem::exists(p_Filename);
+        file.open(p_Filename, std::ios::ate | std::ios::binary);
 
         if (!file.is_open())
         {
             std::ostringstream oss;
-            oss << "Failed to open file " << filename;
+            oss << "Failed to open file " << p_Filename;
             throw std::runtime_error(oss.str());
         }
 
         // prepare buffer to hold shader bytecode
-        file_size = (size_t)file.tellg();
-        buffer.resize(file_size);
+        fileSize = (size_t)file.tellg();
+        buffer.resize(fileSize);
 
         // go back to beginning of file and read in
         file.seekg(0);
-        file.read(buffer.data(), file_size);
+        file.read(buffer.data(), fileSize);
         file.close();
     }
     catch (std::filesystem::filesystem_error &e)
@@ -776,132 +827,13 @@ std::vector<char> mv::MWindow::read_file(std::string filename)
     return buffer;
 }
 
-VkShaderModule mv::MWindow::create_shader_module(const std::vector<char> &code)
+vk::ShaderModule mv::Window::createShaderModule(const std::vector<char> &p_ShaderCharBuffer)
 {
-    VkShaderModule module;
+    vk::ShaderModuleCreateInfo moduleInfo;
+    moduleInfo.codeSize = p_ShaderCharBuffer.size();
+    moduleInfo.pCode = reinterpret_cast<const uint32_t *>(p_ShaderCharBuffer.data());
 
-    VkShaderModuleCreateInfo module_info{};
-    module_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    module_info.pNext = nullptr;
-    module_info.flags = 0;
-    module_info.codeSize = code.size();
-    module_info.pCode = reinterpret_cast<const uint32_t *>(code.data());
-
-    if (vkCreateShaderModule(m_device, &module_info, nullptr, &module) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create shader module!");
-    }
+    vk::ShaderModule module = mvDevice->logicalDevice->createShaderModule(moduleInfo);
 
     return module;
-}
-
-inline XEvent mv::MWindow::create_event(const char *event_type)
-{
-    XEvent cev;
-
-    cev.xclient.type = ClientMessage;
-    cev.xclient.window = window;
-    cev.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", true);
-    cev.xclient.format = 32;
-    cev.xclient.data.l[0] = XInternAtom(display, event_type, false);
-    cev.xclient.data.l[1] = CurrentTime;
-
-    return cev;
-}
-
-void mv::MWindow::handle_x_event(void)
-{
-    // count time for processing events
-    XNextEvent(display, &event);
-    mv::keyboard::key mv_key = mv::keyboard::key::invalid;
-    switch (event.type)
-    {
-    case LeaveNotify:
-    case FocusOut:
-        mouse->on_mouse_leave();
-        //XUngrabPointer(display, CurrentTime);
-        break;
-    case MapNotify:
-    case EnterNotify:
-        mouse->on_mouse_enter();
-        // confine cursor to interior of window
-        // mouse released on focus out or cursor leaving window
-        //XGrabPointer(display, window, 1, 0, GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
-        break;
-    case ButtonPress:
-        if (event.xbutton.button == Button1)
-        {
-            mouse->on_left_press(event.xbutton.x, event.xbutton.y);
-        }
-        else if (event.xbutton.button == Button2)
-        {
-            mouse->on_middle_press(event.xbutton.x, event.xbutton.y);
-        }
-        else if (event.xbutton.button == Button3)
-        {
-            mouse->on_right_press(event.xbutton.x, event.xbutton.y);
-        }
-        // Mouse wheel scroll up
-        else if (event.xbutton.button == Button4)
-        {
-            mouse->on_wheel_up(event.xbutton.x, event.xbutton.y);
-        }
-        // Mouse wheel scroll down
-        else if (event.xbutton.button == Button5)
-        {
-            mouse->on_wheel_down(event.xbutton.x, event.xbutton.y);
-        }
-        break;
-    case ButtonRelease:
-        if (event.xbutton.button == Button1)
-        {
-            mouse->on_left_release(event.xbutton.x, event.xbutton.y);
-        }
-        else if (event.xbutton.button == Button2)
-        {
-            mouse->on_middle_release(event.xbutton.x, event.xbutton.y);
-        }
-        else if (event.xbutton.button == Button3)
-        {
-            mouse->on_right_release(event.xbutton.x, event.xbutton.y);
-        }
-        break;
-    case KeyPress:
-        // try to convert to our mv::keyboard::key enum
-        mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
-        // check quit case
-        if (mv_key == mv::keyboard::key::escape)
-        {
-            XEvent q = create_event("WM_DELETE_WINDOW");
-            XSendEvent(display, window, false, ExposureMask, &q);
-        }
-
-        if (mv_key)
-        {
-            // send event only if not already signaled in key_states bitset
-            if (!kbd->is_keystate(mv_key))
-            {
-                kbd->on_key_press(mv_key);
-            }
-        }
-        break;
-    case KeyRelease:
-        mv_key = kbd->x11_to_mvkey(display, event.xkey.keycode);
-        if (mv_key)
-        {
-            // x11 configured to not send repeat releases with xkb method in constructor
-            // so just process it
-            kbd->on_key_release(mv_key);
-        }
-        break;
-    case Expose:
-        break;
-    case ClientMessage:
-        std::cout << "[+] Exit requested" << std::endl;
-        running = false;
-        break;
-    default: // Unhandled events do nothing
-        break;
-    } // End of switch
-    return;
 }

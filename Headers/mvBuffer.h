@@ -1,44 +1,66 @@
 #ifndef HEADERS_MVBUFFER_H_
 #define HEADERS_MVBUFFER_H_
 
-#include <vulkan/vulkan.h>
 #include <cassert>
 #include <cstring>
+#include <vulkan/vulkan.hpp>
+
+#include "mvDevice.h"
 
 namespace mv
 {
 
+    // Forward decl
+    struct Device;
     struct Buffer
     {
-        VkDevice device = nullptr;
-        VkBuffer buffer = nullptr;
-        VkDeviceMemory memory = nullptr;
-        VkDescriptorBufferInfo descriptor = {};
+        Buffer()
+        {
+            buffer = std::make_unique<vk::Buffer>();
+            memory = std::make_unique<vk::DeviceMemory>();
+        }
+        ~Buffer()
+        {
+        }
 
-        VkDeviceSize size = 0;
-        VkDeviceSize alignment = 0;
-        
-        void* mapped = nullptr;
+        Buffer(const Buffer &) = delete;
+        Buffer &operator=(const Buffer &) = delete;
 
-        VkBufferUsageFlags usage_flags = 0;
-        VkMemoryPropertyFlags memory_property_flags = 0;
+        Buffer(Buffer &&) = default;
+        Buffer &operator=(Buffer &&) = default;
 
-        VkResult map(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
-        void unmap(void);
+        // owns
+        std::unique_ptr<vk::Buffer> buffer;
+        std::unique_ptr<vk::DeviceMemory> memory;
 
-        VkResult bind(VkDeviceSize offset = 0);
+        // info structures
+        // clang-format off
+        vk::DeviceSize            size;
+        vk::DeviceSize            alignment;
+        vk::DescriptorBufferInfo  descriptor;
+        vk::BufferUsageFlags      usageFlags;
+        vk::MemoryPropertyFlags   memoryPropertyFlags;
+        void *                    mapped = nullptr;
+        // clang-format on
 
-        void setup_descriptor(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
+        void map(const mv::Device &p_MvDevice, vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE,
+                 vk::DeviceSize p_MemoryStartOffset = 0);
 
-        void copy_to(void* data, VkDeviceSize size);
+        void unmap(const mv::Device &p_MvDevice);
+
+        void bind(const mv::Device &p_MvDevice, vk::DeviceSize p_MemoryOffset = 0);
+
+        void setupDescriptor(vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE, vk::DeviceSize p_MemoryOffset = 0);
+
+        void copyFrom(void *p_SourceData, vk::DeviceSize p_MemoryCopySize);
 
         // TODO
         // flush buffer
         // invalidate buffer
 
-        void destroy(void);
+        void destroy(const mv::Device &p_MvDevice);
     };
 
-};
+}; // namespace mv
 
 #endif

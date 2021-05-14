@@ -21,6 +21,7 @@ layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec4 out_uv;
 
 void main() {
+    gl_PointSize = 2.0f;
     gl_Position = ubo_proj.mat * ubo_view.mat * ubo_obj.model * in_position;
     out_color = in_color;
     out_uv = in_uv;

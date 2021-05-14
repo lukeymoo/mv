@@ -9,7 +9,15 @@ set(CMAKE_CXX_COMPILER "clang++")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(Vulkan REQUIRED)
+find_package(X11 REQUIRED)
+
 set(HEADERS
+    Headers/imgui-1.82/imgui.h
+    Headers/imgui-1.82/backends/imgui_impl_glfw.h
+    Headers/imgui-1.82/backends/imgui_impl_vulkan.h
+    Headers/mvInput.h
+    Headers/mvWindow.h
     Headers/mvCollection.h
     Headers/mvImage.h
     Headers/mvAllocator.h
@@ -18,15 +26,20 @@ set(HEADERS
     Headers/mvModel.h
     Headers/mvBuffer.h
     Headers/mvEngine.h
-    Headers/mvInit.h
     Headers/mvSwap.h
-    Headers/mvDevice.h
-    Headers/mvKeyboard.h
-    Headers/mvMouse.h
-    Headers/mvException.h
-    Headers/mvWindow.h)
+    Headers/mvDevice.h)
 
 set(SOURCES
+    Headers/imgui-1.82/backends/imgui_impl_glfw.cpp
+    Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp
+    Headers/imgui-1.82/imgui_tables.cpp
+    Headers/imgui-1.82/imgui_widgets.cpp
+    Headers/imgui-1.82/imgui_draw.cpp
+    Headers/imgui-1.82/imgui_demo.cpp
+    Headers/imgui-1.82/imgui.cpp
+    mvCollection.cpp
+    mvAllocator.cpp
+    mvInput.cpp
     mvImage.cpp
     mvTimer.cpp
     mvCamera.cpp
@@ -35,16 +48,13 @@ set(SOURCES
     mvEngine.cpp
     mvSwap.cpp
     mvDevice.cpp
-    mvKeyboard.cpp
-    mvMouse.cpp
-    mvException.cpp
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -std=c++17 -m64 -g)
+add_compile_options(-Wall -Wextra -std=c++20 -O2 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 
-target_include_directories(main PUBLIC Headers/)
+target_include_directories(main PUBLIC Headers/ Headers/imgui-1.82/ Headers/imgui-1.82/backends/)
 
-target_link_libraries(main gcc vulkan dl X11 Xxf86vm Xrandr Xi stdc++fs assimp)
+target_link_libraries(main gcc vulkan dl stdc++fs assimp glfw)

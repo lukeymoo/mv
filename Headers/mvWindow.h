@@ -1,159 +1,150 @@
 #ifndef HEADERS_MVWINDOW_H_
 #define HEADERS_MVWINDOW_H_
 
-#include <X11/Xlib.h>
-#include <X11/XKBlib.h>
-#include <X11/XF86keysym.h>
-#include <X11/Xutil.h>
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_xlib.h>
+// clang-format off
+#include <vulkan/vulkan.hpp>
+#include <GLFW/glfw3.h>
+// clang-format on
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <string.h>
 #include <memory>
 
-#include "mvException.h"
-#include "mvWindow.h"
-#include "mvKeyboard.h"
-#include "mvMouse.h"
+#include "mvInput.h"
 #include "mvDevice.h"
 #include "mvSwap.h"
-#include "mvInit.h"
 #include "mvTimer.h"
+#include "mvWindow.h"
 
 const size_t MAX_IN_FLIGHT = 3;
-#define WINDOW_WIDTH 2560
-#define WINDOW_HEIGHT 1440
 
-const std::vector<const char *> requested_validation_layers = {
-    "VK_LAYER_KHRONOS_validation"};
+#define WINDOW_WIDTH 1920
+#define WINDOW_HEIGHT 1080
 
-const std::vector<const char *> requested_instance_extensions = {
+constexpr std::array<const char *, 1> requestedValidationLayers = {
+    "VK_LAYER_KHRONOS_validation",
+};
+
+constexpr std::array<const char *, 1> requestedInstanceExtensions = {
     "VK_EXT_debug_utils",
-    "VK_KHR_surface",
-    "VK_KHR_xlib_surface"};
+};
 
-const std::vector<const char *> requested_device_extensions = {
+constexpr std::array<const char *, 3> requestedDeviceExtensions = {
     "VK_KHR_swapchain",
-    "VK_KHR_maintenance1"};
+    "VK_KHR_maintenance1",
+    "VK_EXT_extended_dynamic_state",
+};
 
 namespace mv
 {
-    class MWindow
+    // GLFW CALLBACKS -- DEFINED IN ENGINE CPP
+    void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
+    void mouseMotionCallback(GLFWwindow *window, double xpos, double ypos);
+    void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
+    void glfwErrCallback(int error, const char *desc);
+
+    class Window
     {
-    public:
-        class Exception : public BException
-        {
-        public:
-            Exception(int line, std::string file, std::string message);
-            ~Exception(void);
+      public:
+        // delete copy operations
+        Window(const Window &) = delete;
+        Window &operator=(const Window &) = delete;
+        // delete move operations
+        Window(Window &&) = delete;
+        Window &operator=(Window &&) = delete;
 
-            std::string getType(void);
-        };
+        Window(int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle);
+        ~Window();
 
-    public:
-        MWindow(int w, int h, const char *title);
-        ~MWindow();
+        void createInstance(void);
 
-        MWindow &operator=(const MWindow &) = delete;
-        MWindow(const MWindow &) = delete;
-
-        VkResult create_instance(void);
-
+        // calls all other initialization functions
         void prepare(void);
 
-        inline XEvent create_event(const char *eventType);
-        void handle_x_event(void);
+      protected:
+        void initVulkan(void);
+        void checkValidationSupport(void);
+        void checkInstanceExt(void);
+        void createCommandBuffers(void);
+        void createSynchronizationPrimitives(void);
+        void setupDepthStencil(void);
+        void setupRenderPass(void);
+        // TODO re implement
+        // void create_pipeline_cache(void);
+        void setupFramebuffer(void);
 
-    protected:
-        bool init_vulkan(void);
-        void check_validation_support(void);
-        void check_instance_ext(void);
-        void create_command_buffers(void);
-        void create_synchronization_primitives(void);
-        void setup_depth_stencil(void);
-        void setup_render_pass(void);
-        void create_pipeline_cache(void);
-        void setup_framebuffer(void);
+        std::vector<char> readFile(std::string p_Filename);
+        vk::ShaderModule createShaderModule(const std::vector<char> &p_ShaderCharBuffer);
 
-        void destroy_command_buffers(void);
-        void destroy_command_pool(void);
-        void cleanup_depth_stencil(void);
-
-    public:
+      public:
         Timer timer;
         Timer fps;
-        VkClearColorValue default_clear_color = {{0.0f, 0.0f, 0.0f, 1.0f}};
         bool good_init = true;
+        vk::ClearColorValue defaultClearColor = std::array<float, 4>({{0.0f, 0.0f, 0.0f, 1.0f}});
 
-        std::unique_ptr<mv::keyboard> kbd;
-        std::unique_ptr<mv::mouse> mouse;
+        // handlers
+        Mouse mouse;
+        Keyboard keyboard;
+        std::unique_ptr<mv::Device> mvDevice;
 
-        mv::Device *device;
+      protected:
+        // Instance/Device extension functions -- must be loaded
+        PFN_vkCmdSetPrimitiveTopologyEXT pfn_vkCmdSetPrimitiveTopology;
 
-    protected: // Graphics
-        Display *display;
-        Window window;
-        XEvent event;
+        // Glfw
+        GLFWwindow *window = nullptr;
+        std::string title;
+        uint32_t windowWidth = 0;
+        uint32_t windowHeight = 0;
 
-        int screen;
-        bool running = true;
+        // Final list of extensions/layers
+        std::vector<std::string> instanceExtensions;
 
-        uint32_t window_width = 0;
-        uint32_t window_height = 0;
+        // owns
+        std::unique_ptr<vk::Instance> instance;
+        std::unique_ptr<vk::PhysicalDevice> physicalDevice;
+        std::unique_ptr<vk::CommandPool> commandPool;
+        std::unique_ptr<std::unordered_map<std::string, vk::RenderPass>> renderPasses;
 
-        VkInstance m_instance = nullptr;
-        VkPhysicalDevice m_physical_device = nullptr;
-        VkDevice m_device = nullptr;
-        VkQueue m_graphics_queue = nullptr;
-        VkCommandPool m_command_pool = nullptr;
-        VkRenderPass m_render_pass = nullptr;
-        VkPipelineCache m_pipeline_cache = nullptr;
+        std::unique_ptr<mv::Swap> swapchain;
 
-        Swap swapchain;
+        std::unique_ptr<std::vector<vk::CommandBuffer>> commandBuffers;
+        std::unique_ptr<std::vector<vk::Framebuffer>> coreFramebuffers; // core engine frame buffers
+        std::unique_ptr<std::vector<vk::Framebuffer>> guiFramebuffers;  // ImGui frame buffers
+        std::unique_ptr<std::vector<vk::Fence>> inFlightFences;
+        std::unique_ptr<std::vector<vk::Fence>> waitFences; // not allocated
 
-        std::vector<VkCommandBuffer> command_buffers;
-        std::vector<VkFramebuffer> frame_buffers;
-        std::vector<VkFence> wait_fences;
-        std::vector<VkFence> in_flight_fences;
-
-        VkSubmitInfo submit_info = {};
-
-        VkFormat depth_format{};
-        VkPhysicalDeviceFeatures features = {};
-        VkPhysicalDeviceProperties properties = {};
-        VkPhysicalDeviceMemoryProperties memory_properties = {};
-        VkPipelineStageFlags stage_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-        struct
+        struct SemaphoresStruct
         {
-            VkSemaphore present_complete;
-            VkSemaphore render_complete;
-        } semaphores;
+            vk::Semaphore presentComplete;
+            vk::Semaphore renderComplete;
+        };
+        std::unique_ptr<struct SemaphoresStruct> semaphores;
 
-        struct
+        struct DepthStencilStruct
         {
-            VkImage image = nullptr;
-            VkDeviceMemory mem = nullptr;
-            VkImageView view = nullptr;
-        } depth_stencil;
+            vk::Image image;
+            vk::DeviceMemory mem;
+            vk::ImageView view;
+        };
+        std::unique_ptr<struct DepthStencilStruct> depthStencil;
 
-        std::vector<char> read_file(std::string filename);
-        VkShaderModule create_shader_module(const std::vector<char> &code);
+        // clang-format off
+        // info structures
+        // vk::Format                          depthFormat;
+        vk::PipelineStageFlags              stageFlags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+        vk::PhysicalDeviceFeatures          physicalFeatures;
+        vk::PhysicalDeviceProperties        physicalProperties;
+        vk::PhysicalDeviceMemoryProperties  physicalMemoryProperties;
+        // clang-format on
+    }; // end window
 
-    private:
-    };
-};
+}; // end namespace mv
 
 VKAPI_ATTR
-VkBool32
-    VKAPI_CALL
-    debug_message_processor(
-        VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-        VkDebugUtilsMessageTypeFlagsEXT message_type,
-        const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-        void *user_data);
+VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+                                            VkDebugUtilsMessageTypeFlagsEXT message_type,
+                                            const VkDebugUtilsMessengerCallbackDataEXT *callback_data, void *user_data);
 
 #endif

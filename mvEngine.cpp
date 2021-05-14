@@ -1,352 +1,462 @@
 #include "mvEngine.h"
 
-mv::Engine::Engine(int w, int h, const char *title)
-    : MWindow(w, h, title)
+mv::Engine::Engine(int w, int h, const char *title) : Window(w, h, title)
 {
+    pipelines = std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
+    pipelineLayouts = std::make_unique<std::unordered_map<std::string, vk::PipelineLayout>>();
+    renderPasses = std::make_unique<std::unordered_map<std::string, vk::RenderPass>>();
     return;
 }
 
-void mv::Engine::cleanup_swapchain(void)
+mv::Engine::~Engine()
+{
+    if (!mvDevice)
+        return;
+
+    mvDevice->logicalDevice->waitIdle();
+
+    if (pipelines)
+    {
+        for (auto &pipeline : *pipelines)
+        {
+            if (pipeline.second)
+                mvDevice->logicalDevice->destroyPipeline(pipeline.second);
+        }
+        pipelines.reset();
+    }
+
+    if (pipelineLayouts)
+    {
+        for (auto &layout : *pipelineLayouts)
+        {
+            if (layout.second)
+                mvDevice->logicalDevice->destroyPipelineLayout(layout.second);
+        }
+        pipelineLayouts.reset();
+    }
+
+    /*
+      DEBUGGING CLEANUP
+    */
+    if (reticleMesh.vertexBuffer)
+    {
+        mvDevice->logicalDevice->destroyBuffer(reticleMesh.vertexBuffer);
+        mvDevice->logicalDevice->freeMemory(reticleMesh.vertexMemory);
+    }
+    if (reticleObj.uniformBuffer.buffer)
+    {
+        reticleObj.uniformBuffer.destroy(*mvDevice);
+    }
+
+    // collection struct will handle cleanup of models & objs
+    if (collectionHandler)
+    {
+        collectionHandler->cleanup(*mvDevice, *descriptorAllocator);
+    }
+}
+
+void mv::Engine::cleanupSwapchain(void)
 {
     // destroy command buffers
-    destroy_command_buffers();
-    // destroy framebuffers
-    if (!frame_buffers.empty())
+    if (commandBuffers)
     {
-        for (size_t i = 0; i < frame_buffers.size(); i++)
+        if (!commandBuffers->empty())
         {
-            if (frame_buffers[i])
+            mvDevice->logicalDevice->freeCommandBuffers(*commandPool, *commandBuffers);
+        }
+        commandBuffers.reset();
+        commandBuffers = std::make_unique<std::vector<vk::CommandBuffer>>();
+    }
+
+    // destroy framebuffers
+    if (coreFramebuffers)
+    {
+        if (!coreFramebuffers->empty())
+        {
+            for (auto &buffer : *coreFramebuffers)
             {
-                vkDestroyFramebuffer(m_device, frame_buffers[i], nullptr);
-                frame_buffers[i] = nullptr;
+                if (buffer)
+                    mvDevice->logicalDevice->destroyFramebuffer(buffer, nullptr);
             }
+            coreFramebuffers.reset();
+            coreFramebuffers = std::make_unique<std::vector<vk::Framebuffer>>();
         }
     }
 
-    cleanup_depth_stencil();
+    if (guiFramebuffers)
+    {
+        if (!guiFramebuffers->empty())
+        {
+            for (auto &buffer : *guiFramebuffers)
+            {
+                if (buffer)
+                    mvDevice->logicalDevice->destroyFramebuffer(buffer, nullptr);
+            }
+            guiFramebuffers.reset();
+            guiFramebuffers = std::make_unique<std::vector<vk::Framebuffer>>();
+        }
+    }
+
+    if (depthStencil)
+    {
+        if (depthStencil->image)
+        {
+            mvDevice->logicalDevice->destroyImage(depthStencil->image, nullptr);
+        }
+        if (depthStencil->view)
+        {
+            mvDevice->logicalDevice->destroyImageView(depthStencil->view, nullptr);
+        }
+        if (depthStencil->mem)
+        {
+            mvDevice->logicalDevice->freeMemory(depthStencil->mem, nullptr);
+        }
+        depthStencil.reset();
+        depthStencil = std::make_unique<struct mv::Window::DepthStencilStruct>();
+    }
 
     // destroy pipelines
-    if (pipeline_w_sampler)
+    if (pipelines)
     {
-        vkDestroyPipeline(m_device, pipeline_w_sampler, nullptr);
-        pipeline_w_sampler = nullptr;
-    }
-    if (pipeline_no_sampler)
-    {
-        vkDestroyPipeline(m_device, pipeline_no_sampler, nullptr);
-        pipeline_no_sampler = nullptr;
-    }
-
-    // pipeline cache
-    if (m_pipeline_cache)
-    {
-        vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
-        m_pipeline_cache = nullptr;
+        for (auto &pipeline : *pipelines)
+        {
+            if (pipeline.second)
+                mvDevice->logicalDevice->destroyPipeline(pipeline.second);
+        }
+        pipelines.reset();
+        pipelines = std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
     }
 
-    // pipeline layouts
-    if (pipeline_layout_w_sampler)
+    // destroy pipeline layouts
+    if (pipelineLayouts)
     {
-        vkDestroyPipelineLayout(m_device, pipeline_layout_w_sampler, nullptr);
-        pipeline_layout_w_sampler = nullptr;
-    }
-    if (pipeline_layout_no_sampler)
-    {
-        vkDestroyPipelineLayout(m_device, pipeline_layout_no_sampler, nullptr);
-        pipeline_layout_no_sampler = nullptr;
+        for (auto &layout : *pipelineLayouts)
+        {
+            if (layout.second)
+                mvDevice->logicalDevice->destroyPipelineLayout(layout.second);
+        }
+        pipelineLayouts.reset();
+        pipelineLayouts = std::make_unique<std::unordered_map<std::string, vk::PipelineLayout>>();
     }
 
     // destroy render pass
-    if (m_render_pass)
+    if (renderPasses)
     {
-        vkDestroyRenderPass(m_device, m_render_pass, nullptr);
-        m_render_pass = nullptr;
+        for (auto &pass : *renderPasses)
+        {
+            if (pass.second)
+                mvDevice->logicalDevice->destroyRenderPass(pass.second, nullptr);
+        }
+        renderPasses.reset();
+        renderPasses = std::make_unique<std::unordered_map<std::string, vk::RenderPass>>();
     }
-    // descriptors pool
-    // if (descriptor_pool)
-    // {
-    //     vkDestroyDescriptorPool(m_device, descriptor_pool, nullptr);
-    //     descriptor_pool = nullptr;
-    // }
+
     // cleanup command pool
-    if (m_command_pool)
+    if (commandPool)
     {
-        vkDestroyCommandPool(m_device, m_command_pool, nullptr);
-        m_command_pool = nullptr;
+        mvDevice->logicalDevice->destroyCommandPool(*commandPool);
+        commandPool.reset();
+        commandPool = std::make_unique<vk::CommandPool>();
     }
 
     // cleanup swapchain
-    swapchain.cleanup(false);
+    swapchain->cleanup(*instance, *mvDevice, false);
 
     return;
 }
 
 // Allows swapchain to keep up with window resize
-void mv::Engine::recreate_swapchain(void)
+void mv::Engine::recreateSwapchain(void)
 {
     std::cout << "[+] recreating swapchain" << std::endl;
-    vkDeviceWaitIdle(m_device);
+
+    if (!mvDevice)
+        throw std::runtime_error("mv device handler is somehow null, tried to recreate swap chain :: "
+                                 "main");
+
+    mvDevice->logicalDevice->waitIdle();
 
     // Cleanup
-    cleanup_swapchain();
+    cleanupSwapchain();
 
-    m_command_pool = device->create_command_pool(swapchain.queue_index);
+    *commandPool = mvDevice->createCommandPool(mvDevice->queueIdx.graphics);
 
     // create swapchain
-    swapchain.create(&window_width, &window_height);
-
-    // call after swapchain creation!!!
-    // needed for mouse delta calc when using from_center method
-    mouse->set_window_properties(window_width, window_height);
+    swapchain->create(*physicalDevice, *mvDevice, windowWidth, windowHeight);
 
     // create render pass
-    setup_render_pass();
+    setupRenderPass();
 
-    // create pipeline cache
-    create_pipeline_cache();
-
-    setup_depth_stencil();
+    setupDepthStencil();
 
     // create pipeline layout
     // create pipeline
-    prepare_pipeline();
+    preparePipeline();
     // create framebuffers
-    setup_framebuffer();
+    setupFramebuffer();
     // create command buffers
-    create_command_buffers();
+    createCommandBuffers();
 }
 
 void mv::Engine::go(void)
 {
-    std::cout << "[+] Preparing vulkan" << std::endl;
+    std::cout << "[+] Preparing vulkan\n";
     prepare();
 
-    // Create descriptor pool allocator
-    descriptor_allocator = std::make_shared<Allocator>(device);
+    // setup descriptor allocator, collection handler & camera
+    // load models & create objects here
+    goSetup();
 
-    // allocate pool
-    descriptor_allocator->allocate_pool(2000);
+    /*
+      Hard coding settings
+    */
+    camera->zoomLevel = 5.0f;
+    mouse.deltaStyle = Mouse::DeltaStyles::eFromLastPosition;
+    mouse.isDragging = false;
 
-    // create uniform buffer layout ( single mat4 object )
-    descriptor_allocator->create_layout("uniform_layout",
-                                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                                        1,
-                                        VK_SHADER_STAGE_VERTEX_BIT,
-                                        0);
-
-    // create texture sampler layout
-    descriptor_allocator->create_layout("sampler_layout",
-                                        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                        1,
-                                        VK_SHADER_STAGE_FRAGMENT_BIT,
-                                        0);
-
-    // initialize model/object container
-    // constructor by default creates `uniform_layout` for use with view & projection matrix buffers
-    collection_handler = std::make_unique<Collection>(device, descriptor_allocator);
-
-    // Load model
-    collection_handler->load_model("models/_viking_room.fbx");
-    collection_handler->load_model("models/Male.obj");
-
-    // Create object
-    collection_handler->create_object("models/_viking_room.fbx");
-    collection_handler->models[0].objects[0]->position = glm::vec3(0.0f, 0.0f, -5.0f);
-    collection_handler->models[0].objects[0]->rotation = glm::vec3(0.0f, 90.0f, 0.0f);
-
-    collection_handler->create_object("models/Male.obj");
-    collection_handler->models[1].objects[0]->rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-    collection_handler->models[1].objects[0]->position = glm::vec3(0.0f, 0.0f, 0.0f);
-
-    // configure camera before uniform buffer creation
-    camera_init_struct camera_params;
-    camera_params.fov = 40.0f * ((float)swapchain.swap_extent.width / swapchain.swap_extent.height);
-    camera_params.aspect = static_cast<float>(((float)swapchain.swap_extent.height / (float)swapchain.swap_extent.height));
-    camera_params.nearz = 0.01f;
-    camera_params.farz = 200.0f;
-    camera_params.position = glm::vec3(0.0f, 3.0f, -7.0f);
-    camera_params.view_uniform_object = &collection_handler->view_uniform;
-    camera_params.projection_uniform_object = &collection_handler->projection_uniform;
-
-    camera_params.camera_type = Camera::camera_type::third_person;
-    camera_params.target = collection_handler->models.at(1).objects.at(0).get();
-
-    camera = std::make_unique<Camera>(camera_params);
-
-    if (camera->type == Camera::camera_type::first_person || Camera::camera_type::free_look)
-    {
-        mouse->set_delta_style(mouse::delta_calc_style::from_center);
-    }
-    else
-    {
-        mouse->set_delta_style(mouse::delta_calc_style::from_last);
-    }
-
-    prepare_pipeline();
+    preparePipeline();
 
     // basic check
     assert(camera);
-    assert(collection_handler);
-    assert(descriptor_allocator);
+    assert(collectionHandler);
+    assert(descriptorAllocator);
 
-    uint32_t image_index = 0;
-    size_t current_frame = 0;
+    uint32_t imageIndex = 0;
+    size_t currentFrame = 0;
 
     bool added = false;
 
+    [[maybe_unused]] int mouseCenterx = (swapchain->swapExtent.width / 2) + 50;
+    [[maybe_unused]] int mouseCentery = (swapchain->swapExtent.height / 2) - 100;
+
     fps.startTimer();
-    __attribute__((unused)) int fps_counter = 0;
+    [[maybe_unused]] int fpsCounter = 0;
 
     using chrono = std::chrono::high_resolution_clock;
 
     constexpr std::chrono::nanoseconds timestep(16ms);
 
     std::chrono::nanoseconds accumulated(0ns);
-    auto start_time = chrono::now();
-    while (running)
-    {
-        auto delta_time = chrono::now() - start_time;
-        start_time = chrono::now();
-        accumulated += std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time);
+    auto startTime = chrono::now();
 
-        while (XPending(display))
-        {
-            handle_x_event();
-        }
+    /*
+      IMGUI Params
+    */
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+
+    ImGui::StyleColorsDark();
+
+    bool helloWorldActive = true;
+
+    ImGui_ImplVulkan_InitInfo initInfo{
+        .Instance = *instance,
+        .PhysicalDevice = *physicalDevice,
+        .Device = *mvDevice->logicalDevice,
+        .QueueFamily = mvDevice->queueIdx.graphics,
+        .Queue = *mvDevice->graphicsQueue,
+        .PipelineCache = nullptr,
+        .DescriptorPool = descriptorAllocator->get()->pool,
+        .MinImageCount = static_cast<uint32_t>(swapchain->buffers->size()),
+        .ImageCount = static_cast<uint32_t>(swapchain->buffers->size()),
+        .Allocator = nullptr,
+        .CheckVkResultFn = nullptr,
+    };
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+    ImGui_ImplVulkan_Init(&initInfo, renderPasses->at("gui"));
+
+    /*
+      Upload ImGui render fonts
+    */
+    {
+        vk::CommandBuffer guiFont = Engine::beginCommandBuffer();
+
+        ImGui_ImplVulkan_CreateFontsTexture(guiFont);
+
+        Engine::endCommandBuffer(guiFont);
+
+        ImGui_ImplVulkan_DestroyFontUploadObjects();
+    }
+
+    while (!glfwWindowShouldClose(window))
+    {
+        auto deltaTime = chrono::now() - startTime;
+        startTime = chrono::now();
+        accumulated += std::chrono::duration_cast<std::chrono::nanoseconds>(deltaTime);
+
+        glfwPollEvents();
 
         while (accumulated >= timestep)
         {
             accumulated -= timestep;
 
-            mouse->query_pointer();
-
             // Get input events
-            mv::keyboard::event kbd_event = kbd->read();
-            mv::mouse::event mouse_event = mouse->read();
+            mv::Keyboard::Event kbdEvent = keyboard.read();
+            mv::Mouse::Event mouseEvent = mouse.read();
 
-            if (camera->type == Camera::camera_type::third_person)
+            if (camera->type == CameraType::eThirdPerson)
             {
-                // handle mouse scroll wheel
-                if (mouse_event.type == mouse::event::etype::wheel_up)
-                {
-                    camera->adjust_zoom(-(camera->zoom_step));
-                }
-                if (mouse_event.type == mouse::event::etype::wheel_down)
-                {
-                    camera->adjust_zoom(camera->zoom_step);
-                }
 
-                // start mouse drag
-                if (mouse_event.type == mv::mouse::event::etype::r_down &&
-                    !mouse->is_dragging)
+                /*
+                  Mouse scroll wheel
+                */
+                // if (mouse_event.type == mouse.event::etype::wheel_up) {
+                //   camera->adjust_zoom(-(camera->zoom_step));
+                // }
+                // if (mouse_event.type == mouse.event::etype::wheel_down) {
+                //   camera->adjust_zoom(camera->zoom_step);
+                // }
+
+                /*
+                  Start & Stop mouse drag
+                */
+                if (mouseEvent.type == Mouse::Event::Type::eRightDown)
                 {
-                    mouse->start_drag(camera->orbit_angle);
-                }
-                // end drag
-                if (mouse_event.type == mv::mouse::event::etype::r_release &&
-                    mouse->is_dragging)
-                {
-                    camera->realign_orbit();
-                    mouse->end_drag();
+                    if (mouse.isDragging)
+                    {
+                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                        mouse.endDrag();
+                    }
+                    else
+                    {
+                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                        mouse.startDrag(camera->orbitAngle, camera->pitch);
+                    }
                 }
 
                 // if drag enabled check for release
-                if (mouse->is_dragging)
+                if (mouse.isDragging)
                 {
-                    if (mouse->drag_delta_x > 0)
+                    // camera orbit
+                    if (mouse.dragDeltaX > 0)
                     {
-                        camera->adjust_orbit(-abs(mouse->drag_delta_x), mouse->stored_value);
+                        camera->lerpOrbit(-abs(mouse.dragDeltaX));
                     }
-                    else if (mouse->drag_delta_x < 0)
+                    else if (mouse.dragDeltaX < 0)
                     {
-                        camera->adjust_orbit(abs(mouse->drag_delta_x), mouse->stored_value);
+                        camera->adjustOrbit(abs(mouse.dragDeltaX));
+                        camera->lerpOrbit(abs(mouse.dragDeltaX));
                     }
-                    // fetch new orbit
-                    mouse->stored_value = camera->orbit_angle;
-                    // hide pointer & warp to drag start
-                    XWarpPointer(display, None, window, 0, 0, 0, 0, mouse->drag_startx, mouse->drag_starty);
-                    XFlush(display);
-                    camera->target->rotate_to_face(camera->orbit_angle);
+
+                    // camera pitch
+                    if (mouse.dragDeltaY > 0)
+                    {
+                        camera->lerpPitch(abs(mouse.dragDeltaY));
+                    }
+                    else if (mouse.dragDeltaY < 0)
+                    {
+                        camera->lerpPitch(-abs(mouse.dragDeltaY));
+                    }
+
+                    camera->target->rotateToAngle(camera->orbitAngle);
+
+                    mouse.storedOrbit = camera->orbitAngle;
+                    mouse.storedPitch = camera->pitch;
+                    mouse.clear();
                 }
+
+                /*
+                  DEBUGGING CONTROLS
+                */
+
+                // PRINT OUT CAMERA STATE TO CONSOLE
+                if (kbdEvent.type == Keyboard::Event::ePress && kbdEvent.code == GLFW_KEY_LEFT_CONTROL)
+                {
+                    std::cout << "Mouse data\n";
+                    std::cout << "Orbit => " << camera->orbitAngle << "\n";
+                    std::cout << "Pitch => " << camera->pitch << "\n";
+                    std::cout << "Zoom level => " << camera->zoomLevel << "\n";
+                }
+
+                // TOGGLE RENDER PLAYER AIM RAYCAST
+                if (kbdEvent.type == Keyboard::Event::ePress && kbdEvent.code == GLFW_KEY_LEFT_ALT)
+                {
+                    toRenderMap.at("reticle_raycast") = !toRenderMap.at("reticle_raycast");
+                    std::cout << "Render player aiming raycast => " << toRenderMap.at("reticle_raycast") << "\n";
+                }
+
+                /*
+                  END DEBUGGING CONTROLS
+                */
 
                 // sort movement by key combination
 
                 // forward only
-                if (kbd->is_keystate(mv::keyboard::key::w) &&
-                    !kbd->is_keystate(mv::keyboard::key::d) &&
-                    !kbd->is_keystate(mv::keyboard::key::a) &&
-                    !kbd->is_keystate(mv::keyboard::key::s))
+                if (keyboard.isKeyState(GLFW_KEY_W) && !keyboard.isKeyState(GLFW_KEY_S) &&
+                    !keyboard.isKeyState(GLFW_KEY_A) && !keyboard.isKeyState(GLFW_KEY_D))
                 {
-                    camera->target->move(camera->orbit_angle, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
+                    camera->target->move(camera->orbitAngle, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
+                }
+
+                // forward + left + right -- go straight
+                if (keyboard.isKeyState(GLFW_KEY_W) && !keyboard.isKeyState(GLFW_KEY_S) &&
+                    keyboard.isKeyState(GLFW_KEY_A) && keyboard.isKeyState(GLFW_KEY_D))
+                {
+                    camera->target->move(camera->orbitAngle, glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
                 }
 
                 // forward + right
-                if (kbd->is_keystate(mv::keyboard::key::w) &&
-                    kbd->is_keystate(mv::keyboard::key::d) &&
-                    !kbd->is_keystate(mv::keyboard::key::a) &&
-                    !kbd->is_keystate(mv::keyboard::key::s))
+                if (keyboard.isKeyState(GLFW_KEY_W) && !keyboard.isKeyState(GLFW_KEY_S) &&
+                    !keyboard.isKeyState(GLFW_KEY_A) && keyboard.isKeyState(GLFW_KEY_D))
                 {
-                    camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, -1.0f, 1.0f));
+                    camera->target->move(camera->orbitAngle, glm::vec4(1.0f, 0.0f, -1.0f, 1.0f));
                 }
 
                 // forward + left
-                if (kbd->is_keystate(mv::keyboard::key::w) &&
-                    !kbd->is_keystate(mv::keyboard::key::d) &&
-                    kbd->is_keystate(mv::keyboard::key::a) &&
-                    !kbd->is_keystate(mv::keyboard::key::s))
+                if (keyboard.isKeyState(GLFW_KEY_W) && !keyboard.isKeyState(GLFW_KEY_S) &&
+                    keyboard.isKeyState(GLFW_KEY_A) && !keyboard.isKeyState(GLFW_KEY_D))
                 {
-                    camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, -1.0f, 1.0f));
+                    camera->target->move(camera->orbitAngle, glm::vec4(-1.0f, 0.0f, -1.0f, 1.0f));
                 }
 
                 // backward only
-                if (!kbd->is_keystate(mv::keyboard::key::w) &&
-                    !kbd->is_keystate(mv::keyboard::key::d) &&
-                    !kbd->is_keystate(mv::keyboard::key::a) &&
-                    kbd->is_keystate(mv::keyboard::key::s))
+                if (!keyboard.isKeyState(GLFW_KEY_W) && keyboard.isKeyState(GLFW_KEY_S) &&
+                    !keyboard.isKeyState(GLFW_KEY_A) && !keyboard.isKeyState(GLFW_KEY_D))
                 {
-                    camera->target->move(camera->orbit_angle, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+                    camera->target->move(camera->orbitAngle, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
                 }
 
                 // backward + left
-                if (!kbd->is_keystate(mv::keyboard::key::w) &&
-                    !kbd->is_keystate(mv::keyboard::key::d) &&
-                    kbd->is_keystate(mv::keyboard::key::a) &&
-                    kbd->is_keystate(mv::keyboard::key::s))
+                if (!keyboard.isKeyState(GLFW_KEY_W) && keyboard.isKeyState(GLFW_KEY_S) &&
+                    keyboard.isKeyState(GLFW_KEY_A) && !keyboard.isKeyState(GLFW_KEY_D))
                 {
-                    camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, 1.0f, 1.0f));
+                    camera->target->move(camera->orbitAngle, glm::vec4(-1.0f, 0.0f, 1.0f, 1.0f));
                 }
 
                 // backward + right
-                if (!kbd->is_keystate(mv::keyboard::key::w) &&
-                    kbd->is_keystate(mv::keyboard::key::d) &&
-                    !kbd->is_keystate(mv::keyboard::key::a) &&
-                    kbd->is_keystate(mv::keyboard::key::s))
+                if (!keyboard.isKeyState(GLFW_KEY_W) && keyboard.isKeyState(GLFW_KEY_S) &&
+                    !keyboard.isKeyState(GLFW_KEY_A) && keyboard.isKeyState(GLFW_KEY_D))
                 {
-                    camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                    camera->target->move(camera->orbitAngle, glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+                }
+
+                // backward + left + right -- go back
+                if (!keyboard.isKeyState(GLFW_KEY_W) && keyboard.isKeyState(GLFW_KEY_S) &&
+                    keyboard.isKeyState(GLFW_KEY_A) && keyboard.isKeyState(GLFW_KEY_D))
+                {
+                    camera->target->move(camera->orbitAngle, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
                 }
 
                 // left only
-                if (!kbd->is_keystate(mv::keyboard::key::w) &&
-                    !kbd->is_keystate(mv::keyboard::key::d) &&
-                    kbd->is_keystate(mv::keyboard::key::a) &&
-                    !kbd->is_keystate(mv::keyboard::key::s))
+                if (!keyboard.isKeyState(GLFW_KEY_W) && !keyboard.isKeyState(GLFW_KEY_S) &&
+                    keyboard.isKeyState(GLFW_KEY_A) && !keyboard.isKeyState(GLFW_KEY_D))
                 {
-                    camera->target->move(camera->orbit_angle, glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f));
+                    camera->target->move(camera->orbitAngle, glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f));
                 }
 
                 // right only
-                if (!kbd->is_keystate(mv::keyboard::key::w) &&
-                    kbd->is_keystate(mv::keyboard::key::d) &&
-                    !kbd->is_keystate(mv::keyboard::key::a) &&
-                    !kbd->is_keystate(mv::keyboard::key::s))
+                if (!keyboard.isKeyState(GLFW_KEY_W) && !keyboard.isKeyState(GLFW_KEY_S) &&
+                    !keyboard.isKeyState(GLFW_KEY_A) && keyboard.isKeyState(GLFW_KEY_D))
                 {
-                    camera->target->move(camera->orbit_angle, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+                    camera->target->move(camera->orbitAngle, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
                 }
 
                 // debug -- add new objects to world with random position
-                if (kbd->is_keystate(mv::keyboard::key::space) && added == false)
+                if (keyboard.isKeyState(GLFW_KEY_SPACE) && added == false)
                 {
-                    //added = true;
+                    // added = true;
                     int min = 0;
                     int max = 90;
                     int z_max = 60;
@@ -359,392 +469,743 @@ void mv::Engine::go(void)
                     float x = xy_distr(eng);
                     float y = xy_distr(eng);
                     float z = z_distr(eng);
-                    collection_handler->create_object("models/_viking_room.fbx");
-                    collection_handler->models.at(0).objects.back()->position =
-                        glm::vec3(x, y, z);
+                    collectionHandler->createObject(*mvDevice, *descriptorAllocator, "models/_viking_room.fbx");
+                    collectionHandler->models->at(0).objects->back().position = glm::vec3(x, y, z);
                 }
             }
             // update game objects
-            collection_handler->update();
+            collectionHandler->update();
 
             // update view and projection matrices
             camera->update();
+
+            /*
+              Update ray cast vertices
+            */
+            // int min = 0;
+            // int max = 90;
+            // int z_max = 60;
+
+            // std::random_device rd;
+            // std::default_random_engine eng(rd());
+            // std::uniform_int_distribution<int> xy_distr(min, max);
+            // std::uniform_int_distribution<int> z_distr(min, z_max);
+
+            // float x = xy_distr(eng);
+            // float y = xy_distr(eng);
+            // float z = z_distr(eng);
+            // raycast_p1(*this, {x, y, z});
+            raycastP2(*this, {collectionHandler->models->at(1).objects->at(0).position.x,
+                              collectionHandler->models->at(1).objects->at(0).position.y - 1.5f,
+                              collectionHandler->models->at(1).objects->at(0).position.z});
         }
 
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // Render imgui
+        if (helloWorldActive)
+            ImGui::ShowDemoWindow(&helloWorldActive);
+
+        ImGui::Render();
+
+        // TODO
+        // Add alpha to render
         // Render
-        draw(current_frame, image_index);
+        draw(currentFrame, imageIndex);
     }
-    int total_object_count = 0;
-    for (const auto &model : collection_handler->models)
+
+    // Wait for ImGui pipeline
+    mvDevice->logicalDevice->waitIdle();
+
+    // Cleanup IMGUI
+    ImGui_ImplVulkan_Shutdown();
+    ImGui::DestroyContext();
+
+    int totalObjectCount = 0;
+    for (const auto &model : *collectionHandler->models)
     {
-        total_object_count += model.objects.size();
+        totalObjectCount += model.objects->size();
     }
-    std::cout << "Total objects => " << total_object_count << std::endl;
+    std::cout << "Total objects => " << totalObjectCount << std::endl;
     return;
 }
 
-void mv::Engine::create_descriptor_layout(VkDescriptorType type, uint32_t count, VkPipelineStageFlags stage_flags, uint32_t binding, VkDescriptorSetLayout &layout)
+/*
+  Creation of all the graphics pipelines
+*/
+void mv::Engine::preparePipeline(void)
 {
-    VkDescriptorSetLayoutBinding bind_info = {};
-    bind_info.binding = binding;
-    bind_info.descriptorType = type;
-    bind_info.descriptorCount = count;
-    bind_info.stageFlags = stage_flags;
+    vk::DescriptorSetLayout uniformLayout = descriptorAllocator->getLayout("uniform_layout");
+    vk::DescriptorSetLayout samplerLayout = descriptorAllocator->getLayout("sampler_layout");
 
-    VkDescriptorSetLayoutCreateInfo layout_info = {};
-    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layout_info.bindingCount = 1;
-    layout_info.pBindings = &bind_info;
+    std::vector<vk::DescriptorSetLayout> layoutWSampler = {
+        uniformLayout,
+        uniformLayout,
+        uniformLayout,
+        samplerLayout,
+    };
+    std::vector<vk::DescriptorSetLayout> layoutNoSampler = {
+        uniformLayout,
+        uniformLayout,
+        uniformLayout,
+    };
 
-    // layout for model matrix
-    if (vkCreateDescriptorSetLayout(device->device, &layout_info, nullptr, &layout) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create descriptor set layout");
-    }
-}
+    // Pipeline for models with textures
+    vk::PipelineLayoutCreateInfo pLineWithSamplerInfo;
+    pLineWithSamplerInfo.setLayoutCount = static_cast<uint32_t>(layoutWSampler.size());
+    pLineWithSamplerInfo.pSetLayouts = layoutWSampler.data();
 
-void mv::Engine::prepare_pipeline(void)
-{
-    VkDescriptorSetLayout uniform_layout = descriptor_allocator->get_layout("uniform_layout");
-    VkDescriptorSetLayout sampler_layout = descriptor_allocator->get_layout("sampler_layout");
+    // Pipeline with no textures
+    vk::PipelineLayoutCreateInfo pLineNoSamplerInfo;
+    pLineNoSamplerInfo.setLayoutCount = static_cast<uint32_t>(layoutNoSampler.size());
+    pLineNoSamplerInfo.pSetLayouts = layoutNoSampler.data();
 
-    std::vector<VkDescriptorSetLayout> layout_w_sampler = {uniform_layout, uniform_layout, uniform_layout, sampler_layout};
-    std::vector<VkDescriptorSetLayout> layout_no_sampler = {uniform_layout, uniform_layout, uniform_layout};
-    //std::vector<VkDescriptorSetLayout> layouts = {uniform_layout, uniform_layout, uniform_layout};
-    VkPipelineLayoutCreateInfo w_sampler_info = {};
-    w_sampler_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    w_sampler_info.pNext = nullptr;
-    w_sampler_info.flags = 0;
-    w_sampler_info.setLayoutCount = static_cast<uint32_t>(layout_w_sampler.size());
-    w_sampler_info.pSetLayouts = layout_w_sampler.data();
+    pipelineLayouts->insert({
+        "sampler",
+        mvDevice->logicalDevice->createPipelineLayout(pLineWithSamplerInfo),
+    });
 
-    if (vkCreatePipelineLayout(device->device, &w_sampler_info, nullptr, &pipeline_layout_w_sampler) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create pipeline layout with sampler");
-    }
+    pipelineLayouts->insert({
+        "no_sampler",
+        mvDevice->logicalDevice->createPipelineLayout(pLineNoSamplerInfo),
+    });
 
-    VkPipelineLayoutCreateInfo no_sampler_info = {};
-    no_sampler_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    no_sampler_info.pNext = nullptr;
-    no_sampler_info.flags = 0;
-    no_sampler_info.setLayoutCount = static_cast<uint32_t>(layout_no_sampler.size());
-    no_sampler_info.pSetLayouts = layout_no_sampler.data();
+    auto bindingDescription = Vertex::getBindingDescription();
+    auto attributeDescriptions = Vertex::getAttributeDescriptions();
 
-    if (vkCreatePipelineLayout(device->device, &no_sampler_info, nullptr, &pipeline_layout_no_sampler) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create pipeline layout with no sampler");
-    }
+    vk::PipelineVertexInputStateCreateInfo viState;
+    viState.vertexBindingDescriptionCount = 1;
+    viState.pVertexBindingDescriptions = &bindingDescription;
+    viState.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+    viState.pVertexAttributeDescriptions = attributeDescriptions.data();
 
-    auto binding_description = Vertex::get_binding_description();
-    auto attribute_description = Vertex::get_attribute_descriptions();
+    vk::PipelineInputAssemblyStateCreateInfo iaState;
+    iaState.topology = vk::PrimitiveTopology::eTriangleList;
 
-    VkPipelineVertexInputStateCreateInfo vi_state = {};
-    vi_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vi_state.vertexBindingDescriptionCount = 1;
-    vi_state.pVertexBindingDescriptions = &binding_description;
-    vi_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
-    vi_state.pVertexAttributeDescriptions = attribute_description.data();
-    VkPipelineInputAssemblyStateCreateInfo ia_state = mv::initializer::input_assembly_state_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rs_state = mv::initializer::rasterization_state_info(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE, 0);
-    VkPipelineColorBlendAttachmentState cba_state = mv::initializer::color_blend_attachment_state(0xf, VK_FALSE);
-    VkPipelineColorBlendStateCreateInfo cb_state = mv::initializer::color_blend_state_info(1, &cba_state);
-    VkPipelineDepthStencilStateCreateInfo ds_state = mv::initializer::depth_stencil_state_info(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
+    vk::PipelineInputAssemblyStateCreateInfo debugIaState; // used for dynamic states
+    debugIaState.topology = vk::PrimitiveTopology::eLineList;
 
-    VkViewport vp = {};
-    VkRect2D sc = {};
+    vk::PipelineRasterizationStateCreateInfo rsState;
+    rsState.depthClampEnable = VK_FALSE;
+    rsState.rasterizerDiscardEnable = VK_FALSE;
+    rsState.polygonMode = vk::PolygonMode::eFill;
+    rsState.cullMode = vk::CullModeFlagBits::eNone;
+    rsState.frontFace = vk::FrontFace::eClockwise;
+    rsState.depthBiasEnable = VK_FALSE;
+    rsState.depthBiasConstantFactor = 0.0f;
+    rsState.depthBiasClamp = 0.0f;
+    rsState.depthBiasSlopeFactor = 0.0f;
+    rsState.lineWidth = 1.0f;
+
+    vk::PipelineColorBlendAttachmentState cbaState;
+    cbaState.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                              vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+    cbaState.blendEnable = VK_FALSE;
+
+    vk::PipelineColorBlendStateCreateInfo cbState;
+    cbState.attachmentCount = 1;
+    cbState.pAttachments = &cbaState;
+
+    vk::PipelineDepthStencilStateCreateInfo dsState;
+    dsState.depthTestEnable = VK_TRUE;
+    dsState.depthWriteEnable = VK_TRUE;
+    dsState.depthCompareOp = vk::CompareOp::eLessOrEqual;
+    dsState.back.compareOp = vk::CompareOp::eAlways;
+
+    vk::Viewport vp;
     vp.x = 0;
-    vp.y = window_height;
-    vp.width = static_cast<float>(window_width);
-    vp.height = -static_cast<float>(window_height);
+    vp.y = windowHeight;
+    vp.width = static_cast<float>(windowWidth);
+    vp.height = -static_cast<float>(windowHeight);
     vp.minDepth = 0.0f;
     vp.maxDepth = 1.0f;
 
-    sc.offset = {0, 0};
-    sc.extent = swapchain.swap_extent;
+    vk::Rect2D sc;
+    sc.offset = vk::Offset2D{0, 0};
+    sc.extent = swapchain->swapExtent;
 
-    VkPipelineViewportStateCreateInfo vp_state = mv::initializer::viewport_state_info(1, 1, 0);
-    vp_state.pViewports = &vp;
-    vp_state.pScissors = &sc;
-    VkPipelineMultisampleStateCreateInfo ms_state = mv::initializer::multisample_state_info(VK_SAMPLE_COUNT_1_BIT, 0);
+    vk::PipelineViewportStateCreateInfo vpState;
+    vpState.viewportCount = 1;
+    vpState.pViewports = &vp;
+    vpState.scissorCount = 1;
+    vpState.pScissors = &sc;
+
+    vk::PipelineMultisampleStateCreateInfo msState;
+    msState.rasterizationSamples = vk::SampleCountFlagBits::e1;
 
     // Load shaders
-    auto vertex_shader = read_file("shaders/vertex.spv");
-    auto fragment_shader = read_file("shaders/fragment.spv");
-    auto fragment_shader_no_sampler = read_file("shaders/fragment_no_sampler.spv");
+    auto vertexShader = readFile("shaders/vertex.spv");
+    auto fragmentShader = readFile("shaders/fragment.spv");
+    auto fragmentShaderNoSampler = readFile("shaders/fragment_no_sampler.spv");
 
     // Ensure we have files
-    if (vertex_shader.empty() || fragment_shader.empty() || fragment_shader_no_sampler.empty())
+    if (vertexShader.empty() || fragmentShader.empty() || fragmentShaderNoSampler.empty())
     {
         throw std::runtime_error("Failed to load fragment or vertex shader spv files");
     }
 
-    VkShaderModule vertex_shader_module = create_shader_module(vertex_shader);
-    VkShaderModule fragment_shader_module = create_shader_module(fragment_shader);
-    VkShaderModule fragment_shader_no_sampler_module = create_shader_module(fragment_shader_no_sampler);
+    vk::ShaderModule vertexShaderModule = createShaderModule(vertexShader);
+    vk::ShaderModule fragmentShaderModule = createShaderModule(fragmentShader);
+    vk::ShaderModule fragmentShaderNoSamplerModule = createShaderModule(fragmentShaderNoSampler);
 
     // describe vertex shader stage
-    VkPipelineShaderStageCreateInfo vertex_shader_stage_info{};
-    vertex_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertex_shader_stage_info.pNext = nullptr;
-    vertex_shader_stage_info.flags = 0;
-    vertex_shader_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertex_shader_stage_info.module = vertex_shader_module;
-    vertex_shader_stage_info.pName = "main";
-    vertex_shader_stage_info.pSpecializationInfo = nullptr;
+    vk::PipelineShaderStageCreateInfo vertexShaderStageInfo;
+    vertexShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
+    vertexShaderStageInfo.module = vertexShaderModule;
+    vertexShaderStageInfo.pName = "main";
+    vertexShaderStageInfo.pSpecializationInfo = nullptr;
 
     // describe fragment shader stage WITH sampler
-    VkPipelineShaderStageCreateInfo fragment_shader_stage_info{};
-    fragment_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragment_shader_stage_info.pNext = nullptr;
-    fragment_shader_stage_info.flags = 0;
-    fragment_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragment_shader_stage_info.module = fragment_shader_module;
-    fragment_shader_stage_info.pName = "main";
-    fragment_shader_stage_info.pSpecializationInfo = nullptr;
+    vk::PipelineShaderStageCreateInfo fragmentShaderStageInfo;
+    fragmentShaderStageInfo.stage = vk::ShaderStageFlagBits::eFragment;
+    fragmentShaderStageInfo.module = fragmentShaderModule;
+    fragmentShaderStageInfo.pName = "main";
+    fragmentShaderStageInfo.pSpecializationInfo = nullptr;
 
     // fragment shader stage NO sampler
-    VkPipelineShaderStageCreateInfo fragment_shader_stage_no_sampler_info{};
-    fragment_shader_stage_no_sampler_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragment_shader_stage_no_sampler_info.pNext = nullptr;
-    fragment_shader_stage_no_sampler_info.flags = 0;
-    fragment_shader_stage_no_sampler_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragment_shader_stage_no_sampler_info.module = fragment_shader_no_sampler_module;
-    fragment_shader_stage_no_sampler_info.pName = "main";
-    fragment_shader_stage_no_sampler_info.pSpecializationInfo = nullptr;
+    vk::PipelineShaderStageCreateInfo fragmentShaderStageNoSamplerInfo;
+    fragmentShaderStageNoSamplerInfo.stage = vk::ShaderStageFlagBits::eFragment;
+    fragmentShaderStageNoSamplerInfo.module = fragmentShaderNoSamplerModule;
+    fragmentShaderStageNoSamplerInfo.pName = "main";
+    fragmentShaderStageNoSamplerInfo.pSpecializationInfo = nullptr;
 
-    std::vector<VkPipelineShaderStageCreateInfo> shader_stages = {vertex_shader_stage_info, fragment_shader_stage_info};
-    std::vector<VkPipelineShaderStageCreateInfo> shader_stages_no_sampler = {vertex_shader_stage_info, fragment_shader_stage_no_sampler_info};
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = {
+        vertexShaderStageInfo,
+        fragmentShaderStageInfo,
+    };
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStagesNoSampler = {
+        vertexShaderStageInfo,
+        fragmentShaderStageNoSamplerInfo,
+    };
+
+    /*
+      Dynamic state extension
+    */
+    std::array<vk::DynamicState, 1> dynStates = {
+        vk::DynamicState::ePrimitiveTopologyEXT,
+    };
+    vk::PipelineDynamicStateCreateInfo dynamicInfo;
+    dynamicInfo.dynamicStateCount = static_cast<uint32_t>(dynStates.size());
+    dynamicInfo.pDynamicStates = dynStates.data();
 
     // create pipeline WITH sampler
-    VkGraphicsPipelineCreateInfo pipeline_w_sampler_info = mv::initializer::pipeline_create_info(pipeline_layout_w_sampler, m_render_pass);
-    pipeline_w_sampler_info.pInputAssemblyState = &ia_state;
-    pipeline_w_sampler_info.pRasterizationState = &rs_state;
-    pipeline_w_sampler_info.pColorBlendState = &cb_state;
-    pipeline_w_sampler_info.pDepthStencilState = &ds_state;
-    pipeline_w_sampler_info.pViewportState = &vp_state;
-    pipeline_w_sampler_info.pMultisampleState = &ms_state;
-    pipeline_w_sampler_info.stageCount = static_cast<uint32_t>(shader_stages.size());
-    pipeline_w_sampler_info.pStages = shader_stages.data();
-    pipeline_w_sampler_info.pVertexInputState = &vi_state;
-    pipeline_w_sampler_info.pDynamicState = nullptr;
+    vk::GraphicsPipelineCreateInfo pipelineWSamplerInfo;
+    pipelineWSamplerInfo.renderPass = renderPasses->at("core");
+    pipelineWSamplerInfo.layout = pipelineLayouts->at("sampler");
+    pipelineWSamplerInfo.pInputAssemblyState = &iaState;
+    pipelineWSamplerInfo.pRasterizationState = &rsState;
+    pipelineWSamplerInfo.pColorBlendState = &cbState;
+    pipelineWSamplerInfo.pDepthStencilState = &dsState;
+    pipelineWSamplerInfo.pViewportState = &vpState;
+    pipelineWSamplerInfo.pMultisampleState = &msState;
+    pipelineWSamplerInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+    pipelineWSamplerInfo.pStages = shaderStages.data();
+    pipelineWSamplerInfo.pVertexInputState = &viState;
+    pipelineWSamplerInfo.pDynamicState = nullptr;
 
-    if (vkCreateGraphicsPipelines(device->device, m_pipeline_cache, 1, &pipeline_w_sampler_info, nullptr, &pipeline_w_sampler) != VK_SUCCESS)
-    {
+    std::cout << "\n[+] Creating graphics pipeline with sampler -- rigid\n";
+
+    /* Graphics pipeline with sampler -- NO dynamic states */
+    vk::ResultValue result = mvDevice->logicalDevice->createGraphicsPipeline(nullptr, pipelineWSamplerInfo);
+    if (result.result != vk::Result::eSuccess)
         throw std::runtime_error("Failed to create graphics pipeline with sampler");
-    }
+
+    pipelines->insert({
+        "sampler",
+        result.value,
+    });
+
+    pipelineWSamplerInfo.pInputAssemblyState = &debugIaState;
+    pipelineWSamplerInfo.pDynamicState = &dynamicInfo;
+
+    std::cout << "\n[+] Creating graphics pipeline with sampler -- dynamic states\n";
+
+    /* Graphics pipeline with sampler -- WITH dynamic states */
+    result = mvDevice->logicalDevice->createGraphicsPipeline(nullptr, pipelineWSamplerInfo);
+    if (result.result != vk::Result::eSuccess)
+        throw std::runtime_error("Failed to create graphics pipeline with sampler & dynamic states");
+
+    pipelines->insert({
+        "sampler_dynamic",
+        result.value,
+    });
 
     // Create pipeline with NO sampler
-    VkGraphicsPipelineCreateInfo pipeline_no_sampler_info = mv::initializer::pipeline_create_info(pipeline_layout_no_sampler, m_render_pass);
-    pipeline_no_sampler_info.pInputAssemblyState = &ia_state;
-    pipeline_no_sampler_info.pRasterizationState = &rs_state;
-    pipeline_no_sampler_info.pColorBlendState = &cb_state;
-    pipeline_no_sampler_info.pDepthStencilState = &ds_state;
-    pipeline_no_sampler_info.pViewportState = &vp_state;
-    pipeline_no_sampler_info.pMultisampleState = &ms_state;
-    pipeline_no_sampler_info.stageCount = static_cast<uint32_t>(shader_stages_no_sampler.size());
-    pipeline_no_sampler_info.pStages = shader_stages_no_sampler.data();
-    pipeline_no_sampler_info.pVertexInputState = &vi_state;
-    pipeline_no_sampler_info.pDynamicState = nullptr;
+    vk::GraphicsPipelineCreateInfo pipelineNoSamplerInfo;
+    pipelineNoSamplerInfo.renderPass = renderPasses->at("core");
+    pipelineNoSamplerInfo.layout = pipelineLayouts->at("no_sampler");
+    pipelineNoSamplerInfo.pInputAssemblyState = &iaState;
+    pipelineNoSamplerInfo.pRasterizationState = &rsState;
+    pipelineNoSamplerInfo.pColorBlendState = &cbState;
+    pipelineNoSamplerInfo.pDepthStencilState = &dsState;
+    pipelineNoSamplerInfo.pViewportState = &vpState;
+    pipelineNoSamplerInfo.pMultisampleState = &msState;
+    pipelineNoSamplerInfo.stageCount = static_cast<uint32_t>(shaderStagesNoSampler.size());
+    pipelineNoSamplerInfo.pStages = shaderStagesNoSampler.data();
+    pipelineNoSamplerInfo.pVertexInputState = &viState;
+    pipelineNoSamplerInfo.pDynamicState = nullptr;
 
-    if (vkCreateGraphicsPipelines(device->device, nullptr, 1, &pipeline_no_sampler_info, nullptr, &pipeline_no_sampler) != VK_SUCCESS)
-    {
+    std::cout << "\n[+] Creating graphics pipeline no sampler -- rigid\n";
+
+    // Create graphics pipeline NO sampler
+    result = mvDevice->logicalDevice->createGraphicsPipeline(nullptr, pipelineNoSamplerInfo);
+    if (result.result != vk::Result::eSuccess)
         throw std::runtime_error("Failed to create graphics pipeline with no sampler");
-    }
 
-    vkDestroyShaderModule(device->device, vertex_shader_module, nullptr);
-    vkDestroyShaderModule(device->device, fragment_shader_module, nullptr);
-    vkDestroyShaderModule(device->device, fragment_shader_no_sampler_module, nullptr);
+    pipelines->insert({
+        "no_sampler",
+        result.value,
+    });
+
+    // create pipeline no sampler | dynamic state
+    pipelineNoSamplerInfo.pInputAssemblyState = &debugIaState;
+    pipelineNoSamplerInfo.pDynamicState = &dynamicInfo;
+
+    std::cout << "\n[+] Creating graphics pipeline no sampler -- dynamic states\n";
+
+    result = mvDevice->logicalDevice->createGraphicsPipeline(nullptr, pipelineNoSamplerInfo);
+    if (result.result != vk::Result::eSuccess)
+        throw std::runtime_error("Failed to create graphics pipeline with no sampler & dynamic states");
+
+    pipelines->insert({
+        "no_sampler_dynamic",
+        result.value,
+
+    });
+
+    mvDevice->logicalDevice->destroyShaderModule(vertexShaderModule);
+    mvDevice->logicalDevice->destroyShaderModule(fragmentShaderModule);
+    mvDevice->logicalDevice->destroyShaderModule(fragmentShaderNoSamplerModule);
     return;
 }
 
-void mv::Engine::record_command_buffer(uint32_t image_index)
+void mv::Engine::recordCommandBuffer(uint32_t p_ImageIndex)
 {
-    VkCommandBufferBeginInfo begin_info = {};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.pNext = nullptr;
-    begin_info.flags = 0;
-    begin_info.pInheritanceInfo = nullptr;
+    // command buffer begin
+    vk::CommandBufferBeginInfo beginInfo;
 
-    if (vkBeginCommandBuffer(command_buffers[image_index], &begin_info) != VK_SUCCESS)
+    // render pass info
+    std::array<vk::ClearValue, 2> cls;
+    cls[0].color = defaultClearColor;
+    cls[1].depthStencil = vk::ClearDepthStencilValue{1.0f, 0};
+
+    vk::RenderPassBeginInfo passInfo;
+    passInfo.renderPass = renderPasses->at("core");
+    passInfo.framebuffer = coreFramebuffers->at(p_ImageIndex);
+    passInfo.renderArea.offset.x = 0;
+    passInfo.renderArea.offset.y = 0;
+    passInfo.renderArea.extent.width = swapchain->swapExtent.width;
+    passInfo.renderArea.extent.height = swapchain->swapExtent.height;
+    passInfo.clearValueCount = static_cast<uint32_t>(cls.size());
+    passInfo.pClearValues = cls.data();
+
+    // begin recording
+    commandBuffers->at(p_ImageIndex).begin(beginInfo);
+
+    // start render pass
+    commandBuffers->at(p_ImageIndex).beginRenderPass(passInfo, vk::SubpassContents::eInline);
+
+    /*
+      DEBUG RENDER METHODS
+    */
+    for (const auto &job : toRenderMap)
     {
-        throw std::runtime_error("Failed to begin recording to command buffer");
+
+        // player's aiming ray cast
+        if (job.first == "reticle_raycast" && job.second)
+        {
+
+            commandBuffers->at(p_ImageIndex)
+                .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines->at("no_sampler_dynamic"));
+
+            pfn_vkCmdSetPrimitiveTopology(commandBuffers->at(p_ImageIndex),
+                                          static_cast<VkPrimitiveTopology>(vk::PrimitiveTopology::eLineList));
+
+            // render line
+            std::vector<vk::DescriptorSet> toBind = {reticleObj.meshDescriptor,
+                                                     collectionHandler->viewUniform->descriptor,
+                                                     collectionHandler->projectionUniform->descriptor};
+            commandBuffers->at(p_ImageIndex)
+                .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("no_sampler"), 0, toBind,
+                                    nullptr);
+
+            commandBuffers->at(p_ImageIndex).bindVertexBuffers(0, reticleMesh.vertexBuffer, {0});
+            commandBuffers->at(p_ImageIndex).draw(2, 1, 0, 0);
+        }
     }
 
-    std::array<VkClearValue, 2> cls;
-    cls[0].color = default_clear_color;
-    cls[1].depthStencil = {1.0f, 0};
+    /*
+      END DEBUG RENDER METHODS
+    */
 
-    VkRenderPassBeginInfo pass_info = {};
-    pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    pass_info.pNext = nullptr;
-    pass_info.renderPass = m_render_pass;
-    pass_info.framebuffer = frame_buffers[image_index];
-    pass_info.renderArea.offset.x = 0;
-    pass_info.renderArea.offset.y = 0;
-    pass_info.renderArea.extent.width = swapchain.swap_extent.width;
-    pass_info.renderArea.extent.height = swapchain.swap_extent.height;
-    pass_info.clearValueCount = static_cast<uint32_t>(cls.size());
-    pass_info.pClearValues = cls.data();
-
-    vkCmdBeginRenderPass(command_buffers[image_index], &pass_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    for (auto &model : collection_handler->models)
+    for (auto &model : *collectionHandler->models)
     {
         // for each model select the appropriate pipeline
-        if (model.has_texture)
+        if (model.hasTexture)
         {
-            vkCmdBindPipeline(command_buffers[image_index],
-                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              pipeline_w_sampler);
+            commandBuffers->at(p_ImageIndex).bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines->at("sampler"));
         }
         else
         {
-            vkCmdBindPipeline(command_buffers[image_index],
-                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              pipeline_no_sampler);
+            commandBuffers->at(p_ImageIndex)
+                .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines->at("no_sampler"));
         }
-        for (auto &object : model.objects)
+        for (auto &object : *model.objects)
         {
-            for (auto &mesh : model._meshes)
+            for (auto &mesh : *model.loadedMeshes)
             {
-                std::vector<VkDescriptorSet> to_bind = {
-                    object->model_descriptor,
-                    collection_handler->view_uniform.descriptor,
-                    collection_handler->projection_uniform.descriptor};
-                if (model.has_texture)
+                std::vector<vk::DescriptorSet> toBind = {object.meshDescriptor,
+                                                         collectionHandler->viewUniform->descriptor,
+                                                         collectionHandler->projectionUniform->descriptor};
+                if (model.hasTexture)
                 {
-                    to_bind.push_back(mesh.textures[0].descriptor);
-                    vkCmdBindDescriptorSets(command_buffers[image_index],
-                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                            pipeline_layout_w_sampler,
-                                            0,
-                                            static_cast<uint32_t>(to_bind.size()),
-                                            to_bind.data(),
-                                            0,
+                    // TODO
+                    // allow for multiple texture descriptors
+                    toBind.push_back(mesh.textures.at(0).descriptor);
+                    commandBuffers->at(p_ImageIndex)
+                        .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("sampler"), 0, toBind,
                                             nullptr);
                 }
                 else
                 {
-                    vkCmdBindDescriptorSets(command_buffers[image_index],
-                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                            pipeline_layout_no_sampler,
-                                            0,
-                                            static_cast<uint32_t>(to_bind.size()),
-                                            to_bind.data(),
-                                            0,
-                                            nullptr);
+                    commandBuffers->at(p_ImageIndex)
+                        .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("no_sampler"), 0,
+                                            toBind, nullptr);
                 }
                 // Bind mesh buffers
-                mesh.bindBuffers(command_buffers[image_index]);
+                mesh.bindBuffers(commandBuffers->at(p_ImageIndex));
 
                 // Indexed draw
-                vkCmdDrawIndexed(command_buffers[image_index],
-                                 static_cast<uint32_t>(mesh.indices.size()),
-                                 1, 0, 0, 0);
+                commandBuffers->at(p_ImageIndex).drawIndexed(static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
             }
         }
     }
 
-    vkCmdEndRenderPass(command_buffers[image_index]);
+    commandBuffers->at(p_ImageIndex).endRenderPass();
 
-    if (vkEndCommandBuffer(command_buffers[image_index]) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to end command buffer recording");
-    }
+    /*
+     IMGUI RENDER
+    */
+    vk::RenderPassBeginInfo guiPassInfo;
+    guiPassInfo.renderPass = renderPasses->at("gui");
+    guiPassInfo.framebuffer = guiFramebuffers->at(p_ImageIndex);
+    guiPassInfo.renderArea.offset.x = 0;
+    guiPassInfo.renderArea.offset.y = 0;
+    guiPassInfo.renderArea.extent.width = swapchain->swapExtent.width;
+    guiPassInfo.renderArea.extent.height = swapchain->swapExtent.height;
+
+    commandBuffers->at(p_ImageIndex).beginRenderPass(guiPassInfo, vk::SubpassContents::eInline);
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffers->at(p_ImageIndex));
+
+    commandBuffers->at(p_ImageIndex).endRenderPass();
+
+    /*
+      END IMGUI RENDER
+    */
+
+    commandBuffers->at(p_ImageIndex).end();
 
     return;
 }
 
-void mv::Engine::draw(size_t &cur_frame, uint32_t &cur_index)
+void mv::Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
 {
-    vkWaitForFences(device->device, 1, &in_flight_fences[cur_frame], VK_TRUE, UINT64_MAX);
+    vk::Result res = mvDevice->logicalDevice->waitForFences(inFlightFences->at(p_CurrentFrame), VK_TRUE, UINT64_MAX);
+    if (res != vk::Result::eSuccess)
+        throw std::runtime_error("Error occurred while waiting for fence");
 
-    VkResult result;
-    result = vkAcquireNextImageKHR(device->device, swapchain.swapchain, UINT64_MAX, semaphores.present_complete, VK_NULL_HANDLE, &cur_index);
+    vk::Result result = mvDevice->logicalDevice->acquireNextImageKHR(
+        *swapchain->swapchain, UINT64_MAX, semaphores->presentComplete, nullptr, &p_CurrentImageIndex);
+
     switch (result)
     {
-    case VK_ERROR_OUT_OF_DATE_KHR:
-        recreate_swapchain();
-        return;
-        break;
-    case VK_SUBOPTIMAL_KHR:
-        std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
-        break;
-    case VK_SUCCESS:
-        break;
-    default: // unhandled error occurred
-        throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
-        break;
+        case vk::Result::eErrorOutOfDateKHR:
+            recreateSwapchain();
+            return;
+            break;
+        case vk::Result::eSuboptimalKHR:
+            std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+            break;
+        case vk::Result::eSuccess:
+            break;
+        default: // unhandled error occurred
+            throw std::runtime_error("Unhandled error case while acquiring a swapchain image for "
+                                     "rendering");
+            break;
     }
 
-    if (wait_fences[cur_index] != VK_NULL_HANDLE)
+    if (waitFences->at(p_CurrentImageIndex))
     {
-        vkWaitForFences(device->device, 1, &wait_fences[cur_index], VK_TRUE, UINT64_MAX);
+        vk::Result res =
+            mvDevice->logicalDevice->waitForFences(waitFences->at(p_CurrentImageIndex), VK_TRUE, UINT64_MAX);
+        if (res != vk::Result::eSuccess)
+            throw std::runtime_error("Error occurred while waiting for fence");
     }
 
-    record_command_buffer(cur_index);
+    recordCommandBuffer(p_CurrentImageIndex);
 
     // mark in use
-    wait_fences[cur_index] = in_flight_fences[cur_frame];
+    waitFences->at(p_CurrentImageIndex) = inFlightFences->at(p_CurrentFrame);
 
-    VkSubmitInfo submit_info = {};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    VkSemaphore waitSemaphores[] = {semaphores.present_complete};
-    VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = waitSemaphores;
-    submit_info.pWaitDstStageMask = wait_stages;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &command_buffers[cur_index];
-    VkSemaphore render_semaphores[] = {semaphores.render_complete};
-    submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = render_semaphores;
+    vk::SubmitInfo submitInfo;
+    vk::Semaphore waitSemaphores[] = {semaphores->presentComplete};
+    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffers->at(p_CurrentImageIndex);
+    vk::Semaphore renderSemaphores[] = {semaphores->renderComplete};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = renderSemaphores;
 
-    vkResetFences(device->device, 1, &in_flight_fences[cur_frame]);
+    mvDevice->logicalDevice->resetFences(inFlightFences->at(p_CurrentFrame));
 
-    result = vkQueueSubmit(m_graphics_queue, 1, &submit_info, in_flight_fences[cur_frame]);
+    result = mvDevice->graphicsQueue->submit(1, &submitInfo, inFlightFences->at(p_CurrentFrame));
+
     switch (result)
     {
-    case VK_ERROR_OUT_OF_DATE_KHR:
-        recreate_swapchain();
-        return;
-        break;
-    case VK_SUBOPTIMAL_KHR:
-        std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
-        break;
-    case VK_SUCCESS:
-        break;
-    default: // unhandled error occurred
-        throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
-        break;
+        case vk::Result::eErrorOutOfDateKHR:
+            recreateSwapchain();
+            return;
+            break;
+        case vk::Result::eSuboptimalKHR:
+            std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+            break;
+        case vk::Result::eSuccess:
+            break;
+        default: // unhandled error occurred
+            throw std::runtime_error("Unhandled error case while submitting queue");
+            break;
     }
 
-    VkPresentInfoKHR present_info = {};
-    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.pNext = nullptr;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = render_semaphores;
-    VkSwapchainKHR swapchains[] = {swapchain.swapchain};
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = swapchains;
-    present_info.pImageIndices = &cur_index;
-    present_info.pResults = nullptr;
+    vk::PresentInfoKHR presentInfo;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = renderSemaphores;
+    vk::SwapchainKHR swapchains[] = {*swapchain->swapchain};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &p_CurrentImageIndex;
+    presentInfo.pResults = nullptr;
 
-    result = vkQueuePresentKHR(m_graphics_queue, &present_info);
+    result = mvDevice->graphicsQueue->presentKHR(&presentInfo);
+
     switch (result)
     {
-    case VK_ERROR_OUT_OF_DATE_KHR:
-        recreate_swapchain();
-        return;
-        break;
-    case VK_SUBOPTIMAL_KHR:
-        std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
-        break;
-    case VK_SUCCESS:
-        break;
-    default: // unhandled error occurred
-        throw std::runtime_error("Unhandled exception while acquiring a swapchain image for rendering");
-        break;
+        case vk::Result::eErrorOutOfDateKHR:
+            recreateSwapchain();
+            return;
+            break;
+        case vk::Result::eSuboptimalKHR:
+            std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+            break;
+        case vk::Result::eSuccess:
+            break;
+        default: // unhandled error occurred
+            throw std::runtime_error("Unhandled error case while presenting");
+            break;
     }
-    cur_frame = (cur_frame + 1) % MAX_IN_FLIGHT;
+    p_CurrentFrame = (p_CurrentFrame + 1) % MAX_IN_FLIGHT;
+}
+
+/*
+  initialize descriptor allocator, collection handler & camera
+*/
+inline void mv::Engine::goSetup(void)
+{
+    /*
+      INITIALIZE DESCRIPTOR HANDLER
+    */
+    descriptorAllocator = std::make_unique<mv::Allocator>();
+    descriptorAllocator->allocatePool(*mvDevice, 2000);
+
+    /*
+      MAT4 UNIFORM LAYOUT
+    */
+    descriptorAllocator->createLayout(*mvDevice, "uniform_layout", vk::DescriptorType::eUniformBuffer, 1,
+                                      vk::ShaderStageFlagBits::eVertex, 0);
+
+    /*
+      TEXTURE SAMPLER LAYOUT
+    */
+    descriptorAllocator->createLayout(*mvDevice, "sampler_layout", vk::DescriptorType::eCombinedImageSampler, 1,
+                                      vk::ShaderStageFlagBits::eFragment, 0);
+
+    /*
+      INITIALIZE MODEL/OBJECT HANDLER
+      CREATES BUFFERS FOR VIEW & PROJECTION MATRICES
+    */
+    collectionHandler = std::make_unique<Collection>(*mvDevice);
+
+    vk::DescriptorSetLayout uniformLayout = descriptorAllocator->getLayout("uniform_layout");
+    /*
+      VIEW MATRIX UNIFORM OBJECT
+    */
+    descriptorAllocator->allocateSet(*mvDevice, uniformLayout, collectionHandler->viewUniform->descriptor);
+    descriptorAllocator->updateSet(*mvDevice, collectionHandler->viewUniform->mvBuffer.descriptor,
+                                   collectionHandler->viewUniform->descriptor, 0);
+
+    /*
+      PROJECTION MATRIX UNIFORM OBJECT
+    */
+    descriptorAllocator->allocateSet(*mvDevice, uniformLayout, collectionHandler->projectionUniform->descriptor);
+    descriptorAllocator->updateSet(*mvDevice, collectionHandler->projectionUniform->mvBuffer.descriptor,
+                                   collectionHandler->projectionUniform->descriptor, 0);
+
+    /*
+      LOAD MODELS
+    */
+    collectionHandler->loadModel(*mvDevice, *descriptorAllocator, "models/_viking_room.fbx");
+    collectionHandler->loadModel(*mvDevice, *descriptorAllocator, "models/Security2.fbx");
+
+    /*
+      CREATE OBJECTS
+    */
+    collectionHandler->createObject(*mvDevice, *descriptorAllocator, "models/_viking_room.fbx");
+    collectionHandler->models->at(0).objects->at(0).position = glm::vec3(0.0f, 0.0f, -5.0f);
+    collectionHandler->models->at(0).objects->at(0).rotation = glm::vec3(0.0f, 90.0f, 0.0f);
+
+    collectionHandler->createObject(*mvDevice, *descriptorAllocator, "models/Security2.fbx");
+    collectionHandler->models->at(1).objects->at(0).rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    collectionHandler->models->at(1).objects->at(0).position = glm::vec3(0.0f, 0.0f, 0.0f);
+    collectionHandler->models->at(1).objects->at(0).scaleFactor = 0.0125f;
+
+    /*
+      CREATE DEBUG POINTS
+    */
+    Vertex p1;
+    p1.position = {0.0f, 0.0f, 0.0f, 1.0f};
+    p1.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    p1.uv = {0.0f, 0.0f, 0.0f, 0.0f};
+    reticleMesh.vertices = {p1, p1};
+
+    // Create vertex buffer
+    mvDevice->createBuffer(vk::BufferUsageFlagBits::eVertexBuffer,
+                           vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
+                           reticleMesh.vertices.size() * sizeof(mv::Vertex), &reticleMesh.vertexBuffer,
+                           &reticleMesh.vertexMemory, reticleMesh.vertices.data());
+
+    // Create uniform -- not used tbh
+    reticleObj.position = {0.0f, 0.0f, 0.0f};
+    mvDevice->createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,
+                           vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                           &reticleObj.uniformBuffer, sizeof(mv::Object::Matrix));
+    reticleObj.uniformBuffer.map(*mvDevice);
+    reticleObj.update();
+    // glm::mat4 nm = glm::mat4(1.0);
+    // memcpy(reticle_obj.uniform_buffer.mapped, &nm, sizeof(glm::mat4));
+
+    // allocate descriptor for reticle
+    descriptorAllocator->allocateSet(*mvDevice, uniformLayout, reticleObj.meshDescriptor);
+    descriptorAllocator->updateSet(*mvDevice, reticleObj.uniformBuffer.descriptor, reticleObj.meshDescriptor, 0);
+
+    /*
+      CONFIGURE AND CREATE CAMERA
+    */
+    struct CameraInitStruct cameraParams;
+    cameraParams.fov = 45.0f * ((float)swapchain->swapExtent.width / swapchain->swapExtent.height);
+    cameraParams.aspect =
+        static_cast<float>(((float)swapchain->swapExtent.height / (float)swapchain->swapExtent.height));
+    cameraParams.nearz = 0.1f;
+    cameraParams.farz = 200.0f;
+    cameraParams.position = glm::vec3(0.0f, 3.0f, -7.0f);
+    cameraParams.viewUniformObject = collectionHandler->viewUniform.get();
+    cameraParams.projectionUniformObject = collectionHandler->projectionUniform.get();
+
+    cameraParams.type = CameraType::eThirdPerson;
+    cameraParams.target = &collectionHandler->models->at(1).objects->at(0);
+
+    camera = std::make_unique<Camera>(cameraParams);
+    return;
+}
+
+/*
+  GLFW CALLBACKS
+*/
+
+void mv::mouseMotionCallback(GLFWwindow *p_GLFWwindow, double p_XPosition, double p_YPosition)
+{
+    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
+    engine->mouse.update(p_XPosition, p_YPosition);
+    return;
+}
+
+void mv::mouseButtonCallback(GLFWwindow *p_GLFWwindow, int p_Button, int p_Action, [[maybe_unused]] int p_Modifiers)
+{
+    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
+
+    switch (p_Button)
+    {
+        case GLFW_MOUSE_BUTTON_1: // LMB
+            {
+                if (p_Action == GLFW_PRESS)
+                {
+                    engine->mouse.onLeftPress();
+                }
+                else if (p_Action == GLFW_RELEASE)
+                {
+                    engine->mouse.onLeftRelease();
+                }
+                break;
+            }
+        case GLFW_MOUSE_BUTTON_2: // RMB
+            {
+                if (p_Action == GLFW_PRESS)
+                {
+                    engine->mouse.onRightPress();
+                }
+                else if (p_Action == GLFW_RELEASE)
+                {
+                    engine->mouse.onRightRelease();
+                }
+                break;
+            }
+        case GLFW_MOUSE_BUTTON_3: // MMB
+            {
+                if (p_Action == GLFW_PRESS)
+                {
+                    engine->mouse.onMiddlePress();
+                }
+                else if (p_Action == GLFW_RELEASE)
+                {
+                    engine->mouse.onMiddleRelease();
+                }
+                break;
+            }
+    }
+    return;
+}
+
+void mv::keyCallback(GLFWwindow *p_GLFWwindow, int p_Key, [[maybe_unused]] int p_ScanCode, int p_Action,
+                     [[maybe_unused]] int p_Modifier)
+{
+    // get get pointer
+    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
+
+    if (p_Key == GLFW_KEY_ESCAPE && p_Action == GLFW_PRESS)
+    {
+        glfwSetWindowShouldClose(p_GLFWwindow, true);
+        return;
+    }
+
+    if (p_Action == GLFW_PRESS)
+    {
+        engine->keyboard.onKeyPress(p_Key);
+    }
+    else if (p_Action == GLFW_RELEASE)
+    {
+        engine->keyboard.onKeyRelease(p_Key);
+    }
+    return;
+}
+
+void mv::glfwErrCallback(int p_Error, const char *p_Description)
+{
+    std::cout << "GLFW Error...\n"
+              << "Code => " << p_Error << "\n"
+              << "Message => " << p_Description << "\n";
+    return;
 }
