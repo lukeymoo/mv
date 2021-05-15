@@ -18,9 +18,9 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     if (!p_MvDevice.commandPool)
         throw std::runtime_error("command pool not initialized in mv device handler:: image handler");
 
-    int width;
-    int height;
-    int channels;
+    int width = 0;
+    int height = 0;
+    int channels = 0;
 
     // load image
     stbi_uc *rawImage = stbi_load(p_ImageFilename.c_str(), &width, &height, &channels, STBI_rgb_alpha);

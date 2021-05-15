@@ -483,18 +483,6 @@ void mv::Window::setupRenderPass(void)
     coreAttachments[1].initialLayout = vk::ImageLayout::eUndefined;
     coreAttachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
-    std::array<vk::AttachmentDescription, 1> guiAttachments;
-
-    // ImGui attachment
-    guiAttachments[0].format = swapchain->colorFormat;
-    guiAttachments[0].samples = vk::SampleCountFlagBits::e1;
-    guiAttachments[0].loadOp = vk::AttachmentLoadOp::eLoad;
-    guiAttachments[0].storeOp = vk::AttachmentStoreOp::eStore;
-    guiAttachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    guiAttachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    guiAttachments[0].initialLayout = vk::ImageLayout::eColorAttachmentOptimal;
-    guiAttachments[0].finalLayout = vk::ImageLayout::ePresentSrcKHR;
-
     /*
         Core render references
     */
@@ -506,13 +494,6 @@ void mv::Window::setupRenderPass(void)
     depthRef.attachment = 1;
     depthRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
-    /*
-        ImGui references
-    */
-    vk::AttachmentReference guiRef;
-    guiRef.attachment = 0;
-    guiRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
-
     // color attachment and depth testing subpass
     vk::SubpassDescription corePass;
     corePass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
@@ -520,14 +501,7 @@ void mv::Window::setupRenderPass(void)
     corePass.pColorAttachments = &colorRef;
     corePass.pDepthStencilAttachment = &depthRef;
 
-    // imgui rendering
-    vk::SubpassDescription guiPass;
-    guiPass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
-    guiPass.colorAttachmentCount = 1;
-    guiPass.pColorAttachments = &guiRef;
-
     std::vector<vk::SubpassDescription> coreSubpasses = {corePass};
-    std::vector<vk::SubpassDescription> guiSubpasses = {guiPass};
 
     std::array<vk::SubpassDependency, 1> coreDependencies;
     // Color + depth subpass
@@ -540,18 +514,6 @@ void mv::Window::setupRenderPass(void)
         vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
     coreDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
-    std::array<vk::SubpassDependency, 1> guiDependencies;
-    // ImGui subpass
-    guiDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    guiDependencies[0].dstSubpass = 0;
-    guiDependencies[0].srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    guiDependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    guiDependencies[0].srcAccessMask =
-        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
-    guiDependencies[0].dstAccessMask =
-        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
-    guiDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
-
     vk::RenderPassCreateInfo coreRenderPassInfo;
     coreRenderPassInfo.attachmentCount = static_cast<uint32_t>(coreAttachments.size());
     coreRenderPassInfo.pAttachments = coreAttachments.data();
@@ -560,6 +522,8 @@ void mv::Window::setupRenderPass(void)
     coreRenderPassInfo.dependencyCount = static_cast<uint32_t>(coreDependencies.size());
     coreRenderPassInfo.pDependencies = coreDependencies.data();
 
+<<<<<<< HEAD
+=======
     vk::RenderPassCreateInfo guiRenderPassInfo;
     guiRenderPassInfo.attachmentCount = static_cast<uint32_t>(guiAttachments.size());
     guiRenderPassInfo.pAttachments = guiAttachments.data();
@@ -568,6 +532,7 @@ void mv::Window::setupRenderPass(void)
     guiRenderPassInfo.dependencyCount = static_cast<uint32_t>(guiDependencies.size());
     guiRenderPassInfo.pDependencies = guiDependencies.data();
 
+>>>>>>> main
     // std::cout << "Creating render pass for core renderer...\n"
     //           << "Attachments => " << coreAttachments.size() << "\n"
     //           << "Subpasses => " << coreSubpasses.size() << "\n"
@@ -578,15 +543,14 @@ void mv::Window::setupRenderPass(void)
     //           << "Attachments => " << guiAttachments.size() << "\n"
     //           << "Subpasses => " << guiSubpasses.size() << "\n"
     //           << "Dependencies => " << guiDependencies.size() << "\n";
+<<<<<<< HEAD
+=======
     vk::RenderPass tempGui = mvDevice->logicalDevice->createRenderPass(guiRenderPassInfo);
+>>>>>>> main
 
     renderPasses->insert({
         "core",
         std::move(tempCore),
-    });
-    renderPasses->insert({
-        "gui",
-        std::move(tempGui),
     });
     return;
 }
@@ -605,8 +569,6 @@ void mv::Window::setupFramebuffer(void)
 {
     // Attachments for core engine rendering
     std::array<vk::ImageView, 2> coreAttachments;
-    // Attachment for ImGui rendering
-    std::array<vk::ImageView, 1> imguiAttachments;
 
     if (!depthStencil->view)
         throw std::runtime_error("Depth stencil view is nullptr");
@@ -623,18 +585,8 @@ void mv::Window::setupFramebuffer(void)
     coreFrameInfo.height = swapchain->swapExtent.height;
     coreFrameInfo.layers = 1;
 
-    // ImGui must only have 1 attachment
-    vk::FramebufferCreateInfo guiFrameInfo;
-    guiFrameInfo.renderPass = renderPasses->at("gui");
-    guiFrameInfo.attachmentCount = static_cast<uint32_t>(imguiAttachments.size());
-    guiFrameInfo.pAttachments = imguiAttachments.data();
-    guiFrameInfo.width = swapchain->swapExtent.width;
-    guiFrameInfo.height = swapchain->swapExtent.height;
-    guiFrameInfo.layers = 1;
-
     // Framebuffer per swap image
     coreFramebuffers->resize(static_cast<uint32_t>(swapchain->buffers->size()));
-    guiFramebuffers->resize(static_cast<uint32_t>(swapchain->buffers->size()));
     for (size_t i = 0; i < coreFramebuffers->size(); i++)
     {
         if (!swapchain->buffers->at(i).image)
@@ -643,10 +595,8 @@ void mv::Window::setupFramebuffer(void)
             throw std::runtime_error("Swapchain buffer at index " + std::to_string(i) + " has nullptr view");
         // Assign each swapchain image to a frame buffer
         coreAttachments[0] = swapchain->buffers->at(i).view;
-        imguiAttachments[0] = swapchain->buffers->at(i).view;
 
         coreFramebuffers->at(i) = mvDevice->logicalDevice->createFramebuffer(coreFrameInfo);
-        guiFramebuffers->at(i) = mvDevice->logicalDevice->createFramebuffer(guiFrameInfo);
     }
     return;
 }

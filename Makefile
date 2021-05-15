@@ -501,6 +501,60 @@ mvEngine.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvEngine.cpp.s
 .PHONY : mvEngine.cpp.s
 
+mvGui.o: mvGui.cpp.o
+
+.PHONY : mvGui.o
+
+# target to build an object file
+mvGui.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvGui.cpp.o
+.PHONY : mvGui.cpp.o
+
+mvGui.i: mvGui.cpp.i
+
+.PHONY : mvGui.i
+
+# target to preprocess a source file
+mvGui.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvGui.cpp.i
+.PHONY : mvGui.cpp.i
+
+mvGui.s: mvGui.cpp.s
+
+.PHONY : mvGui.s
+
+# target to generate assembly for a file
+mvGui.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvGui.cpp.s
+.PHONY : mvGui.cpp.s
+
+mvHelper.o: mvHelper.cpp.o
+
+.PHONY : mvHelper.o
+
+# target to build an object file
+mvHelper.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvHelper.cpp.o
+.PHONY : mvHelper.cpp.o
+
+mvHelper.i: mvHelper.cpp.i
+
+.PHONY : mvHelper.i
+
+# target to preprocess a source file
+mvHelper.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvHelper.cpp.i
+.PHONY : mvHelper.cpp.i
+
+mvHelper.s: mvHelper.cpp.s
+
+.PHONY : mvHelper.s
+
+# target to generate assembly for a file
+mvHelper.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvHelper.cpp.s
+.PHONY : mvHelper.cpp.s
+
 mvImage.o: mvImage.cpp.o
 
 .PHONY : mvImage.o
@@ -714,6 +768,12 @@ help:
 	@echo "... mvEngine.o"
 	@echo "... mvEngine.i"
 	@echo "... mvEngine.s"
+	@echo "... mvGui.o"
+	@echo "... mvGui.i"
+	@echo "... mvGui.s"
+	@echo "... mvHelper.o"
+	@echo "... mvHelper.i"
+	@echo "... mvHelper.s"
 	@echo "... mvImage.o"
 	@echo "... mvImage.i"
 	@echo "... mvImage.s"
