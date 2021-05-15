@@ -15,4 +15,9 @@ The room's mesh is loaded once & objects are spawned at random locations in a gi
 
 lots more to do...
 
-![Latest snapshot](https://raw.githubusercontent.com/lukeymoo/mv/development/snapshots/Screenshot%20from%202021-05-04%2002-36-47.png)
+![snapshot](https://raw.githubusercontent.com/lukeymoo/mv/development/snapshots/Screenshot%20from%202021-05-04%2002-36-47.png)
+
+Turns out I've had a bug in my aspect ratio for the entire duration of this project; Aspect ratio was 1.0 due to using `swapchain.height/swapchain.height`
+instead of the appropriate `swapchain.width/swapchain.height`
+
+![Lastest snapshot](https://raw.githubusercontent.com/lukeymoo/mv/main/snapshots/Screenshot%20from%202021-05-15%2001-08-24.png)
