@@ -522,17 +522,6 @@ void mv::Window::setupRenderPass(void)
     coreRenderPassInfo.dependencyCount = static_cast<uint32_t>(coreDependencies.size());
     coreRenderPassInfo.pDependencies = coreDependencies.data();
 
-<<<<<<< HEAD
-=======
-    vk::RenderPassCreateInfo guiRenderPassInfo;
-    guiRenderPassInfo.attachmentCount = static_cast<uint32_t>(guiAttachments.size());
-    guiRenderPassInfo.pAttachments = guiAttachments.data();
-    guiRenderPassInfo.subpassCount = static_cast<uint32_t>(guiSubpasses.size());
-    guiRenderPassInfo.pSubpasses = guiSubpasses.data();
-    guiRenderPassInfo.dependencyCount = static_cast<uint32_t>(guiDependencies.size());
-    guiRenderPassInfo.pDependencies = guiDependencies.data();
-
->>>>>>> main
     // std::cout << "Creating render pass for core renderer...\n"
     //           << "Attachments => " << coreAttachments.size() << "\n"
     //           << "Subpasses => " << coreSubpasses.size() << "\n"
@@ -543,10 +532,6 @@ void mv::Window::setupRenderPass(void)
     //           << "Attachments => " << guiAttachments.size() << "\n"
     //           << "Subpasses => " << guiSubpasses.size() << "\n"
     //           << "Dependencies => " << guiDependencies.size() << "\n";
-<<<<<<< HEAD
-=======
-    vk::RenderPass tempGui = mvDevice->logicalDevice->createRenderPass(guiRenderPassInfo);
->>>>>>> main
 
     renderPasses->insert({
         "core",
