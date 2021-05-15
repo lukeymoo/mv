@@ -19,8 +19,8 @@
 
 const size_t MAX_IN_FLIGHT = 3;
 
-#define WINDOW_WIDTH 1920
-#define WINDOW_HEIGHT 1080
+#define WINDOW_WIDTH 2560
+#define WINDOW_HEIGHT 1440
 
 constexpr std::array<const char *, 1> requestedValidationLayers = {
     "VK_LAYER_KHRONOS_validation",

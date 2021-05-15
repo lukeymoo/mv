@@ -48,6 +48,9 @@ mv::Window::Window(int w, int h, std::string title)
             instanceExtensions.push_back(glfw_req);
     }
 
+    std::cout << "Requesting window size => " << windowWidth << ", " << windowHeight << "\n";
+
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window = glfwCreateWindow(windowWidth, windowHeight, title.c_str(), nullptr, nullptr);
     if (!window)
@@ -277,7 +280,7 @@ void mv::Window::initVulkan(void)
     std::vector<std::string> tmp;
     for (const auto &extensionName : requestedDeviceExtensions)
     {
-        std::cout << "\t[-] Requesting device extension => " << extensionName << "\n";
+        // std::cout << "\t[-] Requesting device extension => " << extensionName << "\n";
         tmp.push_back(extensionName);
     }
 
@@ -336,13 +339,13 @@ void mv::Window::createInstance(void)
     std::vector<const char *> req_layers;
     for (auto &layerName : requestedValidationLayers)
     {
-        std::cout << "\t[-] Requesting layer => " << layerName << "\n";
+        // std::cout << "\t[-] Requesting layer => " << layerName << "\n";
         req_layers.push_back(layerName);
     }
     std::vector<const char *> req_inst_ext;
     for (auto &ext : instanceExtensions)
     {
-        std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
+        // std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
         req_inst_ext.push_back(ext.c_str());
     }
 
@@ -358,7 +361,6 @@ void mv::Window::createInstance(void)
     std::vector<const char *> req_inst_ext;
     for (auto &ext : instanceExtensions)
     {
-        std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
         req_inst_ext.push_back(ext.c_str());
     }
 
@@ -520,6 +522,17 @@ void mv::Window::setupRenderPass(void)
     coreRenderPassInfo.dependencyCount = static_cast<uint32_t>(coreDependencies.size());
     coreRenderPassInfo.pDependencies = coreDependencies.data();
 
+<<<<<<< HEAD
+=======
+    vk::RenderPassCreateInfo guiRenderPassInfo;
+    guiRenderPassInfo.attachmentCount = static_cast<uint32_t>(guiAttachments.size());
+    guiRenderPassInfo.pAttachments = guiAttachments.data();
+    guiRenderPassInfo.subpassCount = static_cast<uint32_t>(guiSubpasses.size());
+    guiRenderPassInfo.pSubpasses = guiSubpasses.data();
+    guiRenderPassInfo.dependencyCount = static_cast<uint32_t>(guiDependencies.size());
+    guiRenderPassInfo.pDependencies = guiDependencies.data();
+
+>>>>>>> main
     // std::cout << "Creating render pass for core renderer...\n"
     //           << "Attachments => " << coreAttachments.size() << "\n"
     //           << "Subpasses => " << coreSubpasses.size() << "\n"
@@ -530,6 +543,10 @@ void mv::Window::setupRenderPass(void)
     //           << "Attachments => " << guiAttachments.size() << "\n"
     //           << "Subpasses => " << guiSubpasses.size() << "\n"
     //           << "Dependencies => " << guiDependencies.size() << "\n";
+<<<<<<< HEAD
+=======
+    vk::RenderPass tempGui = mvDevice->logicalDevice->createRenderPass(guiRenderPassInfo);
+>>>>>>> main
 
     renderPasses->insert({
         "core",

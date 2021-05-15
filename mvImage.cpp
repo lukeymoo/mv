@@ -147,8 +147,6 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     descriptor.imageView = *imageView;
     descriptor.sampler = *sampler;
 
-    std::cout << "Loaded model texture\n";
-
     return;
 }
 

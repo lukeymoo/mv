@@ -247,7 +247,8 @@ namespace mv
         std::unique_ptr<std::vector<struct Mesh>> loadedMeshes;
         std::unique_ptr<std::vector<struct Texture>> loadedTextures;
 
-        void load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator, const char *p_Filename);
+        void load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator, const char *p_Filename,
+                  bool p_OutputDebug = true);
 
         void processNode(const mv::Device &p_MvDevice, aiNode *p_Node, const aiScene *p_Scene);
 

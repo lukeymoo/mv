@@ -92,7 +92,6 @@ namespace mv
 
             projectionUniformObject->matrix = glm::perspective(glm::radians(fov), aspect, nearz, farz);
             projectionUniformObject->matrix[1][1] *= -1.0f;
-
             // TODO
             // add non host visible/coherent update support
             // update projection matrix buffer

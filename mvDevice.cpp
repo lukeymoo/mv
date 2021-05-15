@@ -29,7 +29,8 @@ mv::Device::Device(const vk::PhysicalDevice &p_PhysicalDevice, std::vector<std::
         {
             if (strcmp(supportedExtension.extensionName, requested_ext.c_str()) == 0)
             {
-                std::cout << "\t\tFound device extension => " << supportedExtension.extensionName << "\n";
+                if (shouldOutputDebug)
+                    std::cout << "\t\tFound device extension => " << supportedExtension.extensionName << "\n";
                 e = true;
                 break;
             }
@@ -160,9 +161,10 @@ uint32_t mv::Device::getMemoryType(uint32_t p_MemoryTypeBits, vk::MemoryProperty
 vk::Format mv::Device::getSupportedDepthFormat(const vk::PhysicalDevice &p_PhysicalDevice) const
 {
 
-    std::vector<vk::Format> depthFormats = {vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat,
-                                            vk::Format::eD24UnormS8Uint, vk::Format::eD16UnormS8Uint,
-                                            vk::Format::eD16Unorm};
+    std::vector<vk::Format> depthFormats = {
+        vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat, vk::Format::eD24UnormS8Uint,
+        vk::Format::eD16UnormS8Uint,  vk::Format::eD16Unorm,
+    };
 
     for (auto &format : depthFormats)
     {
@@ -181,7 +183,8 @@ void mv::Device::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::Memor
                               vk::DeviceSize p_DeviceSize, vk::Buffer *p_VkBuffer, vk::DeviceMemory *p_DeviceMemory,
                               void *p_InitialData) const
 {
-    std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(p_DeviceSize) << std::endl;
+    if (shouldOutputDebug)
+        std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(p_DeviceSize) << std::endl;
     vk::BufferCreateInfo bufferInfo;
     bufferInfo.usage = p_BufferUsageFlags;
     bufferInfo.size = p_DeviceSize;
@@ -221,8 +224,8 @@ void mv::Device::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::Memor
 void mv::Device::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::MemoryPropertyFlags p_MemoryPropertyFlags,
                               mv::Buffer *p_MvBuffer, vk::DeviceSize p_DeviceSize, void *p_InitialData) const
 {
-
-    std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(p_DeviceSize) << std::endl;
+    if (shouldOutputDebug)
+        std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(p_DeviceSize) << std::endl;
 
     // create buffer
     vk::BufferCreateInfo bufferInfo;
