@@ -8,12 +8,10 @@
 #include <random>
 #include <unordered_map>
 
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_vulkan.h"
-
 #include "mvAllocator.h"
 #include "mvCamera.h"
 #include "mvCollection.h"
+#include "mvGui.h"
 #include "mvWindow.h"
 
 using namespace std::chrono_literals;
@@ -33,7 +31,7 @@ namespace mv
           these will be removed for release versions
         */
         std::unordered_map<std::string, bool> toRenderMap = {
-            std::pair<std::string, bool>{"reticle_raycast", true},
+            std::pair<std::string, bool>{"reticle_raycast", false},
         };
 
         struct mv::Mesh reticleMesh; // Vertex buffer & memory
@@ -47,6 +45,7 @@ namespace mv
         std::unique_ptr<Allocator> descriptorAllocator; // descriptor pool/set manager
         std::unique_ptr<Collection> collectionHandler;  // model/obj manager
         std::unique_ptr<Camera> camera;                 // camera manager(view/proj matrix handler)
+        std::unique_ptr<GuiHandler> gui;                // ImGui manager
 
         // Containers for pipelines
         std::unique_ptr<std::unordered_map<std::string, vk::Pipeline>> pipelines;
@@ -64,86 +63,6 @@ namespace mv
         inline void goSetup(void);
         void recordCommandBuffer(uint32_t imageIndex);
         void draw(size_t &current_frame, uint32_t &current_image_index);
-
-        /*
-          Helper methods
-        */
-        // Create quick one time submit command buffer
-        inline vk::CommandBuffer beginCommandBuffer(void)
-        {
-            // sanity check
-            if (!mvDevice)
-                throw std::runtime_error("attempted to create one time submit command buffer but mv device "
-                                         "handler not initialized\n");
-
-            if (!mvDevice->commandPool)
-                throw std::runtime_error("attempted to create one time submit command buffer but command "
-                                         "pool is not initialized\n");
-
-            vk::CommandBufferAllocateInfo allocInfo;
-            allocInfo.level = vk::CommandBufferLevel::ePrimary;
-            allocInfo.commandPool = *mvDevice->commandPool;
-            allocInfo.commandBufferCount = 1;
-
-            // allocate command buffer
-            std::vector<vk::CommandBuffer> cmdbuf = mvDevice->logicalDevice->allocateCommandBuffers(allocInfo);
-
-            if (cmdbuf.size() < 1)
-                throw std::runtime_error("Failed to create one time submit command buffer");
-
-            // if more than 1 was created clean them up
-            // shouldn't happen
-            if (cmdbuf.size() > 1)
-            {
-                std::vector<vk::CommandBuffer> toDestroy;
-                for (auto &buf : cmdbuf)
-                {
-                    if (&buf - &cmdbuf[0] > 0)
-                    {
-                        toDestroy.push_back(buf);
-                    }
-                }
-                mvDevice->logicalDevice->freeCommandBuffers(*mvDevice->commandPool, toDestroy);
-            }
-
-            vk::CommandBufferBeginInfo beginInfo;
-            beginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
-
-            cmdbuf.at(0).begin(beginInfo);
-
-            return cmdbuf.at(0);
-        }
-
-        inline void endCommandBuffer(vk::CommandBuffer buffer)
-        {
-            // sanity check
-            if (!mvDevice)
-                throw std::runtime_error("attempted to end command buffer recording but mv device handler is nullptr");
-
-            if (!mvDevice->commandPool)
-                throw std::runtime_error("attempted to end command buffer recording but command pool is nullptr");
-
-            if (!mvDevice->graphicsQueue)
-                throw std::runtime_error("attempted to end command buffer recording but graphics queue is nullptr");
-
-            if (!buffer)
-                throw std::runtime_error("attempted to end command buffer recording but the buffer passed "
-                                         "as parameter is nullptr");
-
-            buffer.end();
-
-            vk::SubmitInfo submitInfo;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &buffer;
-
-            // submit buffer
-            mvDevice->graphicsQueue->submit(submitInfo);
-            mvDevice->graphicsQueue->waitIdle();
-
-            // free buffer
-            mvDevice->logicalDevice->freeCommandBuffers(*mvDevice->commandPool, buffer);
-            return;
-        }
 
       protected:
         void prepareUniforms(void);

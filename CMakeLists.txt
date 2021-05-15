@@ -16,6 +16,8 @@ set(HEADERS
     Headers/imgui-1.82/imgui.h
     Headers/imgui-1.82/backends/imgui_impl_glfw.h
     Headers/imgui-1.82/backends/imgui_impl_vulkan.h
+    Headers/mvGui.h
+    Headers/mvHelper.h
     Headers/mvInput.h
     Headers/mvWindow.h
     Headers/mvCollection.h
@@ -37,6 +39,8 @@ set(SOURCES
     Headers/imgui-1.82/imgui_draw.cpp
     Headers/imgui-1.82/imgui_demo.cpp
     Headers/imgui-1.82/imgui.cpp
+    mvGui.cpp
+    mvHelper.cpp
     mvCollection.cpp
     mvAllocator.cpp
     mvInput.cpp

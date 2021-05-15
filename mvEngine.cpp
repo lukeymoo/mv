@@ -83,20 +83,6 @@ void mv::Engine::cleanupSwapchain(void)
         }
     }
 
-    if (guiFramebuffers)
-    {
-        if (!guiFramebuffers->empty())
-        {
-            for (auto &buffer : *guiFramebuffers)
-            {
-                if (buffer)
-                    mvDevice->logicalDevice->destroyFramebuffer(buffer, nullptr);
-            }
-            guiFramebuffers.reset();
-            guiFramebuffers = std::make_unique<std::vector<vk::Framebuffer>>();
-        }
-    }
-
     if (depthStencil)
     {
         if (depthStencil->image)
@@ -240,45 +226,23 @@ void mv::Engine::go(void)
     auto startTime = chrono::now();
 
     /*
-      IMGUI Params
+        Create and initialize ImGui handler
+        Will create render pass & perform pre game loop ImGui initialization
     */
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
-    (void)io;
+    // clang-format off
+    gui = std::make_unique<GuiHandler>(window,
+                                        *instance,
+                                        *physicalDevice,
+                                        *mvDevice->logicalDevice,
+                                        *swapchain,
+                                        *mvDevice->commandPool,
+                                        *mvDevice->graphicsQueue,
+                                        *renderPasses,
+                                        descriptorAllocator->get()->pool);
+    // clang-format on
 
-    ImGui::StyleColorsDark();
-
-    bool helloWorldActive = true;
-
-    ImGui_ImplVulkan_InitInfo initInfo{
-        .Instance = *instance,
-        .PhysicalDevice = *physicalDevice,
-        .Device = *mvDevice->logicalDevice,
-        .QueueFamily = mvDevice->queueIdx.graphics,
-        .Queue = *mvDevice->graphicsQueue,
-        .PipelineCache = nullptr,
-        .DescriptorPool = descriptorAllocator->get()->pool,
-        .MinImageCount = static_cast<uint32_t>(swapchain->buffers->size()),
-        .ImageCount = static_cast<uint32_t>(swapchain->buffers->size()),
-        .Allocator = nullptr,
-        .CheckVkResultFn = nullptr,
-    };
-    ImGui_ImplGlfw_InitForVulkan(window, true);
-    ImGui_ImplVulkan_Init(&initInfo, renderPasses->at("gui"));
-
-    /*
-      Upload ImGui render fonts
-    */
-    {
-        vk::CommandBuffer guiFont = Engine::beginCommandBuffer();
-
-        ImGui_ImplVulkan_CreateFontsTexture(guiFont);
-
-        Engine::endCommandBuffer(guiFont);
-
-        ImGui_ImplVulkan_DestroyFontUploadObjects();
-    }
+    *guiFramebuffers = gui->createFramebuffers(*mvDevice->logicalDevice, renderPasses->at("gui"), *swapchain->buffers,
+                                               swapchain->swapExtent.width, swapchain->swapExtent.height);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -310,19 +274,25 @@ void mv::Engine::go(void)
                 // }
 
                 /*
-                  Start & Stop mouse drag
+                  Start mouse drag
                 */
                 if (mouseEvent.type == Mouse::Event::Type::eRightDown)
                 {
+
+                    if (!mouse.isDragging)
+                    {
+                        // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+                        // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                        mouse.startDrag(camera->orbitAngle, camera->pitch);
+                    }
+                }
+                if (mouseEvent.type == Mouse::Event::Type::eRightRelease)
+                {
                     if (mouse.isDragging)
                     {
-                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                        // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+                        // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
                         mouse.endDrag();
-                    }
-                    else
-                    {
-                        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-                        mouse.startDrag(camera->orbitAngle, camera->pitch);
                     }
                 }
 
@@ -373,8 +343,9 @@ void mv::Engine::go(void)
                 // TOGGLE RENDER PLAYER AIM RAYCAST
                 if (kbdEvent.type == Keyboard::Event::ePress && kbdEvent.code == GLFW_KEY_LEFT_ALT)
                 {
-                    toRenderMap.at("reticle_raycast") = !toRenderMap.at("reticle_raycast");
-                    std::cout << "Render player aiming raycast => " << toRenderMap.at("reticle_raycast") << "\n";
+                    // toRenderMap.at("reticle_raycast") = !toRenderMap.at("reticle_raycast");
+                    // std::cout << "Render player aiming raycast => " << toRenderMap.at("reticle_raycast") << "\n";
+                    std::cout << "Ray cast permanently disabled\n";
                 }
 
                 /*
@@ -495,20 +466,25 @@ void mv::Engine::go(void)
             // float y = xy_distr(eng);
             // float z = z_distr(eng);
             // raycast_p1(*this, {x, y, z});
-            raycastP2(*this, {collectionHandler->models->at(1).objects->at(0).position.x,
-                              collectionHandler->models->at(1).objects->at(0).position.y - 1.5f,
-                              collectionHandler->models->at(1).objects->at(0).position.z});
+            // raycastP2(*this, {collectionHandler->models->at(1).objects->at(0).position.x,
+            //                   collectionHandler->models->at(1).objects->at(0).position.y - 1.5f,
+            //                   collectionHandler->models->at(1).objects->at(0).position.z});
         }
 
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
+        // Game editor rendering
+        {
+            gui->newFrame();
+            ImGui::SetNextWindowPos(ImVec2(0, 0));
+            ImGui::SetNextWindowSize(ImVec2(swapchain->swapExtent.width, 32));
+            ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                           ImGuiWindowFlags_NoSavedSettings;
+            ImGui::Begin("Toolbar", nullptr, windowFlags);
 
-        // Render imgui
-        if (helloWorldActive)
-            ImGui::ShowDemoWindow(&helloWorldActive);
+            ImGui::End();
 
-        ImGui::Render();
+            gui->renderFrame();
+        }
 
         // TODO
         // Add alpha to render
@@ -516,12 +492,7 @@ void mv::Engine::go(void)
         draw(currentFrame, imageIndex);
     }
 
-    // Wait for ImGui pipeline
-    mvDevice->logicalDevice->waitIdle();
-
-    // Cleanup IMGUI
-    ImGui_ImplVulkan_Shutdown();
-    ImGui::DestroyContext();
+    gui->cleanup(*mvDevice->logicalDevice);
 
     int totalObjectCount = 0;
     for (const auto &model : *collectionHandler->models)
@@ -888,20 +859,8 @@ void mv::Engine::recordCommandBuffer(uint32_t p_ImageIndex)
     /*
      IMGUI RENDER
     */
-    vk::RenderPassBeginInfo guiPassInfo;
-    guiPassInfo.renderPass = renderPasses->at("gui");
-    guiPassInfo.framebuffer = guiFramebuffers->at(p_ImageIndex);
-    guiPassInfo.renderArea.offset.x = 0;
-    guiPassInfo.renderArea.offset.y = 0;
-    guiPassInfo.renderArea.extent.width = swapchain->swapExtent.width;
-    guiPassInfo.renderArea.extent.height = swapchain->swapExtent.height;
-
-    commandBuffers->at(p_ImageIndex).beginRenderPass(guiPassInfo, vk::SubpassContents::eInline);
-
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffers->at(p_ImageIndex));
-
-    commandBuffers->at(p_ImageIndex).endRenderPass();
-
+    gui->doRenderPass(renderPasses->at("gui"), guiFramebuffers->at(p_ImageIndex), commandBuffers->at(p_ImageIndex),
+                      swapchain->swapExtent);
     /*
       END IMGUI RENDER
     */
