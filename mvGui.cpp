@@ -7,6 +7,12 @@ mv::GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Insta
                            std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
                            const vk::DescriptorPool &p_DescriptorPool)
 {
+    // Ensure gui not already in render pass map
+    if (p_RenderPassMap.find("gui") != p_RenderPassMap.end())
+    {
+        std::cout << "ImGui already initialized, skipping...\n";
+        return;
+    }
     // Create render pass
     createRenderPass(p_RenderPassMap, p_LogicalDevice, p_MvSwap.colorFormat);
 
@@ -54,14 +60,6 @@ mv::GuiHandler::~GuiHandler()
 void mv::GuiHandler::createRenderPass(std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
                                       const vk::Device &p_LogicalDevice, const vk::Format &p_AttachmentColorFormat)
 {
-    // Ensure gui not already in render pass map
-    if (p_RenderPassMap.find("gui") != p_RenderPassMap.end())
-    {
-        std::cout
-            << "\t[-] Attempted to create ImGui render pass but render pass named gui already exists, skipping...\n";
-        return;
-    }
-
     std::array<vk::AttachmentDescription, 1> guiAttachments;
 
     // ImGui attachment
@@ -182,4 +180,52 @@ void mv::GuiHandler::doRenderPass(const vk::RenderPass &p_RenderPass, const vk::
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), p_CommandBuffer);
 
     p_CommandBuffer.endRenderPass();
+}
+
+void mv::GuiHandler::update(const vk::Extent2D &p_SwapExtent, float p_RenderDelta, float p_FrameDelta)
+{
+    auto updateEnd = std::chrono::high_resolution_clock::now();
+    float timeSince = std::chrono::duration<float, std::ratio<1L, 1L>>(updateEnd - lastDeltaUpdate).count();
+    if (timeSince >= 1.0f)
+    {
+        storedRenderDelta = p_RenderDelta;
+        storedFrameDelta = p_FrameDelta;
+        lastDeltaUpdate = std::chrono::high_resolution_clock::now();
+    }
+    ImGui::BeginMainMenuBar();
+
+    /*
+        File Menu
+    */
+    if (ImGui::BeginMenu("File"))
+    {
+        if (ImGui::MenuItem("Open", nullptr))
+        {
+            // Load map file
+        }
+        if (ImGui::MenuItem("Save", nullptr))
+        {
+            // Save map file
+        }
+        if (ImGui::MenuItem("Save As...", nullptr))
+        {
+            // Save map file & force naming
+        }
+
+        ImGui::EndMenu();
+    }
+
+    ImGui::EndMainMenuBar();
+
+    /*
+        Engine status data
+    */
+    // Bottom left window
+    ImGuiWindowFlags engineDataFlags =
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar;
+    ImGui::SetNextWindowPos(ImVec2(0, p_SwapExtent.height - 32));
+    ImGui::SetNextWindowSize(ImVec2(p_SwapExtent.width, 32));
+    ImGui::Begin("Status", nullptr, engineDataFlags);
+    ImGui::Text("Render rate: %f ms | Frame time: %f ms", storedRenderDelta, storedFrameDelta);
+    ImGui::End();
 }

@@ -9,6 +9,7 @@
 // clang-format on
 
 #include <iostream>
+#include <chrono>
 
 #include "mvHelper.h"
 #include "mvSwap.h"
@@ -23,6 +24,13 @@ namespace mv
                    const vk::Queue &p_GraphicsQueue, std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
                    const vk::DescriptorPool &p_DescriptorPool);
         ~GuiHandler();
+
+        std::chrono::_V2::system_clock::time_point lastDeltaUpdate = std::chrono::high_resolution_clock::now();
+
+        float storedFrameDelta = 0.0f;
+        float storedRenderDelta = 0.0f;
+
+        void update(const vk::Extent2D &p_SwapExtent, float p_RenderDelta, float p_FrameDelta);
 
         void createRenderPass(std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
                               const vk::Device &p_LogicalDevice, const vk::Format &p_AttachmentColorFormat);

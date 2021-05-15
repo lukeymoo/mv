@@ -48,15 +48,21 @@ mv::Window::Window(int w, int h, std::string title)
             instanceExtensions.push_back(glfw_req);
     }
 
-    std::cout << "Requesting window size => " << windowWidth << ", " << windowHeight << "\n";
+    /*
+        Create window, windowed fullscreen
+    */
+    auto monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode *videoMode = glfwGetVideoMode(monitor);
 
+    glfwWindowHint(GLFW_RED_BITS, videoMode->redBits);
+    glfwWindowHint(GLFW_GREEN_BITS, videoMode->greenBits);
+    glfwWindowHint(GLFW_BLUE_BITS, videoMode->blueBits);
+    glfwWindowHint(GLFW_REFRESH_RATE, videoMode->refreshRate);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window = glfwCreateWindow(windowWidth, windowHeight, title.c_str(), nullptr, nullptr);
+    window = glfwCreateWindow(videoMode->width, videoMode->height, title.c_str(), monitor, nullptr);
     if (!window)
         throw std::runtime_error("Failed to create window");
-
-    // glfwSetWindowPos(window, 0, 0);
 
     // set keyboard callback
     glfwSetKeyCallback(window, mv::keyCallback);

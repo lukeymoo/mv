@@ -241,6 +241,9 @@ void mv::Engine::go(void)
               << "swapchain height => " << swapchain->swapExtent.height << "\taspect ratio => "
               << (float)swapchain->swapExtent.width / swapchain->swapExtent.height << "\n";
 
+    float renderDelta = 0.0f;
+    auto renderStart = chrono::now();
+    auto renderStop = chrono::now();
     while (!glfwWindowShouldClose(window))
     {
         auto deltaTime = chrono::now() - startTime;
@@ -471,14 +474,10 @@ void mv::Engine::go(void)
         // Game editor rendering
         {
             gui->newFrame();
-            ImGui::SetNextWindowPos(ImVec2(0, 0));
-            ImGui::SetNextWindowSize(ImVec2(swapchain->swapExtent.width, 32));
-            ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                                           ImGuiWindowFlags_NoSavedSettings;
-            ImGui::Begin("Toolbar", nullptr, windowFlags);
 
-            ImGui::End();
+            gui->update(swapchain->swapExtent,
+                        std::chrono::duration<float, std::ratio<1L, 1000L>>(renderStop - renderStart).count(),
+                        std::chrono::duration<float, std::chrono::milliseconds::period>(deltaTime).count());
 
             gui->renderFrame();
         }
@@ -486,7 +485,9 @@ void mv::Engine::go(void)
         // TODO
         // Add alpha to render
         // Render
+        renderStart = chrono::now();
         draw(currentFrame, imageIndex);
+        renderStop = chrono::now();
     }
 
     gui->cleanup(*mvDevice->logicalDevice);
