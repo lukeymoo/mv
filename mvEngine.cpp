@@ -241,7 +241,6 @@ void mv::Engine::go(void)
               << "swapchain height => " << swapchain->swapExtent.height << "\taspect ratio => "
               << (float)swapchain->swapExtent.width / swapchain->swapExtent.height << "\n";
 
-    float renderDelta = 0.0f;
     auto renderStart = chrono::now();
     auto renderStop = chrono::now();
     while (!glfwWindowShouldClose(window))
@@ -260,7 +259,7 @@ void mv::Engine::go(void)
             mv::Keyboard::Event kbdEvent = keyboard.read();
             mv::Mouse::Event mouseEvent = mouse.read();
 
-            if (camera->type == CameraType::eThirdPerson)
+            if (camera->type == CameraType::eThirdPerson && !gui->hasFocus)
             {
 
                 /*
@@ -475,7 +474,7 @@ void mv::Engine::go(void)
         {
             gui->newFrame();
 
-            gui->update(swapchain->swapExtent,
+            gui->update(window, swapchain->swapExtent,
                         std::chrono::duration<float, std::ratio<1L, 1000L>>(renderStop - renderStart).count(),
                         std::chrono::duration<float, std::chrono::milliseconds::period>(deltaTime).count());
 
@@ -1142,7 +1141,8 @@ void mv::keyCallback(GLFWwindow *p_GLFWwindow, int p_Key, [[maybe_unused]] int p
 
     if (p_Key == GLFW_KEY_ESCAPE && p_Action == GLFW_PRESS)
     {
-        glfwSetWindowShouldClose(p_GLFWwindow, true);
+        // glfwSetWindowShouldClose(p_GLFWwindow, true);
+        std::cout << "Escape key exiting has been disabled...\n";
         return;
     }
 

@@ -25,15 +25,42 @@ namespace mv
                    const vk::DescriptorPool &p_DescriptorPool);
         ~GuiHandler();
 
+        bool hasFocus = false;
+
+      private:
         std::chrono::_V2::system_clock::time_point lastDeltaUpdate = std::chrono::high_resolution_clock::now();
 
         float storedFrameDelta = 0.0f;
         float storedRenderDelta = 0.0f;
 
-        void update(const vk::Extent2D &p_SwapExtent, float p_RenderDelta, float p_FrameDelta);
+        struct FileMenu
+        {
+            struct OpenModal
+            {
+                bool isOpen = false;
+                ImGuiWindowFlags flags =
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoResize;
+            } openModal;
 
-        void createRenderPass(std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
-                              const vk::Device &p_LogicalDevice, const vk::Format &p_AttachmentColorFormat);
+            struct SaveAsModal
+            {
+                bool isOpen = false;
+            } saveAsModal;
+
+            struct QuitModal
+            {
+                bool isOpen = false;
+                ImGuiWindowFlags flags =
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoResize;
+            } quitModal;
+
+        } fileMenu;
+
+        std::function<void()> show = []() {};
+
+      public:
+        void update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
+                    float p_FrameDelta);
 
         std::vector<vk::Framebuffer> createFramebuffers(const vk::Device &p_LogicalDevice,
                                                         const vk::RenderPass &p_GuiRenderPass,
@@ -46,6 +73,10 @@ namespace mv
                           const vk::CommandBuffer &p_CommandBuffer, vk::Extent2D &p_RenderAreaExtent);
 
         void cleanup(const vk::Device &p_LogicalDevice);
+
+      private:
+        void createRenderPass(std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+                              const vk::Device &p_LogicalDevice, const vk::Format &p_AttachmentColorFormat);
     };
 }; // namespace mv
 
