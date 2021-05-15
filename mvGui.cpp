@@ -201,6 +201,9 @@ void mv::GuiHandler::update(const vk::Extent2D &p_SwapExtent, float p_RenderDelt
     {
         if (ImGui::MenuItem("Open", nullptr))
         {
+            // TODO
+            // Create variable HAS_SAVED & HAS_EDITED
+            // Prevent losing changes without save
             // Load map file
         }
         if (ImGui::MenuItem("Save", nullptr))
