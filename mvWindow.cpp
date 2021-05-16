@@ -64,14 +64,17 @@ mv::Window::Window(int w, int h, std::string title)
     if (!window)
         throw std::runtime_error("Failed to create window");
 
-    // set keyboard callback
+    // Set keyboard callback
     glfwSetKeyCallback(window, mv::keyCallback);
 
-    // set mouse motion callback
+    // Set mouse motion callback
     glfwSetCursorPosCallback(window, mv::mouseMotionCallback);
 
-    // set mouse button callback
+    // Set mouse button callback
     glfwSetMouseButtonCallback(window, mv::mouseButtonCallback);
+
+    // Set mouse wheel callback
+    glfwSetScrollCallback(window, mv::mouseScrollCallback);
 
     auto is_raw_supp = glfwRawMouseMotionSupported();
 

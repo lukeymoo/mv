@@ -224,6 +224,34 @@ void mv::Mouse::onWheelDown(int p_NewX, int p_NewY) noexcept
     return;
 }
 
+void mv::Mouse::onWheelUp(void) noexcept
+{
+    mouseBuffer.push(Event{
+        .type = Event::Type::eWheelUp,
+        .x = currentX,
+        .y = currentY,
+        .isLeftPressed = isLeftPressed,
+        .isMiddlePressed = isMiddlePressed,
+        .isRightPressed = isRightPressed,
+    });
+    trimBuffer(mouseBuffer, maxBufferSize);
+    return;
+}
+// used internally -- use onDelta
+void mv::Mouse::onWheelDown(void) noexcept
+{
+    mouseBuffer.push(Event{
+        .type = Event::Type::eWheelDown,
+        .x = currentX,
+        .y = currentY,
+        .isLeftPressed = isLeftPressed,
+        .isMiddlePressed = isMiddlePressed,
+        .isRightPressed = isRightPressed,
+    });
+    trimBuffer(mouseBuffer, maxBufferSize);
+    return;
+}
+
 void mv::Mouse::calculateDelta(void) noexcept
 {
     // if dragging calculate drag delta

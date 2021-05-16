@@ -237,10 +237,6 @@ void mv::Engine::go(void)
     *guiFramebuffers = gui->createFramebuffers(*mvDevice->logicalDevice, renderPasses->at("gui"), *swapchain->buffers,
                                                swapchain->swapExtent.width, swapchain->swapExtent.height);
 
-    std::cout << "swap chain width => " << swapchain->swapExtent.width << "\n"
-              << "swapchain height => " << swapchain->swapExtent.height << "\taspect ratio => "
-              << (float)swapchain->swapExtent.width / swapchain->swapExtent.height << "\n";
-
     auto renderStart = chrono::now();
     auto renderStop = chrono::now();
     while (!glfwWindowShouldClose(window))
@@ -265,12 +261,14 @@ void mv::Engine::go(void)
                 /*
                   Mouse scroll wheel
                 */
-                // if (mouse_event.type == mouse.event::etype::wheel_up) {
-                //   camera->adjust_zoom(-(camera->zoom_step));
-                // }
-                // if (mouse_event.type == mouse.event::etype::wheel_down) {
-                //   camera->adjust_zoom(camera->zoom_step);
-                // }
+                if (mouseEvent.type == Mouse::Event::Type::eWheelUp)
+                {
+                    camera->adjustZoom(-(camera->zoomStep));
+                }
+                if (mouseEvent.type == Mouse::Event::Type::eWheelDown)
+                {
+                    camera->adjustZoom(camera->zoomStep);
+                }
 
                 /*
                   Start mouse drag
@@ -325,31 +323,6 @@ void mv::Engine::go(void)
                     mouse.storedPitch = camera->pitch;
                     mouse.clear();
                 }
-
-                /*
-                  DEBUGGING CONTROLS
-                */
-
-                // PRINT OUT CAMERA STATE TO CONSOLE
-                if (kbdEvent.type == Keyboard::Event::ePress && kbdEvent.code == GLFW_KEY_LEFT_CONTROL)
-                {
-                    std::cout << "Mouse data\n";
-                    std::cout << "Orbit => " << camera->orbitAngle << "\n";
-                    std::cout << "Pitch => " << camera->pitch << "\n";
-                    std::cout << "Zoom level => " << camera->zoomLevel << "\n";
-                }
-
-                // TOGGLE RENDER PLAYER AIM RAYCAST
-                if (kbdEvent.type == Keyboard::Event::ePress && kbdEvent.code == GLFW_KEY_LEFT_ALT)
-                {
-                    // toRenderMap.at("reticle_raycast") = !toRenderMap.at("reticle_raycast");
-                    // std::cout << "Render player aiming raycast => " << toRenderMap.at("reticle_raycast") << "\n";
-                    std::cout << "Ray cast permanently disabled\n";
-                }
-
-                /*
-                  END DEBUGGING CONTROLS
-                */
 
                 // sort movement by key combination
 
@@ -1087,6 +1060,18 @@ void mv::mouseMotionCallback(GLFWwindow *p_GLFWwindow, double p_XPosition, doubl
     return;
 }
 
+void mv::mouseScrollCallback(GLFWwindow *p_GLFWwindow, double p_XOffset, double p_YOffset)
+{
+    auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
+
+    if (p_YOffset > 0)
+        engine->mouse.onWheelUp(0, 0);
+    if (p_YOffset < 0)
+        engine->mouse.onWheelDown(0, 0);
+
+    return;
+}
+
 void mv::mouseButtonCallback(GLFWwindow *p_GLFWwindow, int p_Button, int p_Action, [[maybe_unused]] int p_Modifiers)
 {
     auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
@@ -1142,13 +1127,13 @@ void mv::keyCallback(GLFWwindow *p_GLFWwindow, int p_Key, [[maybe_unused]] int p
     if (p_Key == GLFW_KEY_ESCAPE && p_Action == GLFW_PRESS)
     {
         // glfwSetWindowShouldClose(p_GLFWwindow, true);
-        std::cout << "Escape key exiting has been disabled...\n";
         return;
     }
 
     if (p_Action == GLFW_PRESS)
     {
         engine->keyboard.onKeyPress(p_Key);
+        engine->gui->getIO().AddInputCharacter(p_Key);
     }
     else if (p_Action == GLFW_RELEASE)
     {

@@ -7,6 +7,10 @@ mv::GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Insta
                            std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
                            const vk::DescriptorPool &p_DescriptorPool)
 {
+    if (!p_GLFWwindow)
+        throw std::runtime_error("Invalid GLFW window handle passed to Gui handler");
+    else
+        window = p_GLFWwindow;
     // Ensure gui not already in render pass map
     if (p_RenderPassMap.find("gui") != p_RenderPassMap.end())
     {
@@ -18,8 +22,6 @@ mv::GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Insta
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    [[maybe_unused]] ImGuiIO &io = ImGui::GetIO();
-    (void)io;
 
     ImGui::StyleColorsDark();
 
@@ -190,11 +192,41 @@ void mv::GuiHandler::update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_Swap
     */
     auto updateEnd = std::chrono::high_resolution_clock::now();
     float timeSince = std::chrono::duration<float, std::ratio<1L, 1L>>(updateEnd - lastDeltaUpdate).count();
-    if (timeSince >= 0.5f)
+    if (timeSince >= 1.0f)
     {
         storedRenderDelta = p_RenderDelta;
         storedFrameDelta = p_FrameDelta;
         lastDeltaUpdate = std::chrono::high_resolution_clock::now();
+        displayFPS = frameCount;
+        frameCount = 0;
+    }
+    else
+    {
+        frameCount++;
+    }
+
+    /*
+        FUNCTION LAMBDAS
+    */
+
+    /*
+        KEYBOARD SHORTCUTS
+    */
+    // MENU SHORTCUTS
+    if (getIO().KeysDown[GLFW_KEY_LEFT_CONTROL])
+    {
+        // Open file dialog
+        if (getIO().KeysDown[GLFW_KEY_O])
+            show = showOpenDialog;
+
+        // Save file as dialog
+        if (getIO().KeysDown[GLFW_KEY_LEFT_SHIFT] || getIO().KeysDown[GLFW_KEY_RIGHT_SHIFT])
+            if (getIO().KeysDown[GLFW_KEY_S])
+                show = showSaveDialog;
+
+        // Quit Dialog
+        if (getIO().KeysDown[GLFW_KEY_Q])
+            show = showQuitDialog;
     }
 
     ImGui::BeginMainMenuBar();
@@ -207,101 +239,28 @@ void mv::GuiHandler::update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_Swap
         /*
             OPEN FILE BUTTON
         */
-        if (ImGui::MenuItem("Open", nullptr))
+        if (ImGui::MenuItem("Open", "Ctrl+O"))
         {
-            show = [this]() {
-                if (!ImGui::IsPopupOpen("Load map file...", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
-                {
-                    fileMenu.openModal.isOpen = true;
-                    ImGui::SetNextWindowSize(ImVec2(800, 600));
-                    ImGui::OpenPopup("Load map file...", ImGuiPopupFlags_NoOpenOverExistingPopup);
-                }
-
-                if (ImGui::BeginPopupModal("Load map file...", &fileMenu.openModal.isOpen, fileMenu.openModal.flags))
-                {
-                    hasFocus = true;
-                    fileMenu.openModal.isOpen = true;
-
-                    // Print current directory
-                    ImGui::LabelText("Home", nullptr);
-
-                    ImGui::EndPopup();
-                }
-                else
-                {
-                    hasFocus = false;
-                    fileMenu.openModal.isOpen = false;
-                    show = []() {};
-                }
-            };
+            show = showOpenDialog;
         }
 
         if (ImGui::MenuItem("Save", nullptr))
         {
+            // Test if new file
         }
 
-        if (ImGui::MenuItem("Save As...", nullptr))
+        if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S"))
         {
+            show = showSaveDialog;
         }
 
         /*
             QUIT APPLICATION BUTTON
         */
-        if (ImGui::MenuItem("Quit", nullptr))
+        if (ImGui::MenuItem("Quit", "Ctrl+Q"))
         {
             // are you sure?
-            show = [&, this]() {
-                if (!ImGui::IsPopupOpen("Are you sure?", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
-                {
-                    fileMenu.quitModal.isOpen = true;
-                    auto viewport = ImGui::GetMainViewport();
-                    auto center = viewport->GetCenter();
-                    center.x -= 200;
-                    center.y -= 200;
-                    const auto min = ImVec2(200, 50);
-                    const auto max = ImVec2(200, 50);
-                    ImGui::SetNextWindowSizeConstraints(min, max);
-                    ImGui::SetNextWindowSize(max, ImGuiPopupFlags_NoOpenOverExistingPopup);
-                    ImGui::SetNextWindowPos(center);
-                    ImGui::OpenPopup("Are you sure?", ImGuiPopupFlags_NoOpenOverExistingPopup);
-                }
-
-                if (ImGui::BeginPopupModal("Are you sure?", &fileMenu.quitModal.isOpen, fileMenu.quitModal.flags))
-                {
-                    hasFocus = true;
-
-                    if (ImGui::Button("Cancel"))
-                    {
-                        hasFocus = false;
-                        fileMenu.quitModal.isOpen = false;
-                        show = []() {};
-                        ImGui::CloseCurrentPopup();
-                    }
-
-                    ImGui::SameLine();
-
-                    ImGui::Dummy(ImVec2(75, 0));
-
-                    ImGui::SameLine();
-
-                    if (ImGui::Button("Quit"))
-                    {
-                        hasFocus = false;
-                        fileMenu.quitModal.isOpen = false;
-                        show = []() {};
-                        ImGui::CloseCurrentPopup();
-                        glfwSetWindowShouldClose(p_GLFWwindow, GLFW_TRUE);
-                    }
-
-                    ImGui::EndPopup();
-                }
-                else
-                {
-                    hasFocus = false;
-                    fileMenu.quitModal.isOpen = false;
-                    show = []() {};
-                }
-            };
+            show = showQuitDialog;
         }
 
         ImGui::EndMenu();
@@ -312,7 +271,7 @@ void mv::GuiHandler::update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_Swap
     /*
         Handle Popups
     */
-    show();
+    show(this);
 
     /*
         Engine status data
@@ -323,6 +282,14 @@ void mv::GuiHandler::update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_Swap
     ImGui::SetNextWindowPos(ImVec2(0, p_SwapExtent.height - 32));
     ImGui::SetNextWindowSize(ImVec2(p_SwapExtent.width, 32));
     ImGui::Begin("Status", nullptr, engineDataFlags);
-    ImGui::Text("Render rate: %.2f ms | Frame time: %.2f ms", storedRenderDelta, storedFrameDelta);
+    ImGui::Text("Render time: %.2f ms | Frame time: %.2f ms | FPS %i", storedRenderDelta, storedFrameDelta, displayFPS);
     ImGui::End();
+
+    // Clear key states
+    getIO().ClearInputCharacters();
+}
+
+ImGuiIO &mv::GuiHandler::getIO(void)
+{
+    return ImGui::GetIO();
 }

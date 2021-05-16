@@ -41,6 +41,7 @@ namespace mv
     // GLFW CALLBACKS -- DEFINED IN ENGINE CPP
     void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
     void mouseMotionCallback(GLFWwindow *window, double xpos, double ypos);
+    void mouseScrollCallback(GLFWwindow *p_GLFWwindow, double p_XOffset, double p_YOffset);
     void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
     void glfwErrCallback(int error, const char *desc);
 

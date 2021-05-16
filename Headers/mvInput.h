@@ -165,6 +165,9 @@ namespace mv
         void onMiddlePress(void) noexcept;
         void onMiddleRelease(void) noexcept;
 
+        void onWheelUp(void) noexcept;
+        void onWheelDown(void) noexcept;
+
         void onWheelUp(int p_NewX, int p_NewY) noexcept;
         void onWheelDown(int p_NewX, int p_NewY) noexcept;
         void calculateDelta(void) noexcept;
