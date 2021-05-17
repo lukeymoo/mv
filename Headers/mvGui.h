@@ -672,12 +672,12 @@ namespace mv
                 else if (message.first == LogHandler::MessagePriority::eWarning)
                 {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
-                    ImGui::Text("[-] %s", message.second.c_str());
+                    ImGui::Text("[!] %s", message.second.c_str());
                     ImGui::PopStyleColor();
                 }
                 else
                 {
-                    ImGui::Text("[-] %s", message.second.c_str());
+                    ImGui::Text(" %s", message.second.c_str());
                 }
             }
             // Check if scrolled to bottom
