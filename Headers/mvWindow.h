@@ -16,6 +16,7 @@
 #include "mvSwap.h"
 #include "mvTimer.h"
 #include "mvWindow.h"
+#include "mvHelper.h"
 
 const size_t MAX_IN_FLIGHT = 3;
 

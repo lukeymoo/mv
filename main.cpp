@@ -1,6 +1,9 @@
 #include "mvEngine.h"
+#include "mvHelper.h"
 
 #include <iostream>
+
+mv::LogHandler logger;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
 {

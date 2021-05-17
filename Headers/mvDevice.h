@@ -12,6 +12,7 @@
 #include <iostream>
 
 #include "mvBuffer.h"
+#include "mvHelper.h"
 
 namespace mv
 {

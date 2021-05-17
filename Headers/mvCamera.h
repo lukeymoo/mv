@@ -517,7 +517,6 @@ namespace mv
         }
         inline void rotate(glm::vec3 p_Delta, float p_FrameDelta) // should remain unused while using timesteps
         {
-            std::cout << "delta => " << p_Delta.x << ", " << p_Delta.y << "\n";
             float speedLimit = 0.5f;
             float toApplyX = (p_Delta.x * p_FrameDelta * speedLimit);
             float toApplyY = (p_Delta.y * p_FrameDelta * speedLimit);

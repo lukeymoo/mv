@@ -1,6 +1,8 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "mvModel.h"
 
+extern mv::LogHandler logger;
+
 /*
     MODEL METHODS
 */
@@ -62,9 +64,9 @@ void mv::Model::load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAl
     }
     if (p_OutputDebug)
     {
-        std::cout << "\t :: Loaded model => " << p_Filename << "\n";
-        std::cout << "\t\t Meshes => " << loadedMeshes->size() << "\n";
-        std::cout << "\t\t Textures => " << loadedTextures->size() << "\n";
+        logger.logMessage("\t :: Loaded model => " + std::string(p_Filename) + "\n\t\t Meshes => " +
+                          std::to_string(loadedMeshes->size()) + "\n\t\t Textures => " +
+                          std::to_string(loadedTextures->size()));
     }
     return;
 }

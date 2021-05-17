@@ -1,5 +1,7 @@
 #include "mvWindow.h"
 
+extern mv::LogHandler logger;
+
 mv::Window::Window(int w, int h, std::string title)
 {
     this->windowWidth = w;
@@ -289,7 +291,7 @@ void mv::Window::initVulkan(void)
     std::vector<std::string> tmp;
     for (const auto &extensionName : requestedDeviceExtensions)
     {
-        // std::cout << "\t[-] Requesting device extension => " << extensionName << "\n";
+        logger.logMessage("Requesting device extension " + std::string(extensionName));
         tmp.push_back(extensionName);
     }
 
@@ -348,13 +350,13 @@ void mv::Window::createInstance(void)
     std::vector<const char *> req_layers;
     for (auto &layerName : requestedValidationLayers)
     {
-        // std::cout << "\t[-] Requesting layer => " << layerName << "\n";
+        logger.logMessage("Requesting layer => " + std::string(layerName));
         req_layers.push_back(layerName);
     }
     std::vector<const char *> req_inst_ext;
     for (auto &ext : instanceExtensions)
     {
-        // std::cout << "\t[-] Requesting instance extension => " << ext << "\n";
+        logger.logMessage("Requesting instance extension => " + std::string(ext));
         req_inst_ext.push_back(ext.c_str());
     }
 
@@ -531,16 +533,11 @@ void mv::Window::setupRenderPass(void)
     coreRenderPassInfo.dependencyCount = static_cast<uint32_t>(coreDependencies.size());
     coreRenderPassInfo.pDependencies = coreDependencies.data();
 
-    // std::cout << "Creating render pass for core renderer...\n"
-    //           << "Attachments => " << coreAttachments.size() << "\n"
-    //           << "Subpasses => " << coreSubpasses.size() << "\n"
-    //           << "Dependencies => " << coreDependencies.size() << "\n";
+    logger.logMessage("Creating render pass for core renderer...\nAttachments => " +
+                      std::to_string(coreAttachments.size()) + "\nSubpasses => " +
+                      std::to_string(coreSubpasses.size()) + "\nDependencies => " +
+                      std::to_string(coreDependencies.size()) + "\n");
     vk::RenderPass tempCore = mvDevice->logicalDevice->createRenderPass(coreRenderPassInfo);
-
-    // std::cout << "Creating render pass for imgui...\n"
-    //           << "Attachments => " << guiAttachments.size() << "\n"
-    //           << "Subpasses => " << guiSubpasses.size() << "\n"
-    //           << "Dependencies => " << guiDependencies.size() << "\n";
 
     renderPasses->insert({
         "core",
@@ -630,7 +627,7 @@ void mv::Window::checkValidationSupport(void)
     }
     else
     {
-        std::cout << "[+] System supports all requested validation layers" << std::endl;
+        logger.logMessage("System supports all requested validation layers");
     }
     return;
 }
@@ -682,6 +679,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
         oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
             << p_CallbackData->pMessageIdName << "\n"
             << p_CallbackData->pMessage << "\n\n";
+        std::cout << oss.str();
+        logger.logMessage(mv::LogHandler::MessagePriority::eWarning, oss.str().c_str());
     }
     if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
@@ -690,6 +689,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << "Warning: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
             << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
+        logger.logMessage(mv::LogHandler::MessagePriority::eWarning, oss.str().c_str());
     }
     // else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
     // {
@@ -708,6 +708,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << "Error: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
             << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
+        logger.logMessage(mv::LogHandler::MessagePriority::eError, oss.str().c_str());
     }
     // else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
     // {

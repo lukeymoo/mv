@@ -1,5 +1,7 @@
 #include "mvAllocator.h"
 
+extern mv::LogHandler logger;
+
 mv::Allocator::Allocator(void)
 {
     containers = std::make_unique<std::vector<struct Container>>();
@@ -105,17 +107,15 @@ void mv::Allocator::createLayout(const mv::Device &p_MvDevice, std::string p_Lay
         }
         if (layoutAlreadyExists)
         {
-            if (shouldOutputDebug)
-                std::cout << "[-] Request to create descriptor set layout => " << p_LayoutName
-                          << " already exists; Skipping...\n";
+            logger.logMessage(LogHandler::MessagePriority::eWarning, "Request to create descriptor set layout => " +
+                                                                         p_LayoutName + " already exists; Skipping...");
             return;
         }
     }
 
     // add to map
     layouts->insert({p_LayoutName, p_MvDevice.logicalDevice->createDescriptorSetLayout(p_CreateInfo)});
-    if (shouldOutputDebug)
-        std::cout << "[+] Descriptor set layout => " << p_LayoutName << " created\n";
+    logger.logMessage("Descriptor set layout => " + p_LayoutName + " created");
     return;
 }
 
@@ -129,7 +129,7 @@ void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, vk::DescriptorSetL
         throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
 
     if (shouldOutputDebug)
-        std::cout << "[-] Allocating descriptor set" << std::endl;
+        logger.logMessage("Allocating descriptor set");
     if (!p_DescriptorLayout)
     {
         std::ostringstream oss;
@@ -186,7 +186,7 @@ void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, Container *p_PoolC
         throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
 
     if (shouldOutputDebug)
-        std::cout << "[-] Allocating descriptor set" << std::endl;
+        logger.logMessage("Allocating descriptor set");
     if (!p_DescriptorLayout)
     {
         std::ostringstream oss;
@@ -327,8 +327,7 @@ mv::Allocator::Container::~Container()
 
 struct mv::Allocator::Container *mv::Allocator::allocatePool(const mv::Device &p_MvDevice, uint32_t p_Count)
 {
-    if (shouldOutputDebug)
-        std::cout << "[+] Allocating descriptor pool of max sets => " << p_Count << std::endl;
+    logger.logMessage("[+] Allocating descriptor pool of max sets => " + std::to_string(p_Count));
     std::vector<vk::DescriptorPoolSize> poolSizes = {
         {vk::DescriptorType::eSampler, 1000},
         {vk::DescriptorType::eCombinedImageSampler, 1000},

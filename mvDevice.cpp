@@ -1,5 +1,7 @@
 #include "mvDevice.h"
 
+extern mv::LogHandler logger;
+
 mv::Device::Device(const vk::PhysicalDevice &p_PhysicalDevice, std::vector<std::string> &p_RequestedDeviceExtensions)
 {
     this->requestedPhysicalDeviceExtensions = p_RequestedDeviceExtensions;
@@ -29,8 +31,7 @@ mv::Device::Device(const vk::PhysicalDevice &p_PhysicalDevice, std::vector<std::
         {
             if (strcmp(supportedExtension.extensionName, requested_ext.c_str()) == 0)
             {
-                if (shouldOutputDebug)
-                    std::cout << "\t\tFound device extension => " << supportedExtension.extensionName << "\n";
+                logger.logMessage("Found device extension => " + std::string(supportedExtension.extensionName));
                 e = true;
                 break;
             }
@@ -183,8 +184,8 @@ void mv::Device::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::Memor
                               vk::DeviceSize p_DeviceSize, vk::Buffer *p_VkBuffer, vk::DeviceMemory *p_DeviceMemory,
                               void *p_InitialData) const
 {
-    if (shouldOutputDebug)
-        std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(p_DeviceSize) << std::endl;
+    logger.logMessage("Allocating buffer of size => " + std::to_string(static_cast<uint32_t>(p_DeviceSize)));
+
     vk::BufferCreateInfo bufferInfo;
     bufferInfo.usage = p_BufferUsageFlags;
     bufferInfo.size = p_DeviceSize;
@@ -224,8 +225,7 @@ void mv::Device::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::Memor
 void mv::Device::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::MemoryPropertyFlags p_MemoryPropertyFlags,
                               mv::Buffer *p_MvBuffer, vk::DeviceSize p_DeviceSize, void *p_InitialData) const
 {
-    if (shouldOutputDebug)
-        std::cout << "\t[-] Allocating buffer of size => " << static_cast<uint32_t>(p_DeviceSize) << std::endl;
+    logger.logMessage("Allocating buffer of size => " + std::to_string(static_cast<uint32_t>(p_DeviceSize)));
 
     // create buffer
     vk::BufferCreateInfo bufferInfo;

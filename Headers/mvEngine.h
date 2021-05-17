@@ -12,6 +12,7 @@
 #include "mvCamera.h"
 #include "mvCollection.h"
 #include "mvGui.h"
+#include "mvHelper.h"
 #include "mvWindow.h"
 
 using namespace std::chrono_literals;

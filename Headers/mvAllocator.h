@@ -10,6 +10,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include "mvDevice.h"
+#include "mvHelper.h"
 
 namespace mv
 {

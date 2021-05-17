@@ -1,5 +1,7 @@
 #include "mvGui.h"
 
+extern mv::LogHandler logger;
+
 mv::GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
                            const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
                            const mv::Swap &p_MvSwap, const vk::CommandPool &p_CommandPool,
@@ -7,6 +9,7 @@ mv::GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Insta
                            std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
                            const vk::DescriptorPool &p_DescriptorPool)
 {
+    this->ptrLogger = &logger;
     if (!p_GLFWwindow)
         throw std::runtime_error("Invalid GLFW window handle passed to Gui handler");
     else
@@ -14,7 +17,7 @@ mv::GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Insta
     // Ensure gui not already in render pass map
     if (p_RenderPassMap.find("gui") != p_RenderPassMap.end())
     {
-        std::cout << "ImGui already initialized, skipping...\n";
+        logger.logMessage(LogHandler::MessagePriority::eWarning, "ImGui already initialized, skipping...");
         return;
     }
     // Create render pass
@@ -184,14 +187,15 @@ void mv::GuiHandler::doRenderPass(const vk::RenderPass &p_RenderPass, const vk::
     p_CommandBuffer.endRenderPass();
 }
 
-void mv::GuiHandler::update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
-                            float p_FrameDelta)
+void mv::GuiHandler::update([[maybe_unused]] GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent,
+                            float p_RenderDelta, float p_FrameDelta)
 {
     /*
         Determine if should update engine status deltas
     */
     auto updateEnd = std::chrono::high_resolution_clock::now();
     float timeSince = std::chrono::duration<float, std::ratio<1L, 1L>>(updateEnd - lastDeltaUpdate).count();
+    frameCount++;
     if (timeSince >= 1.0f)
     {
         storedRenderDelta = p_RenderDelta;
@@ -199,10 +203,6 @@ void mv::GuiHandler::update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_Swap
         lastDeltaUpdate = std::chrono::high_resolution_clock::now();
         displayFPS = frameCount;
         frameCount = 0;
-    }
-    else
-    {
-        frameCount++;
     }
 
     /*
@@ -212,6 +212,10 @@ void mv::GuiHandler::update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_Swap
     /*
         KEYBOARD SHORTCUTS
     */
+    // Show quit menu if no popups
+    if (getIO().KeysDown[GLFW_KEY_ESCAPE])
+        if (show == noShow)
+            show = showQuitDialog;
     // MENU SHORTCUTS
     if (getIO().KeysDown[GLFW_KEY_LEFT_CONTROL])
     {
@@ -229,58 +233,25 @@ void mv::GuiHandler::update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_Swap
             show = showQuitDialog;
     }
 
-    ImGui::BeginMainMenuBar();
+    // Render main menu
+    renderMenu();
 
-    /*
-        File Menu
-    */
-    if (ImGui::BeginMenu("File"))
-    {
-        /*
-            OPEN FILE BUTTON
-        */
-        if (ImGui::MenuItem("Open", "Ctrl+O"))
-        {
-            show = showOpenDialog;
-        }
+    // Render terrain modal
+    renderTerrainModal();
 
-        if (ImGui::MenuItem("Save", nullptr))
-        {
-            // Test if new file
-        }
+    // Render debug console
+    renderDebugModal(logger.getMessages());
 
-        if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S"))
-        {
-            show = showSaveDialog;
-        }
-
-        /*
-            QUIT APPLICATION BUTTON
-        */
-        if (ImGui::MenuItem("Quit", "Ctrl+Q"))
-        {
-            // are you sure?
-            show = showQuitDialog;
-        }
-
-        ImGui::EndMenu();
-    }
-
-    ImGui::EndMainMenuBar();
-
-    /*
-        Handle Popups
-    */
+    // display popup menu callback if any
     show(this);
 
     /*
         Engine status data
     */
-    // Bottom left window
     ImGuiWindowFlags engineDataFlags =
         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar;
     ImGui::SetNextWindowPos(ImVec2(0, p_SwapExtent.height - 32));
-    ImGui::SetNextWindowSize(ImVec2(p_SwapExtent.width, 32));
+    ImGui::SetNextWindowSize(ImVec2(p_SwapExtent.width - debugModal.width, 32));
     ImGui::Begin("Status", nullptr, engineDataFlags);
     ImGui::Text("Render time: %.2f ms | Frame time: %.2f ms | FPS %i", storedRenderDelta, storedFrameDelta, displayFPS);
     ImGui::End();

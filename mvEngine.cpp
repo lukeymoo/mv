@@ -1,5 +1,7 @@
 #include "mvEngine.h"
 
+extern mv::LogHandler logger;
+
 mv::Engine::Engine(int w, int h, const char *title) : Window(w, h, title)
 {
     pipelines = std::make_unique<std::unordered_map<std::string, vk::Pipeline>>();
@@ -154,7 +156,7 @@ void mv::Engine::cleanupSwapchain(void)
 // Allows swapchain to keep up with window resize
 void mv::Engine::recreateSwapchain(void)
 {
-    std::cout << "[+] recreating swapchain" << std::endl;
+    logger.logMessage("Recreating swap chain");
 
     if (!mvDevice)
         throw std::runtime_error("mv device handler is somehow null, tried to recreate swap chain :: "
@@ -186,7 +188,7 @@ void mv::Engine::recreateSwapchain(void)
 
 void mv::Engine::go(void)
 {
-    std::cout << "[+] Preparing vulkan\n";
+    logger.logMessage("Preparing Vulkan");
     prepare();
 
     // setup descriptor allocator, collection handler & camera
@@ -239,6 +241,11 @@ void mv::Engine::go(void)
 
     auto renderStart = chrono::now();
     auto renderStop = chrono::now();
+
+    collectionHandler->loadModel(*mvDevice, *descriptorAllocator, "models/Security2.fbx");
+
+    logger.logMessage("Entering game loop\n");
+
     while (!glfwWindowShouldClose(window))
     {
         auto deltaTime = chrono::now() - startTime;
@@ -261,11 +268,11 @@ void mv::Engine::go(void)
                 /*
                   Mouse scroll wheel
                 */
-                if (mouseEvent.type == Mouse::Event::Type::eWheelUp)
+                if (mouseEvent.type == Mouse::Event::Type::eWheelUp && !gui->hover)
                 {
                     camera->adjustZoom(-(camera->zoomStep));
                 }
-                if (mouseEvent.type == Mouse::Event::Type::eWheelDown)
+                if (mouseEvent.type == Mouse::Event::Type::eWheelDown && !gui->hover)
                 {
                     camera->adjustZoom(camera->zoomStep);
                 }
@@ -469,7 +476,8 @@ void mv::Engine::go(void)
     {
         totalObjectCount += model.objects->size();
     }
-    std::cout << "Total objects => " << totalObjectCount << std::endl;
+    logger.logMessage("Exiting Vulkan..");
+    logger.logMessage("Total objects => " + std::to_string(totalObjectCount));
     return;
 }
 
@@ -848,7 +856,7 @@ void mv::Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
             return;
             break;
         case vk::Result::eSuboptimalKHR:
-            std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+            logger.logMessage(LogHandler::MessagePriority::eWarning, "Swapchain is no longer optimal : not recreating");
             break;
         case vk::Result::eSuccess:
             break;
@@ -894,7 +902,7 @@ void mv::Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
             return;
             break;
         case vk::Result::eSuboptimalKHR:
-            std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+            logger.logMessage(LogHandler::MessagePriority::eWarning, "Swapchain is no longer optimal : not recreating");
             break;
         case vk::Result::eSuccess:
             break;
@@ -921,7 +929,7 @@ void mv::Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
             return;
             break;
         case vk::Result::eSuboptimalKHR:
-            std::cout << "[/] Swapchain is no longer optimal : not recreating" << std::endl;
+            logger.logMessage(LogHandler::MessagePriority::eWarning, "Swapchain is no longer optimal : not recreating");
             break;
         case vk::Result::eSuccess:
             break;
@@ -1060,7 +1068,7 @@ void mv::mouseMotionCallback(GLFWwindow *p_GLFWwindow, double p_XPosition, doubl
     return;
 }
 
-void mv::mouseScrollCallback(GLFWwindow *p_GLFWwindow, double p_XOffset, double p_YOffset)
+void mv::mouseScrollCallback(GLFWwindow *p_GLFWwindow, [[maybe_unused]] double p_XOffset, double p_YOffset)
 {
     auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
 
@@ -1144,8 +1152,7 @@ void mv::keyCallback(GLFWwindow *p_GLFWwindow, int p_Key, [[maybe_unused]] int p
 
 void mv::glfwErrCallback(int p_Error, const char *p_Description)
 {
-    std::cout << "GLFW Error...\n"
-              << "Code => " << p_Error << "\n"
-              << "Message => " << p_Description << "\n";
+    logger.logMessage(LogHandler::MessagePriority::eError, "GLFW Error...\nCode => " + std::to_string(p_Error) +
+                                                               "\nMessage=> " + std::string(p_Description));
     return;
 }

@@ -20,6 +20,7 @@
 
 #include "mvAllocator.h"
 #include "mvDevice.h"
+#include "mvHelper.h"
 #include "mvImage.h"
 
 static constexpr float MOVESPEED = 0.05f;

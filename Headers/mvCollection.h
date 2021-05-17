@@ -5,6 +5,7 @@
 
 #include "mvAllocator.h"
 #include "mvDevice.h"
+#include "mvHelper.h"
 #include "mvModel.h"
 
 namespace mv

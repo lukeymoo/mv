@@ -1,5 +1,7 @@
 #include "mvCollection.h"
 
+extern mv::LogHandler logger;
+
 mv::Collection::Collection(const mv::Device &p_MvDevice)
 {
 
@@ -33,8 +35,8 @@ void mv::Collection::loadModel(const mv::Device &p_MvDevice, mv::Allocator &p_De
     {
         if (name.compare(p_Filename) == 0) // if same
         {
-            if (shouldOutputDebug)
-                std::cout << "[-] Skipping already loaded model name => " << p_Filename << "\n";
+            logger.logMessage(LogHandler::MessagePriority::eWarning,
+                              "Skipping already loaded model name => " + std::string(p_Filename));
             alreadyLoaded = true;
             break;
         }
@@ -42,8 +44,7 @@ void mv::Collection::loadModel(const mv::Device &p_MvDevice, mv::Allocator &p_De
 
     if (!alreadyLoaded)
     {
-        if (shouldOutputDebug)
-            std::cout << "[+] Loading model => " << p_Filename << "\n";
+        logger.logMessage("Loading model => " + std::string(p_Filename));
         // make space for new model
         models->push_back(mv::Model());
         // call model routine _load
@@ -84,14 +85,14 @@ void mv::Collection::createObject(const mv::Device &p_MvDevice, mv::Allocator &p
         throw std::runtime_error(oss.str().c_str());
     }
 
-    if (shouldOutputDebug)
-        std::cout << "[+] Creating object of model type => " << p_ModelName << std::endl;
+    logger.logMessage("Creating object of model type => " + p_ModelName);
 
     // create new object element in specified model
     models->at(modelIndex).objects->push_back(mv::Object());
 
     if (shouldOutputDebug)
-        std::cout << "\t -- Model type object count is now => " << models->at(modelIndex).objects->size() << "\n";
+        logger.logMessage(" -- Model type object count is now => " +
+                          std::to_string(models->at(modelIndex).objects->size()));
 
     // create uniform buffer for object
     p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,
