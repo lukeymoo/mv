@@ -901,37 +901,6 @@ void mv::Engine::recordCommandBuffer(uint32_t p_ImageIndex)
                     .drawIndexed(offset.second.second, 1, offset.second.first, offset.first.first, 0);
             }
         }
-
-        // for (auto &object : *model.objects)
-        // {
-        //     for (auto &mesh : *model.loadedMeshes)
-        //     {
-        //         std::vector<vk::DescriptorSet> toBind = {object.meshDescriptor,
-        //                                                  collectionHandler->viewUniform->descriptor,
-        //                                                  collectionHandler->projectionUniform->descriptor};
-        //         if (model.hasTexture)
-        //         {
-        //             // TODO
-        //             // allow for multiple texture descriptors
-        //             toBind.push_back(mesh.textures.at(0).descriptor);
-        //             commandBuffers->at(p_ImageIndex)
-        //                 .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("sampler"), 0,
-        //                 toBind,
-        //                                     nullptr);
-        //         }
-        //         else
-        //         {
-        //             commandBuffers->at(p_ImageIndex)
-        //                 .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("no_sampler"), 0,
-        //                                     toBind, nullptr);
-        //         }
-        //         // Bind mesh buffers
-        //         mesh.bindBuffers(commandBuffers->at(p_ImageIndex));
-
-        //         // Indexed draw
-        //         commandBuffers->at(p_ImageIndex).drawIndexed(static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
-        //     }
-        // }
     }
 
     commandBuffers->at(p_ImageIndex).endRenderPass();
