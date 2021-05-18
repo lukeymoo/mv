@@ -531,7 +531,8 @@ void mv::Engine::go(void)
                         std::chrono::duration<float, std::ratio<1L, 1000L>>(renderStop - renderStart).count(),
                         std::chrono::duration<float, std::chrono::milliseconds::period>(deltaTime).count(),
                         static_cast<uint32_t>(collectionHandler->modelNames.size()),
-                        collectionHandler->getObjectCount(), collectionHandler->getVertexCount());
+                        collectionHandler->getObjectCount(), collectionHandler->getVertexCount(),
+                        collectionHandler->getTriangleCount());
 
             gui->renderFrame();
         }
@@ -868,18 +869,22 @@ void mv::Engine::recordCommandBuffer(uint32_t p_ImageIndex)
             commandBuffers->at(p_ImageIndex)
                 .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines->at("no_sampler"));
         }
+
+        // Bind vertex & index buffer for model
+        model.bindBuffers(commandBuffers->at(p_ImageIndex));
+
+        // For each object
         for (auto &object : *model.objects)
         {
-            for (auto &mesh : *model.loadedMeshes)
+            // Iterate index offsets ;; draw
+            for (auto &offset : model.bufferOffsets)
             {
                 std::vector<vk::DescriptorSet> toBind = {object.meshDescriptor,
                                                          collectionHandler->viewUniform->descriptor,
                                                          collectionHandler->projectionUniform->descriptor};
-                if (model.hasTexture)
+                if (offset.first.second >= 0)
                 {
-                    // TODO
-                    // allow for multiple texture descriptors
-                    toBind.push_back(mesh.textures.at(0).descriptor);
+                    toBind.push_back(model.textureDescriptors.at(offset.first.second).first);
                     commandBuffers->at(p_ImageIndex)
                         .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("sampler"), 0, toBind,
                                             nullptr);
@@ -890,13 +895,43 @@ void mv::Engine::recordCommandBuffer(uint32_t p_ImageIndex)
                         .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("no_sampler"), 0,
                                             toBind, nullptr);
                 }
-                // Bind mesh buffers
-                mesh.bindBuffers(commandBuffers->at(p_ImageIndex));
 
-                // Indexed draw
-                commandBuffers->at(p_ImageIndex).drawIndexed(static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
+                // { { vertex offset, Texture index }, { Index start, Index count } }
+                commandBuffers->at(p_ImageIndex)
+                    .drawIndexed(offset.second.second, 1, offset.second.first, offset.first.first, 0);
             }
         }
+
+        // for (auto &object : *model.objects)
+        // {
+        //     for (auto &mesh : *model.loadedMeshes)
+        //     {
+        //         std::vector<vk::DescriptorSet> toBind = {object.meshDescriptor,
+        //                                                  collectionHandler->viewUniform->descriptor,
+        //                                                  collectionHandler->projectionUniform->descriptor};
+        //         if (model.hasTexture)
+        //         {
+        //             // TODO
+        //             // allow for multiple texture descriptors
+        //             toBind.push_back(mesh.textures.at(0).descriptor);
+        //             commandBuffers->at(p_ImageIndex)
+        //                 .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("sampler"), 0,
+        //                 toBind,
+        //                                     nullptr);
+        //         }
+        //         else
+        //         {
+        //             commandBuffers->at(p_ImageIndex)
+        //                 .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts->at("no_sampler"), 0,
+        //                                     toBind, nullptr);
+        //         }
+        //         // Bind mesh buffers
+        //         mesh.bindBuffers(commandBuffers->at(p_ImageIndex));
+
+        //         // Indexed draw
+        //         commandBuffers->at(p_ImageIndex).drawIndexed(static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
+        //     }
+        // }
     }
 
     commandBuffers->at(p_ImageIndex).endRenderPass();
@@ -1118,8 +1153,8 @@ inline void mv::Engine::goSetup(void)
     cameraParams.viewUniformObject = collectionHandler->viewUniform.get();
     cameraParams.projectionUniformObject = collectionHandler->projectionUniform.get();
 
-    cameraParams.type = CameraType::eFreeLook;
-    // cameraParams.target = &collectionHandler->models->at(1).objects->at(0);
+    cameraParams.type = CameraType::eThirdPerson;
+    cameraParams.target = &collectionHandler->models->at(1).objects->at(0);
 
     camera = std::make_unique<Camera>(cameraParams);
 
@@ -1148,9 +1183,9 @@ void mv::mouseScrollCallback(GLFWwindow *p_GLFWwindow, [[maybe_unused]] double p
     auto engine = reinterpret_cast<mv::Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
 
     if (p_YOffset > 0)
-        engine->mouse.onWheelUp(0, 0);
+        engine->mouse.onWheelUp();
     if (p_YOffset < 0)
-        engine->mouse.onWheelDown(0, 0);
+        engine->mouse.onWheelDown();
 
     return;
 }

@@ -609,6 +609,33 @@ mvInput.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvInput.cpp.s
 .PHONY : mvInput.cpp.s
 
+mvMap.o: mvMap.cpp.o
+
+.PHONY : mvMap.o
+
+# target to build an object file
+mvMap.cpp.o:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvMap.cpp.o
+.PHONY : mvMap.cpp.o
+
+mvMap.i: mvMap.cpp.i
+
+.PHONY : mvMap.i
+
+# target to preprocess a source file
+mvMap.cpp.i:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvMap.cpp.i
+.PHONY : mvMap.cpp.i
+
+mvMap.s: mvMap.cpp.s
+
+.PHONY : mvMap.s
+
+# target to generate assembly for a file
+mvMap.cpp.s:
+	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvMap.cpp.s
+.PHONY : mvMap.cpp.s
+
 mvModel.o: mvModel.cpp.o
 
 .PHONY : mvModel.o
@@ -780,6 +807,9 @@ help:
 	@echo "... mvInput.o"
 	@echo "... mvInput.i"
 	@echo "... mvInput.s"
+	@echo "... mvMap.o"
+	@echo "... mvMap.i"
+	@echo "... mvMap.s"
 	@echo "... mvModel.o"
 	@echo "... mvModel.i"
 	@echo "... mvModel.s"

@@ -197,7 +197,7 @@ namespace mv
       public:
         ImGuiIO &getIO(void);
         void update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent, float p_RenderDelta, float p_FrameDelta,
-                    uint32_t p_ModelCount, uint32_t p_ObjectCount, uint32_t p_VertexCount);
+                    uint32_t p_ModelCount, uint32_t p_ObjectCount, uint32_t p_VertexCount, uint32_t p_TriangleCount);
 
         std::vector<vk::Framebuffer> createFramebuffers(const vk::Device &p_LogicalDevice,
                                                         const vk::RenderPass &p_GuiRenderPass,
@@ -741,11 +741,13 @@ namespace mv
                 {
                     if (ptrCamera->setCameraType(CameraType::eThirdPerson, {0.0f, 0.0f, 0.0f}))
                     {
+                        std::cout << "switching to third person\n";
                         mapModal.cameraItem.deselectAllBut(CameraItemType::eThirdPerson);
                         mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eThirdPerson;
                     }
                     else
                     {
+                        std::cout << "switching to free look\n";
                         mapModal.cameraItem.deselectAllBut(mapModal.cameraItem.selectedType);
                     }
                 }

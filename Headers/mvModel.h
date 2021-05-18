@@ -27,8 +27,11 @@ static constexpr float MOVESPEED = 0.05f;
 
 namespace mv
 {
-    struct Texture
+    class Texture
     {
+      public:
+        Texture(){};
+        ~Texture(){};
         std::string type;
         std::string path;
         mv::Image mvImage;
@@ -209,7 +212,7 @@ namespace mv
         // we should remove this data after everything is loaded
         std::vector<uint32_t> indices;
         std::vector<struct Vertex> vertices;
-        std::vector<struct Texture> textures;
+        std::vector<Texture> textures;
 
         // TODO
         // Consider linking all related mesh objects into a single buffer.
@@ -220,6 +223,8 @@ namespace mv
 
         vk::DeviceMemory vertexMemory;
         vk::DeviceMemory indexMemory;
+
+        int mtlIndex = -1;
 
         // Bind vertex & index buffers if exist
         void bindBuffers(vk::CommandBuffer &p_CommandBuffer);
@@ -240,13 +245,34 @@ namespace mv
         Model(void);
         ~Model();
 
+        void bindBuffers(vk::CommandBuffer &p_CommandBuffer);
+        void cleanup(const mv::Device &p_MvDevice);
+
+        // All meshes combined
+        vk::Buffer vertexBuffer;
+        vk::Buffer indexBuffer;
+        vk::DeviceMemory vertexMemory;
+        vk::DeviceMemory indexMemory;
+
+        uint32_t totalVertices = 0;
+        uint32_t totalIndices = 0;
+        uint32_t triangleCount = 0;
+
+        // { vk::DescriptorSet, mv::Texture }
+        // mv::Texture -> mv::Image
+        // mv::Image -> vk::ImageInfo
+        // vk::DescriptorSet -> vk::ImageInfo
+        std::vector<std::pair<vk::DescriptorSet, mv::Texture>> textureDescriptors;
+
         std::string modelName;
         bool hasTexture = false; // do not assume model has texture
-
-        // owns
         std::unique_ptr<std::vector<struct Object>> objects;
+
+        // { {vertex offset, Texture vkDescriptorSet index}, { Index start, Index count } }
+        // texture descriptor set is either a valid index to textureDescriptors or -1
+        std::vector<std::pair<std::pair<uint32_t, int>, std::pair<uint32_t, uint32_t>>> bufferOffsets;
         std::unique_ptr<std::vector<struct Mesh>> loadedMeshes;
-        std::unique_ptr<std::vector<struct Texture>> loadedTextures;
+        std::unique_ptr<std::vector<Texture>> loadedTextures;
 
         void load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator, const char *p_Filename,
                   bool p_OutputDebug = true);
@@ -255,9 +281,9 @@ namespace mv
 
         mv::Mesh processMesh(const mv::Device &p_MvDevice, aiMesh *p_Mesh, const aiScene *p_Scene);
 
-        std::vector<struct Texture> loadMaterialTextures(const mv::Device &p_MvDevice, aiMaterial *p_Material,
-                                                         aiTextureType p_Type, [[maybe_unused]] std::string p_TypeName,
-                                                         [[maybe_unused]] const aiScene *p_Scene);
+        std::vector<Texture> loadMaterialTextures(const mv::Device &p_MvDevice, aiMaterial *p_Material,
+                                                  aiTextureType p_Type, [[maybe_unused]] std::string p_TypeName,
+                                                  [[maybe_unused]] const aiScene *p_Scene, int &p_MtlIndex);
     };
 }; // namespace mv
 

@@ -61,9 +61,9 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
     imageInfo.initialLayout = vk::ImageLayout::eUndefined;
 
-    image = std::make_unique<vk::Image>(p_MvDevice.logicalDevice->createImage(imageInfo));
+    image = p_MvDevice.logicalDevice->createImage(imageInfo);
 
-    memoryRequirements = p_MvDevice.logicalDevice->getImageMemoryRequirements(*image);
+    memoryRequirements = p_MvDevice.logicalDevice->getImageMemoryRequirements(image);
 
     vk::MemoryAllocateInfo allocInfo;
     allocInfo.allocationSize = memoryRequirements.size;
@@ -71,12 +71,12 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
         p_MvDevice.getMemoryType(memoryRequirements.memoryTypeBits, p_ImageCreateInfo.memoryProperties);
 
     // allocate image memory
-    memory = std::make_unique<vk::DeviceMemory>(p_MvDevice.logicalDevice->allocateMemory(allocInfo));
+    memory = p_MvDevice.logicalDevice->allocateMemory(allocInfo);
 
-    p_MvDevice.logicalDevice->bindImageMemory(*image, *memory, 0);
+    p_MvDevice.logicalDevice->bindImageMemory(image, memory, 0);
 
     // transition image to transfer dst
-    transitionImageLayout(p_MvDevice, image.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    transitionImageLayout(p_MvDevice, &image, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
     // copy staging buffer to image
     vk::CommandBuffer commandBuffer = beginCommandBuffer(p_MvDevice);
@@ -92,17 +92,17 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     region.imageOffset = vk::Offset3D{0, 0, 0};
     region.imageExtent = vk::Extent3D{static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
 
-    commandBuffer.copyBufferToImage(stagingBuffer, *image, vk::ImageLayout::eTransferDstOptimal, region);
+    commandBuffer.copyBufferToImage(stagingBuffer, image, vk::ImageLayout::eTransferDstOptimal, region);
 
     endCommandBuffer(p_MvDevice, commandBuffer);
 
     // transition image to shader read only
-    transitionImageLayout(p_MvDevice, image.get(), vk::ImageLayout::eTransferDstOptimal,
+    transitionImageLayout(p_MvDevice, &image, vk::ImageLayout::eTransferDstOptimal,
                           vk::ImageLayout::eShaderReadOnlyOptimal);
 
     // create view into image
     vk::ImageViewCreateInfo viewInfo;
-    viewInfo.image = *image;
+    viewInfo.image = image;
     viewInfo.viewType = vk::ImageViewType::e2D;
     viewInfo.format = p_ImageCreateInfo.format;
     viewInfo.components = {
@@ -118,7 +118,7 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     viewInfo.subresourceRange.layerCount = 1;
 
     // create image view
-    imageView = std::make_unique<vk::ImageView>(p_MvDevice.logicalDevice->createImageView(viewInfo));
+    imageView = p_MvDevice.logicalDevice->createImageView(viewInfo);
 
     // create image sampler
     vk::SamplerCreateInfo samplerInfo;
@@ -136,7 +136,7 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
 
     // create sampler
-    sampler = std::make_unique<vk::Sampler>(p_MvDevice.logicalDevice->createSampler(samplerInfo));
+    sampler = p_MvDevice.logicalDevice->createSampler(samplerInfo);
 
     // cleanup staging resources
     p_MvDevice.logicalDevice->destroyBuffer(stagingBuffer);
@@ -144,8 +144,8 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
 
     // setup the descriptor
     descriptor.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-    descriptor.imageView = *imageView;
-    descriptor.sampler = *sampler;
+    descriptor.imageView = imageView;
+    descriptor.sampler = sampler;
 
     return;
 }
@@ -292,26 +292,25 @@ void mv::Image::transitionImageLayout(const mv::Device &p_MvDevice, vk::Image *p
 
 void mv::Image::destroy(const mv::Device &p_MvDevice)
 {
-
     if (sampler)
     {
-        p_MvDevice.logicalDevice->destroySampler(*sampler);
-        sampler.reset();
+        p_MvDevice.logicalDevice->destroySampler(sampler);
+        sampler = nullptr;
     }
     if (imageView)
     {
-        p_MvDevice.logicalDevice->destroyImageView(*imageView);
-        imageView.reset();
+        p_MvDevice.logicalDevice->destroyImageView(imageView);
+        imageView = nullptr;
     }
     if (image)
     {
-        p_MvDevice.logicalDevice->destroyImage(*image);
-        image.reset();
+        p_MvDevice.logicalDevice->destroyImage(image);
+        image = nullptr;
     }
     if (memory)
     {
-        p_MvDevice.logicalDevice->freeMemory(*memory);
-        memory.reset();
+        p_MvDevice.logicalDevice->freeMemory(memory);
+        memory = nullptr;
     }
     return;
 }

@@ -13,22 +13,14 @@ namespace mv
 {
     struct Image
     {
-        // delete copy
-        Image(const Image &) = delete;
-        Image &operator=(const Image &) = delete;
-
-        // allow move
-        Image(Image &&) = default;
-        Image &operator=(Image &&) = default;
-
         Image(void);
         ~Image(); // Image cleaned up in engine
 
         // owns
-        std::unique_ptr<vk::Image> image;
-        std::unique_ptr<vk::ImageView> imageView;
-        std::unique_ptr<vk::Sampler> sampler;
-        std::unique_ptr<vk::DeviceMemory> memory;
+        vk::Image image;
+        vk::ImageView imageView;
+        vk::Sampler sampler;
+        vk::DeviceMemory memory;
 
         // info structs
         vk::DescriptorImageInfo descriptor;

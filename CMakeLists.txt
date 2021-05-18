@@ -16,6 +16,7 @@ set(HEADERS
     Headers/imgui-1.82/imgui.h
     Headers/imgui-1.82/backends/imgui_impl_glfw.h
     Headers/imgui-1.82/backends/imgui_impl_vulkan.h
+    Headers/mvMap.h
     Headers/mvGui.h
     Headers/mvHelper.h
     Headers/mvInput.h
@@ -39,6 +40,7 @@ set(SOURCES
     Headers/imgui-1.82/imgui_draw.cpp
     Headers/imgui-1.82/imgui_demo.cpp
     Headers/imgui-1.82/imgui.cpp
+    mvMap.cpp
     mvGui.cpp
     mvHelper.cpp
     mvCollection.cpp
@@ -55,7 +57,7 @@ set(SOURCES
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -Wextra -std=c++20 -O2 -m64 -g)
+add_compile_options(-Wall -Wextra -std=c++20 -O3 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 

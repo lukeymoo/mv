@@ -6,6 +6,7 @@
 #include "mvAllocator.h"
 #include "mvDevice.h"
 #include "mvHelper.h"
+#include "mvMap.h"
 #include "mvModel.h"
 
 namespace mv
@@ -33,14 +34,19 @@ namespace mv
         Collection(const mv::Device &p_MvDevice);
         ~Collection();
 
-        // load model
+        // Load terrain normal
+        void loadTerrain(void);
+
+        // Load model
         void loadModel(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator, const char *p_Filename);
 
-        // creates object with specified model data
+        // Creates object with specified model data
         void createObject(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator, std::string p_ModelName);
 
+        // Calls update for each object
         void update(void);
 
+        // Destroys Vulkan resources allocated by this handler
         void cleanup(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator);
 
         inline uint32_t getObjectCount(void)
@@ -52,16 +58,21 @@ namespace mv
             }
             return count;
         }
+        inline uint32_t getTriangleCount(void)
+        {
+            uint32_t count = 0;
+            for (const auto &model : *models)
+            {
+                count += model.triangleCount * model.objects->size();
+            }
+            return count;
+        }
         inline uint32_t getVertexCount(void)
         {
             uint32_t count = 0;
             for (const auto &model : *models)
             {
-                for (const auto &mesh : *model.loadedMeshes)
-                {
-                    count += mesh.vertices.size();
-                }
-                count *= model.objects->size();
+                count += model.totalIndices * model.objects->size();
             }
             return count;
         }

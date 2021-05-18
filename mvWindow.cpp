@@ -681,6 +681,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
         logger.logMessage(mv::LogHandler::MessagePriority::eWarning, oss.str().c_str());
+        std::cout << oss.str();
     }
     if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
@@ -690,6 +691,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
         logger.logMessage(mv::LogHandler::MessagePriority::eWarning, oss.str().c_str());
+        std::cout << oss.str();
     }
     // else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
     // {
@@ -709,6 +711,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeveri
             << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
         logger.logMessage(mv::LogHandler::MessagePriority::eError, oss.str().c_str());
+        std::cout << oss.str();
     }
     // else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
     // {

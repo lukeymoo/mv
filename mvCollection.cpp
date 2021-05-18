@@ -4,7 +4,6 @@ extern mv::LogHandler logger;
 
 mv::Collection::Collection(const mv::Device &p_MvDevice)
 {
-
     // initialize containers
     viewUniform = std::make_unique<struct mv::UniformObject>();
     projectionUniform = std::make_unique<struct mv::UniformObject>();
@@ -25,6 +24,11 @@ mv::Collection::Collection(const mv::Device &p_MvDevice)
 
 mv::Collection::~Collection()
 {
+}
+
+void mv::Collection::loadTerrain(void)
+{
+    return;
 }
 
 void mv::Collection::loadModel(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator,
@@ -141,6 +145,8 @@ void mv::Collection::cleanup(const mv::Device &p_MvDevice, mv::Allocator &p_Desc
     // cleanup models & objects buffers
     for (auto &model : *models)
     {
+        model.cleanup(p_MvDevice);
+
         if (!model.objects)
         {
             std::ostringstream oss;
@@ -159,10 +165,10 @@ void mv::Collection::cleanup(const mv::Device &p_MvDevice, mv::Allocator &p_Desc
         {
             object.uniformBuffer.destroy(p_MvDevice);
         }
-        for (auto &mesh : *model.loadedMeshes)
-        {
-            mesh.cleanup(p_MvDevice);
-        }
+        // for (auto &mesh : *model.loadedMeshes)
+        // {
+        //     mesh.cleanup(p_MvDevice);
+        // }
     }
 
     viewUniform->mvBuffer.destroy(p_MvDevice);

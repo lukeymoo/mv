@@ -224,7 +224,7 @@ void mv::GuiHandler::doRenderPass(const vk::RenderPass &p_RenderPass, const vk::
 
 void mv::GuiHandler::update([[maybe_unused]] GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent,
                             float p_RenderDelta, float p_FrameDelta, uint32_t p_ModelCount, uint32_t p_ObjectCount,
-                            uint32_t p_VertexCount)
+                            uint32_t p_VertexCount, uint32_t p_TriangleCount)
 {
     /*
         Determine if should update engine status deltas
@@ -292,9 +292,10 @@ void mv::GuiHandler::update([[maybe_unused]] GLFWwindow *p_GLFWwindow, const vk:
     ImGui::SetNextWindowPos(ImVec2(0, p_SwapExtent.height - 32));
     ImGui::SetNextWindowSize(ImVec2(p_SwapExtent.width - debugModal.width, 32));
     ImGui::Begin("Status", nullptr, engineDataFlags);
-    ImGui::Text("Render time: %.2f ms | Frame time: %.2f ms | FPS: %i | Model Count: %i | Object Count: %i | Unique "
-                "Vertices: %i",
-                storedRenderDelta, storedFrameDelta, displayFPS, p_ModelCount, p_ObjectCount, p_VertexCount);
+    ImGui::Text("Render time: %.2f ms | Frame time: %.2f ms | FPS: %i | Model Count: %i | Object Count: %i | Vertex "
+                "Count: %i | Triangle Count: %i",
+                storedRenderDelta, storedFrameDelta, displayFPS, p_ModelCount, p_ObjectCount, p_VertexCount,
+                p_TriangleCount);
     ImGui::End();
 
     // Clear key states

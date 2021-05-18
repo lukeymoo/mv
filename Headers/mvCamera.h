@@ -455,9 +455,11 @@ namespace mv
                 case CameraType::eThirdPerson:
                     {
                         if (!target)
+                        {
                             ptrLogger->logMessage(LogHandler::MessagePriority::eError,
                                                   "Can't set to third person due to no target");
-                        return false;
+                            return false;
+                        }
                         break;
                     }
                 case CameraType::eFirstPerson:
@@ -513,10 +515,10 @@ namespace mv
             return;
         }
 
+        // P_TargetAxii essentially a unit vector specifying direction
+        // p_OrbitAngle is the angle you wish to transform the unit vector by
         inline glm::vec3 rotateVector(float p_OrbitAngle, glm::vec4 p_TargetAxii)
         {
-            // target_axis is our default directional vector
-
             // construct rotation matrix from orbit angle
             glm::mat4 rotationMatrix = glm::mat4(1.0);
             rotationMatrix = glm::rotate(rotationMatrix, glm::radians(p_OrbitAngle), glm::vec3(0.0f, 1.0f, 0.0f));

@@ -10,7 +10,7 @@ mv::Model::Model(void)
 {
     objects = std::make_unique<std::vector<struct Object>>();
     loadedMeshes = std::make_unique<std::vector<struct Mesh>>();
-    loadedTextures = std::make_unique<std::vector<struct Texture>>();
+    loadedTextures = std::make_unique<std::vector<Texture>>();
 }
 
 mv::Model::~Model()
@@ -34,35 +34,111 @@ void mv::Model::load(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAl
     // process model data
     processNode(p_MvDevice, aiScene->mRootNode, aiScene);
 
-    // Create buffer for each mesh
+    // Arrange data in contiguous arrays for loading into gpu memory
+    std::vector<Vertex> allVertices;
+    std::vector<uint32_t> allIndices;
+
+    // Get total size of all meshes
+    uint32_t vertexTotalSize = 0;
+    uint32_t indexTotalSize = 0;
+
+    uint32_t vertexOffset = 0;
+    uint32_t indexStart = 0;
+    int textureIndex = -1;
     for (auto &mesh : *loadedMeshes)
     {
         // if the model required textures
         // create the descriptor sets for them
-        if (!mesh.textures.empty())
+        // if (!mesh.textures.empty())
+        // {
+        //     hasTexture = true;
+
+        //     vk::DescriptorSetLayout samplerLayout = p_DescriptorAllocator.getLayout("sampler_layout");
+        //     for (auto &texture : mesh.textures)
+        //     {
+        //         p_DescriptorAllocator.allocateSet(p_MvDevice, samplerLayout, texture.descriptor);
+        //         p_DescriptorAllocator.updateSet(p_MvDevice, texture.mvImage.descriptor, texture.descriptor, 0);
+        //     }
+        // }
+
+        // For every texture loaded
+        if (mesh.mtlIndex >= 0)
         {
             hasTexture = true;
-
+            // { vk::DescriptorSet, mv::Texture }
             vk::DescriptorSetLayout samplerLayout = p_DescriptorAllocator.getLayout("sampler_layout");
-            for (auto &texture : mesh.textures)
-            {
-                p_DescriptorAllocator.allocateSet(p_MvDevice, samplerLayout, texture.descriptor);
-                p_DescriptorAllocator.updateSet(p_MvDevice, texture.mvImage.descriptor, texture.descriptor, 0);
-            }
+            p_DescriptorAllocator.allocateSet(p_MvDevice, samplerLayout, textureDescriptors.at(mesh.mtlIndex).first);
+            p_DescriptorAllocator.updateSet(p_MvDevice, textureDescriptors.at(mesh.mtlIndex).second.mvImage.descriptor,
+                                            textureDescriptors.at(mesh.mtlIndex).first, 0);
         }
-        // create vertex buffer and load vertices
-        p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eVertexBuffer,
-                                vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
-                                mesh.vertices.size() * sizeof(Vertex), &mesh.vertexBuffer, &mesh.vertexMemory,
-                                mesh.vertices.data());
 
-        // create index buffer, load indices data into it
-        p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eIndexBuffer,
-                                vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
-                                mesh.indices.size() * sizeof(uint32_t), &mesh.indexBuffer, &mesh.indexMemory,
-                                mesh.indices.data());
+        auto meshVertexSize = static_cast<uint32_t>(mesh.vertices.size()) * sizeof(Vertex);
+        auto meshIndexSize = static_cast<uint32_t>(mesh.indices.size()) * sizeof(uint32_t);
+
+        // Append mesh data
+        allVertices.insert(allVertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+        allIndices.insert(allIndices.end(), mesh.indices.begin(), mesh.indices.end());
+
+        // { {vertex offset, textureDescriptors index}, { Index start, Index count } }
+        std::cout << "Vertex offset => " << vertexOffset << "\n";
+        std::cout << "Mesh Mtl index => " << mesh.mtlIndex << "\n";
+        std::cout << "Index start => " << indexStart << "\n";
+        std::cout << "Indices count for mesh => " << mesh.indices.size() << "\n";
+
+        bufferOffsets.push_back({{vertexOffset, mesh.mtlIndex}, {indexStart, mesh.indices.size()}});
+
+        indexStart += mesh.indices.size();
+        // vertexOffset += meshVertexSize;
+        vertexOffset += mesh.vertices.size();
+        vertexTotalSize += meshVertexSize;
+        indexTotalSize += meshIndexSize;
+        std::cout << "\n\n\n";
     }
-    if (p_OutputDebug)
+
+    // Create large contiguous buffers for model data
+    // Data loaded in allVertices & allIndices
+    totalVertices = allVertices.size();
+    totalIndices = allIndices.size();
+    triangleCount = totalIndices / 3;
+
+    // Create vertex buffer
+    p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eVertexBuffer,
+                            vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
+                            vertexTotalSize, &vertexBuffer, &vertexMemory, allVertices.data());
+    // Create index buffer
+    p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eIndexBuffer,
+                            vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible,
+                            indexTotalSize, &indexBuffer, &indexMemory, allIndices.data());
+
+    // Create buffer for each mesh
+    // for (auto &mesh : *loadedMeshes)
+    // {
+    //     // if the model required textures
+    //     // create the descriptor sets for them
+    //     if (!mesh.textures.empty())
+    //     {
+    //         hasTexture = true;
+
+    //         vk::DescriptorSetLayout samplerLayout = p_DescriptorAllocator.getLayout("sampler_layout");
+    //         for (auto &texture : mesh.textures)
+    //         {
+    //             p_DescriptorAllocator.allocateSet(p_MvDevice, samplerLayout, texture.descriptor);
+    //             p_DescriptorAllocator.updateSet(p_MvDevice, texture.mvImage.descriptor, texture.descriptor, 0);
+    //         }
+    //     }
+    //     // create vertex buffer and load vertices
+    //     p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eVertexBuffer,
+    //                             vk::MemoryPropertyFlagBits::eHostCoherent |
+    //                             vk::MemoryPropertyFlagBits::eHostVisible, mesh.vertices.size() * sizeof(Vertex),
+    //                             &mesh.vertexBuffer, &mesh.vertexMemory, mesh.vertices.data());
+
+    //     // create index buffer, load indices data into it
+    //     p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eIndexBuffer,
+    //                             vk::MemoryPropertyFlagBits::eHostCoherent |
+    //                             vk::MemoryPropertyFlagBits::eHostVisible, mesh.indices.size() * sizeof(uint32_t),
+    //                             &mesh.indexBuffer, &mesh.indexMemory, mesh.indices.data());
+    // }
+    if (p_OutputDebug || true)
     {
         logger.logMessage("\t :: Loaded model => " + std::string(p_Filename) + "\n\t\t Meshes => " +
                           std::to_string(loadedMeshes->size()) + "\n\t\t Textures => " +
@@ -91,7 +167,7 @@ struct mv::Mesh mv::Model::processMesh(const mv::Device &p_MvDevice, aiMesh *p_M
 {
     std::vector<uint32_t> inds;
     std::vector<struct Vertex> verts;
-    std::vector<struct Texture> texs;
+    std::vector<Texture> texs;
 
     for (uint32_t i = 0; i < p_Mesh->mNumVertices; i++)
     {
@@ -140,30 +216,30 @@ struct mv::Mesh mv::Model::processMesh(const mv::Device &p_MvDevice, aiMesh *p_M
         }
     }
 
+    // construct _Mesh then return
+    struct Mesh m;
+
     // get material textures
     if (p_Mesh->mMaterialIndex >= 0)
     {
         aiMaterial *material = p_Scene->mMaterials[p_Mesh->mMaterialIndex];
-        std::vector<struct Texture> diffuseMaps =
-            loadMaterialTextures(p_MvDevice, material, aiTextureType_DIFFUSE, "texture_diffuse", p_Scene);
+        std::vector<Texture> diffuseMaps =
+            loadMaterialTextures(p_MvDevice, material, aiTextureType_DIFFUSE, "texture_diffuse", p_Scene, m.mtlIndex);
         texs.insert(texs.end(), std::make_move_iterator(diffuseMaps.begin()),
                     std::make_move_iterator(diffuseMaps.end()));
     }
 
-    // construct _Mesh then return
-    struct Mesh m;
     m.vertices = verts;
     m.indices = inds;
     m.textures = std::move(texs);
     return m;
 }
 
-std::vector<struct mv::Texture> mv::Model::loadMaterialTextures(const mv::Device &p_MvDevice, aiMaterial *p_Material,
-                                                                aiTextureType p_Type,
-                                                                [[maybe_unused]] std::string p_TypeName,
-                                                                [[maybe_unused]] const aiScene *p_Scene)
+std::vector<mv::Texture> mv::Model::loadMaterialTextures(const mv::Device &p_MvDevice, aiMaterial *p_Material,
+                                                         aiTextureType p_Type, [[maybe_unused]] std::string p_TypeName,
+                                                         [[maybe_unused]] const aiScene *p_Scene, int &p_MtlIndex)
 {
-    std::vector<struct Texture> textures;
+    std::vector<Texture> textures;
     for (uint32_t i = 0; i < p_Material->GetTextureCount(p_Type); i++)
     {
         aiString t_name;
@@ -183,7 +259,7 @@ std::vector<struct mv::Texture> mv::Model::loadMaterialTextures(const mv::Device
         // if not already loaded, load it
         if (!skip)
         {
-            struct Texture tex;
+            Texture tex;
             // TODO
             // if embedded compressed texture type
             std::string filename = std::string(t_name.C_Str());
@@ -201,26 +277,27 @@ std::vector<struct mv::Texture> mv::Model::loadMaterialTextures(const mv::Device
             // load texture
             tex.mvImage.create(p_MvDevice, createInfo, filename);
             // add to vector for return
-            textures.push_back(std::move(tex));
+            textures.push_back(tex);
             // add to loaded_textures to save processing time in event of duplicate
-            loadedTextures->push_back(std::move(tex));
+            loadedTextures->push_back(tex);
+            vk::DescriptorSet descriptor;
+            std::cout << "Pushing back texture for => " << filename;
+            textureDescriptors.push_back(std::make_pair(descriptor, tex));
+            p_MtlIndex = textureDescriptors.size() - 1;
+            std::cout << " mtl index => " << p_MtlIndex << "\n";
         }
     }
     return textures;
 }
 
-/*
-    MESH METHODS
-*/
-void mv::Mesh::bindBuffers(vk::CommandBuffer &p_CommandBuffer)
+void mv::Model::bindBuffers(vk::CommandBuffer &p_CommandBuffer)
 {
-    vk::DeviceSize offsets = 0;
-    p_CommandBuffer.bindVertexBuffers(0, 1, &vertexBuffer, &offsets);
+    vk::DeviceSize offset = 0;
+    p_CommandBuffer.bindVertexBuffers(0, vertexBuffer, offset);
     p_CommandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
     return;
 }
-
-void mv::Mesh::cleanup(const mv::Device &p_MvDevice)
+void mv::Model::cleanup(const mv::Device &p_MvDevice)
 {
     if (vertexBuffer)
     {
@@ -245,13 +322,69 @@ void mv::Mesh::cleanup(const mv::Device &p_MvDevice)
         indexMemory = nullptr;
     }
 
-    // cleanup textures
-    if (!textures.empty())
+    if (!textureDescriptors.empty())
     {
-        for (auto &texture : textures)
+        for (auto &descriptor : textureDescriptors)
         {
-            texture.mvImage.destroy(p_MvDevice);
+            descriptor.second.mvImage.destroy(p_MvDevice);
         }
     }
+
+    // Cleaned up by previous loop
+    // if (!loadedTextures->empty())
+    // {
+    //     for (auto &texture : *loadedTextures)
+    //     {
+    //         texture.mvImage.destroy(p_MvDevice);
+    //     }
+    //     loadedTextures->clear();
+    // }
     return;
 }
+
+/*
+    MESH METHODS
+*/
+void mv::Mesh::bindBuffers(vk::CommandBuffer &p_CommandBuffer)
+{
+    vk::DeviceSize offsets = 0;
+    p_CommandBuffer.bindVertexBuffers(0, 1, &vertexBuffer, &offsets);
+    p_CommandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
+    return;
+}
+
+// void mv::Mesh::cleanup(const mv::Device &p_MvDevice)
+// {
+//     if (vertexBuffer)
+//     {
+//         p_MvDevice.logicalDevice->destroyBuffer(vertexBuffer);
+//         vertexBuffer = nullptr;
+//     }
+
+//     if (vertexMemory)
+//     {
+//         p_MvDevice.logicalDevice->freeMemory(vertexMemory);
+//         vertexMemory = nullptr;
+//     }
+
+//     if (indexBuffer)
+//     {
+//         p_MvDevice.logicalDevice->destroyBuffer(indexBuffer);
+//         indexBuffer = nullptr;
+//     }
+//     if (indexMemory)
+//     {
+//         p_MvDevice.logicalDevice->freeMemory(indexMemory);
+//         indexMemory = nullptr;
+//     }
+
+//     // cleanup textures
+//     if (!textures.empty())
+//     {
+//         for (auto &texture : textures)
+//         {
+//             texture.mvImage.destroy(p_MvDevice);
+//         }
+//     }
+//     return;
+// }
