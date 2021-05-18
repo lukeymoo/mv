@@ -25,18 +25,28 @@ namespace mv
             eWarning,
         };
 
+        inline void trim(void)
+        {
+            if (messages.size() > 500)
+                messages.clear();
+            return;
+        }
+
         // TODO
         // Add multi thread support
         inline void logMessage(std::pair<MessagePriority, std::string> p_Message)
         {
+            trim();
             messages.push_back(p_Message);
         }
         inline void logMessage(MessagePriority p_MessagePriority, std::string p_Message)
         {
+            trim();
             messages.push_back({p_MessagePriority, p_Message});
         }
         inline void logMessage(std::string p_Message)
         {
+            trim();
             messages.push_back({MessagePriority::eInfo, p_Message});
         }
         inline std::vector<std::pair<MessagePriority, std::string>> getMessages(void)

@@ -13,6 +13,7 @@
 
 #include "mvBuffer.h"
 #include "mvCollection.h"
+#include "mvHelper.h"
 #include "mvModel.h"
 
 namespace mv
@@ -22,7 +23,8 @@ namespace mv
         eInvalid = 0,
         eFreeLook,
         eFirstPerson,
-        eThirdPerson
+        eThirdPerson,
+        eIsometric // MOBA / Old RTS style
     };
 
     struct CameraInitStruct
@@ -51,56 +53,8 @@ namespace mv
     struct Camera
     {
       public:
-        Camera(struct CameraInitStruct &p_CameraInitStruct)
-        {
-            fov = p_CameraInitStruct.fov;
-            aspect = p_CameraInitStruct.aspect;
-            nearz = p_CameraInitStruct.nearz;
-            farz = p_CameraInitStruct.farz;
-            position = p_CameraInitStruct.position;
-            viewUniformObject = p_CameraInitStruct.viewUniformObject;
-            projectionUniformObject = p_CameraInitStruct.projectionUniformObject;
-
-            type = p_CameraInitStruct.type;
-
-            // ensure matrices specified
-            if (p_CameraInitStruct.viewUniformObject == nullptr)
-            {
-                throw std::runtime_error("No view matrix uniform object specified");
-            }
-            if (p_CameraInitStruct.projectionUniformObject == nullptr)
-            {
-                throw std::runtime_error("No projection matrix uniform object specified");
-            }
-
-            if (type == CameraType::eInvalid)
-                throw std::runtime_error("No camera type specified in camera initialization structure");
-
-            // ensure target is given if type is third person
-            if (type == CameraType::eThirdPerson)
-            {
-                if (p_CameraInitStruct.target == nullptr)
-                    throw std::runtime_error("Camera type is specified as third person yet no target "
-                                             "specified in initialization structure");
-                target = p_CameraInitStruct.target;
-            }
-
-            front = glm::vec3(0.0f, 0.0f, -1.0f);
-            rotation = glm::vec3(0.01f, 0.01f, 0.01f);
-
-            update();
-
-            projectionUniformObject->matrix = glm::perspective(glm::radians(fov), aspect, nearz, farz);
-            projectionUniformObject->matrix[1][1] *= -1.0f;
-            // TODO
-            // add non host visible/coherent update support
-            // update projection matrix buffer
-            memcpy(projectionUniformObject->mvBuffer.mapped, &projectionUniformObject->matrix,
-                   sizeof(projectionUniformObject->matrix));
-        }
-        ~Camera()
-        {
-        }
+        Camera(struct CameraInitStruct &p_CameraInitStruct);
+        ~Camera();
         Camera(const Camera &) = delete;
         Camera &operator=(const Camera &) = delete;
 
@@ -116,6 +70,8 @@ namespace mv
         static constexpr float maxMoveAccel = 0.25f; // normal speed
         // static constexpr float max_move_accel = 0.5f; // maybe speed boost for freelook?
         static constexpr float moveFriction = moveStep * 0.3f;
+
+        mv::LogHandler *ptrLogger = nullptr;
 
         // -- third person --
         float pitch = 40.0f;
@@ -133,9 +89,9 @@ namespace mv
         static constexpr float minZoomLevel = 3.4f;
         static constexpr float zoomFriction = zoomStep * 0.125f;
 
-        glm::vec3 position = glm::vec3(1.0);
-        glm::vec3 rotation = glm::vec3(0.1f, 0.1f, 0.1f);
-        glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
+        glm::vec3 position = {0.0f, 0.0f, 0.0f};
+        glm::vec3 rotation = {0.0f, 0.0f, 0.0f};
+        glm::vec3 front = {0.0f, 0.0f, 1.0f};
 
       private:
         float aspect = 0;
@@ -157,7 +113,7 @@ namespace mv
         // Updates view matrix
         inline void update(void)
         {
-            if (type == CameraType::eThirdPerson)
+            if (type == CameraType::eThirdPerson || type == CameraType::eFreeLook)
             {
                 /*
                   Zoom Implementation
@@ -403,95 +359,6 @@ namespace mv
                 }
             }
         }
-
-        inline void increasePitch(void)
-        {
-            constexpr float speed = 0.35f;
-            float fZoom = zoomLevel + speed;
-            if (fZoom < 20.0f)
-            {
-                zoomLevel += speed;
-                pitch += speed;
-            }
-            return;
-        }
-        inline void increasePitch(float p_Delta)
-        {
-            constexpr float speed = 0.35f;
-            float fZoom = zoomLevel + (speed * p_Delta);
-            if (fZoom < 20.0f)
-            {
-                zoomLevel += speed;
-                pitch += speed;
-            }
-            return;
-        }
-        inline void decreasePitch(void)
-        {
-            constexpr float speed = 0.35f;
-            float fZoom = zoomLevel - speed;
-            if (fZoom > 3.4f)
-            {
-                zoomLevel -= speed;
-                pitch -= speed;
-            }
-            return;
-        }
-        inline void decreasePitch(float p_Delta)
-        {
-            constexpr float speed = 0.35f;
-            float fZoom = zoomLevel - (speed * p_Delta);
-            if (fZoom > 3.4f)
-            {
-                zoomLevel -= speed;
-                pitch -= speed;
-            }
-            return;
-        }
-        inline void increaseOrbit(void)
-        {
-            constexpr float speed = 2.0f;
-            float fOrbit = orbitAngle + speed;
-            if (fOrbit >= 360.0f)
-            {
-                fOrbit = 0.0f;
-            }
-            orbitAngle = fOrbit;
-            return;
-        }
-        inline void increaseOrbit(float p_Delta)
-        {
-            constexpr float speed = 0.25f;
-            float fOrbit = orbitAngle + (speed * p_Delta);
-            if (fOrbit > 359.9f)
-            {
-                fOrbit = 0.0f;
-            }
-            orbitAngle = fOrbit;
-            return;
-        }
-        inline void decreaseOrbit(void)
-        {
-            constexpr float speed = 2.0f;
-            float fOrbit = orbitAngle - speed;
-            if (fOrbit < 0.0f)
-            {
-                fOrbit = 359.9f;
-            }
-            orbitAngle = fOrbit;
-            return;
-        }
-        inline void decreaseOrbit(float p_Delta)
-        {
-            constexpr float speed = 0.25f;
-            float fOrbit = orbitAngle - (speed * p_Delta);
-            if (fOrbit < 0.0f)
-            {
-                fOrbit = 359.9f;
-            }
-            orbitAngle = fOrbit;
-            return;
-        }
         // free look methods
         inline void getFrontFace(void)
         {
@@ -513,6 +380,12 @@ namespace mv
             fr = glm::normalize(fr);
 
             front = fr;
+            return;
+        }
+        inline void move(float p_Angle, glm::vec3 p_TargetAxii, bool p_Boost = false)
+        {
+            constexpr float newMoveSpeed = MOVESPEED * 3.0f;
+            position += rotateVector(p_Angle, {p_TargetAxii, 1.0f}) * ((p_Boost) ? newMoveSpeed : MOVESPEED);
             return;
         }
         inline void rotate(glm::vec3 p_Delta, float p_FrameDelta) // should remain unused while using timesteps
@@ -544,14 +417,14 @@ namespace mv
             rotation = glm::vec3(upcomingX, upcomingY, upcomingZ);
             return;
         }
-        inline void moveUp(float p_FrameDelta)
+        inline void moveUp(void)
         {
-            position.y += MOVESPEED * p_FrameDelta;
+            position.y -= MOVESPEED * 1.5f;
             return;
         }
-        inline void moveDown(float p_FrameDelta)
+        inline void moveDown(void)
         {
-            position.y -= MOVESPEED * p_FrameDelta;
+            position.y += MOVESPEED * 1.5f;
             return;
         }
         inline void moveLeft(void)
@@ -567,27 +440,53 @@ namespace mv
         inline void moveForward(void)
         {
             getFrontFace();
-            position += front * MOVESPEED;
+            position += front * MOVESPEED * 1.5f;
         }
         inline void moveBackward(void)
         {
             getFrontFace();
-            position -= front * MOVESPEED;
+            position -= front * MOVESPEED * 1.5f;
+        }
+
+        inline bool setCameraType(CameraType p_CameraType, glm::vec3 p_Position)
+        {
+            switch (p_CameraType)
+            {
+                case CameraType::eThirdPerson:
+                    {
+                        if (!target)
+                            ptrLogger->logMessage(LogHandler::MessagePriority::eError,
+                                                  "Can't set to third person due to no target");
+                        return false;
+                        break;
+                    }
+                case CameraType::eFirstPerson:
+                    {
+                        ptrLogger->logMessage(LogHandler::MessagePriority::eError,
+                                              "First person mode not implemented yet");
+                        return false;
+                        break;
+                    }
+                default:
+                    {
+                        break;
+                    }
+            }
+            position = p_Position;
+            type = p_CameraType;
+            return true;
         }
 
         inline void updateFreelook(void)
         {
-            glm::mat4 rotationMatrix = glm::mat4(1.0f);
-            glm::mat4 translationMatrix = glm::mat4(1.0f);
+            glm::mat4 xMat = glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), {1.0f, 0.0f, 0.0f});
+            glm::mat4 yMat = glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y), {0.0f, 1.0f, 0.0f});
 
-            // rotate about each axis
-            rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::mat4 rotMat = yMat * xMat;
 
-            translationMatrix = glm::translate(glm::mat4(1.0), position);
+            glm::mat4 posMat = glm::translate(glm::mat4(1.0f), position);
 
-            viewUniformObject->matrix = rotationMatrix * translationMatrix;
+            viewUniformObject->matrix = glm::inverse(rotMat) * glm::inverse(posMat);
             return;
         }
 
@@ -612,6 +511,51 @@ namespace mv
             viewUniformObject->matrix = targetMat * rotationMatrix * distanceMat;
             viewUniformObject->matrix = glm::inverse(viewUniformObject->matrix);
             return;
+        }
+
+        inline glm::vec3 rotateVector(float p_OrbitAngle, glm::vec4 p_TargetAxii)
+        {
+            // target_axis is our default directional vector
+
+            // construct rotation matrix from orbit angle
+            glm::mat4 rotationMatrix = glm::mat4(1.0);
+            rotationMatrix = glm::rotate(rotationMatrix, glm::radians(p_OrbitAngle), glm::vec3(0.0f, 1.0f, 0.0f));
+
+            // multiply our def vec
+
+            glm::vec4 x_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 y_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 z_col = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 w_col = {0.0f, 0.0f, 0.0f, 0.0f};
+
+            // x * x_column
+            x_col.x = p_TargetAxii.x * rotationMatrix[0][0];
+            x_col.y = p_TargetAxii.x * rotationMatrix[0][1];
+            x_col.z = p_TargetAxii.x * rotationMatrix[0][2];
+            x_col.w = p_TargetAxii.x * rotationMatrix[0][3];
+
+            // y * y_column
+            y_col.x = p_TargetAxii.y * rotationMatrix[1][0];
+            y_col.y = p_TargetAxii.y * rotationMatrix[1][1];
+            y_col.z = p_TargetAxii.y * rotationMatrix[1][2];
+            y_col.w = p_TargetAxii.y * rotationMatrix[1][3];
+
+            // z * z_column
+            z_col.x = p_TargetAxii.z * rotationMatrix[2][0];
+            z_col.y = p_TargetAxii.z * rotationMatrix[2][1];
+            z_col.z = p_TargetAxii.z * rotationMatrix[2][2];
+            z_col.w = p_TargetAxii.z * rotationMatrix[2][3];
+
+            // w * w_column
+            w_col.x = p_TargetAxii.w * rotationMatrix[3][0];
+            w_col.y = p_TargetAxii.w * rotationMatrix[3][1];
+            w_col.z = p_TargetAxii.w * rotationMatrix[3][2];
+            w_col.w = p_TargetAxii.w * rotationMatrix[3][3];
+
+            glm::vec4 f = x_col + y_col + z_col + w_col;
+
+            // extract relevant data & return
+            return {f.x, f.y, f.z};
         }
     };
 }; // namespace mv

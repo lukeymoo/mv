@@ -225,7 +225,7 @@ void mv::Engine::go(void)
         Will create render pass & perform pre game loop ImGui initialization
     */
     // clang-format off
-    gui = std::make_unique<GuiHandler>(window,
+    gui = std::make_unique<GuiHandler>(window, camera.get(),
                                         *instance,
                                         *physicalDevice,
                                         *mvDevice->logicalDevice,
@@ -241,8 +241,6 @@ void mv::Engine::go(void)
 
     auto renderStart = chrono::now();
     auto renderStop = chrono::now();
-
-    collectionHandler->loadModel(*mvDevice, *descriptorAllocator, "models/Security2.fbx");
 
     logger.logMessage("Entering game loop\n");
 
@@ -262,6 +260,81 @@ void mv::Engine::go(void)
             mv::Keyboard::Event kbdEvent = keyboard.read();
             mv::Mouse::Event mouseEvent = mouse.read();
 
+            if (camera->type == CameraType::eFreeLook && !gui->hasFocus)
+            {
+                /*
+                  Start mouse drag
+                */
+                if (mouseEvent.type == Mouse::Event::Type::eRightDown)
+                {
+
+                    if (!mouse.isDragging)
+                    {
+                        // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+                        // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                        mouse.startDrag(camera->orbitAngle, camera->pitch);
+                    }
+                }
+                if (mouseEvent.type == Mouse::Event::Type::eRightRelease)
+                {
+                    if (mouse.isDragging)
+                    {
+                        // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+                        // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                        mouse.endDrag();
+                    }
+                }
+
+                // if drag enabled check for release
+                if (mouse.isDragging)
+                {
+                    // camera orbit
+                    // if (mouse.dragDeltaX > 0)
+                    // {
+                    //     camera->lerpOrbit(abs(mouse.dragDeltaX));
+                    // }
+                    // else if (mouse.dragDeltaX < 0)
+                    // {
+                    //     camera->lerpOrbit(-abs(mouse.dragDeltaX));
+                    // }
+
+                    // // camera pitch
+                    // if (mouse.dragDeltaY > 0)
+                    // {
+                    //     camera->lerpPitch(-abs(mouse.dragDeltaY));
+                    // }
+                    // else if (mouse.dragDeltaY < 0)
+                    // {
+                    //     camera->lerpPitch(abs(mouse.dragDeltaY));
+                    // }
+
+                    camera->rotate({mouse.dragDeltaY, -mouse.dragDeltaX, 0.0f}, 1.0f);
+
+                    mouse.storedOrbit = camera->orbitAngle;
+                    mouse.storedPitch = camera->pitch;
+                    mouse.clear();
+                }
+
+                // WASD
+                if (keyboard.isKeyState(GLFW_KEY_W))
+                    camera->move(camera->rotation.y, {0.0f, 0.0f, -1.0f}, (keyboard.isKeyState(GLFW_KEY_LEFT_SHIFT)));
+                if (keyboard.isKeyState(GLFW_KEY_A))
+                    camera->move(camera->rotation.y, {-1.0f, 0.0f, 0.0f}, (keyboard.isKeyState(GLFW_KEY_LEFT_SHIFT)));
+                if (keyboard.isKeyState(GLFW_KEY_S))
+                    camera->move(camera->rotation.y, {0.0f, 0.0f, 1.0f}, (keyboard.isKeyState(GLFW_KEY_LEFT_SHIFT)));
+                if (keyboard.isKeyState(GLFW_KEY_D))
+                    camera->move(camera->rotation.y, {1.0f, 0.0f, 0.0f}, (keyboard.isKeyState(GLFW_KEY_LEFT_SHIFT)));
+
+                // space + alt
+                if (keyboard.isKeyState(GLFW_KEY_SPACE))
+                    camera->moveUp();
+                if (keyboard.isKeyState(GLFW_KEY_LEFT_ALT))
+                    camera->moveDown();
+            }
+
+            /*
+                THIRD PERSON CAMERA
+            */
             if (camera->type == CameraType::eThirdPerson && !gui->hasFocus)
             {
 
@@ -310,7 +383,7 @@ void mv::Engine::go(void)
                     }
                     else if (mouse.dragDeltaX < 0)
                     {
-                        camera->adjustOrbit(abs(mouse.dragDeltaX));
+                        // camera->adjustOrbit(abs(mouse.dragDeltaX));
                         camera->lerpOrbit(abs(mouse.dragDeltaX));
                     }
 
@@ -422,7 +495,7 @@ void mv::Engine::go(void)
                     collectionHandler->createObject(*mvDevice, *descriptorAllocator, "models/_viking_room.fbx");
                     collectionHandler->models->at(0).objects->back().position = glm::vec3(x, y, z);
                 }
-            }
+            } // end third person methods
             // update game objects
             collectionHandler->update();
 
@@ -456,7 +529,9 @@ void mv::Engine::go(void)
 
             gui->update(window, swapchain->swapExtent,
                         std::chrono::duration<float, std::ratio<1L, 1000L>>(renderStop - renderStart).count(),
-                        std::chrono::duration<float, std::chrono::milliseconds::period>(deltaTime).count());
+                        std::chrono::duration<float, std::chrono::milliseconds::period>(deltaTime).count(),
+                        static_cast<uint32_t>(collectionHandler->modelNames.size()),
+                        collectionHandler->getObjectCount(), collectionHandler->getVertexCount());
 
             gui->renderFrame();
         }
@@ -1034,17 +1109,17 @@ inline void mv::Engine::goSetup(void)
     /*
       CONFIGURE AND CREATE CAMERA
     */
-    struct CameraInitStruct cameraParams;
-    cameraParams.fov = 60.0f;
+    struct CameraInitStruct cameraParams = {};
+    cameraParams.fov = 50.0f;
     cameraParams.aspect = (float)swapchain->swapExtent.width / (float)swapchain->swapExtent.height;
     cameraParams.nearz = 0.1f;
     cameraParams.farz = 200.0f;
-    cameraParams.position = glm::vec3(0.0f, 3.0f, -7.0f);
+    cameraParams.position = glm::vec3(0.0f, -3.0f, 7.0f);
     cameraParams.viewUniformObject = collectionHandler->viewUniform.get();
     cameraParams.projectionUniformObject = collectionHandler->projectionUniform.get();
 
-    cameraParams.type = CameraType::eThirdPerson;
-    cameraParams.target = &collectionHandler->models->at(1).objects->at(0);
+    cameraParams.type = CameraType::eFreeLook;
+    // cameraParams.target = &collectionHandler->models->at(1).objects->at(0);
 
     camera = std::make_unique<Camera>(cameraParams);
 

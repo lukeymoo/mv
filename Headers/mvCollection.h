@@ -42,6 +42,29 @@ namespace mv
         void update(void);
 
         void cleanup(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator);
+
+        inline uint32_t getObjectCount(void)
+        {
+            uint32_t count = 0;
+            for (const auto &model : *models)
+            {
+                count += model.objects->size();
+            }
+            return count;
+        }
+        inline uint32_t getVertexCount(void)
+        {
+            uint32_t count = 0;
+            for (const auto &model : *models)
+            {
+                for (const auto &mesh : *model.loadedMeshes)
+                {
+                    count += mesh.vertices.size();
+                }
+                count *= model.objects->size();
+            }
+            return count;
+        }
     };
 }; // namespace mv
 

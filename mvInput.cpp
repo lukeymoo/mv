@@ -303,6 +303,7 @@ void mv::Mouse::endDrag(void) noexcept
     return;
 }
 
+// Clear deltas
 void mv::Mouse::clear(void) noexcept
 {
     deltaX = 0;

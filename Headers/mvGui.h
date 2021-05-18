@@ -16,15 +16,17 @@
 
 #include "mvHelper.h"
 #include "mvSwap.h"
+#include "mvCamera.h"
 
 namespace mv
 {
     class GuiHandler
     {
       public:
-        GuiHandler(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance, const vk::PhysicalDevice &p_PhysicalDevice,
-                   const vk::Device &p_LogicalDevice, const mv::Swap &p_MvSwap, const vk::CommandPool &p_CommandPool,
-                   const vk::Queue &p_GraphicsQueue, std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+        GuiHandler(GLFWwindow *p_GLFWwindow, Camera *p_CameraHandler, const vk::Instance &p_Instance,
+                   const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+                   const mv::Swap &p_MvSwap, const vk::CommandPool &p_CommandPool, const vk::Queue &p_GraphicsQueue,
+                   std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
                    const vk::DescriptorPool &p_DescriptorPool);
         ~GuiHandler();
 
@@ -42,6 +44,15 @@ namespace mv
         int frameCount = 0;
 
         LogHandler *ptrLogger;
+        Camera *ptrCamera;
+
+        struct AssetModal
+        {
+            const int width = 300;
+            const int height = 100;
+            ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
+        } assetModal;
 
         struct DebugModal
         {
@@ -61,6 +72,71 @@ namespace mv
                 ImGuiSelectableFlags flags = ImGuiSelectableFlags_AllowDoubleClick;
             } terrainItem; // Selectable flags
 
+            struct CameraItem
+            {
+                enum Type
+                {
+                    eUndefined,
+                    eFreeLook,
+                    eFirstPerson,
+                    eThirdPerson,
+                    eIsometric,
+                };
+                // { TYPE, { ITEM TEXT, SELECTED? } }
+                // clang-format off
+                std::unordered_map<CameraItem::Type, std::pair<std::string, bool>> typeMap = {
+                    {eUndefined, {"Undefined", false}},
+                    {eFreeLook, {"Free Look", false}},
+                    {eFirstPerson, {"First Person", false}},
+                    {eThirdPerson, {"Third Person", false}},
+                    {eIsometric, {"Isometric", false}},
+                };
+                // clang-format on
+                Type selectedType = eUndefined;
+
+                inline std::string getTypeName(Type p_EnumType)
+                {
+                    return typeMap.at(p_EnumType).first;
+                }
+
+                inline bool getIsSelected(Type p_EnumType)
+                {
+                    return typeMap.at(p_EnumType).second;
+                }
+
+                inline bool *getIsSelectedRef(Type p_EnumType)
+                {
+                    return &typeMap.at(p_EnumType).second;
+                }
+                inline void select(Type p_EnumType)
+                {
+                    deselectAllBut(p_EnumType);
+                    for (auto &pair : typeMap)
+                    {
+                        if (pair.first == p_EnumType)
+                            pair.second.second = true;
+                    }
+                    return;
+                }
+                inline void deselectAll(void)
+                {
+                    for (auto &pair : typeMap)
+                    {
+                        pair.second.second = false;
+                    }
+                    return;
+                }
+                inline void deselectAllBut(Type p_EnumType)
+                {
+                    for (auto &pair : typeMap)
+                    {
+                        if (pair.first == p_EnumType)
+                            continue;
+                        pair.second.second = false;
+                    }
+                }
+            } cameraItem;
+
             struct
             {
                 bool isOpen;
@@ -70,7 +146,7 @@ namespace mv
             } selectTerrainModal;
 
             const int width = 300;
-            const int height = 200;
+            const int height = 100;
             // Parent modal
             ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
@@ -112,14 +188,16 @@ namespace mv
 
         } fileMenu;
 
+        const int menuBarHeight = 18;
+
         // Effectively a virtual function for which dialog modal to display
         void (*noShow)(GuiHandler *p_This) = [](GuiHandler *) {};
         void (*show)(GuiHandler *p_This) = noShow;
 
       public:
         ImGuiIO &getIO(void);
-        void update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
-                    float p_FrameDelta);
+        void update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent, float p_RenderDelta, float p_FrameDelta,
+                    uint32_t p_ModelCount, uint32_t p_ObjectCount, uint32_t p_VertexCount);
 
         std::vector<vk::Framebuffer> createFramebuffers(const vk::Device &p_LogicalDevice,
                                                         const vk::RenderPass &p_GuiRenderPass,
@@ -589,19 +667,21 @@ namespace mv
         } // end renderMenu
 
         // Render terrain modal
-        inline void renderTerrainModal(void)
+        inline void renderMapConfigModal(void)
         {
             // Terrain info
             auto viewport = ImGui::GetMainViewport();
             auto pos = viewport->Size;
             pos.x -= mapModal.width;
-            pos.y = 18;
+            pos.y = menuBarHeight;
             ImGui::SetNextWindowPos(pos);
             ImGui::SetNextWindowSize(ImVec2(mapModal.width, mapModal.height));
 
             ImGui::Begin("Map Details", nullptr, mapModal.windowFlags);
 
-            // Display selected terrain normal file
+            /*
+                Selected terrain map
+            */
             ImGui::Text("Terrain file: ");
             ImGui::SameLine();
             ImGui::Selectable(mapModal.terrainItem.filename.c_str(), &mapModal.terrainItem.isSelected,
@@ -616,8 +696,79 @@ namespace mv
                 mapModal.terrainItem.isSelected = false;
             }
 
+            /*
+                Camera configuration
+            */
+            ImGui::Spacing();
+            ImGui::Text("Camera style");
+            ImGui::SameLine();
+
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.0f, 1.0f));
+            if (ImGui::TreeNode(mapModal.cameraItem.typeMap.at(mapModal.cameraItem.selectedType).first.c_str()))
+            {
+                using CameraItemType = mv::GuiHandler::MapModal::CameraItem::Type;
+
+                ImGui::Dummy(ImVec2(64, 1));
+                ImGui::SameLine();
+
+                // FREE LOOK
+                if (ImGui::MenuItem(mapModal.cameraItem.getTypeName(CameraItemType::eFreeLook).c_str(), nullptr,
+                                    mapModal.cameraItem.getIsSelectedRef(CameraItemType::eFreeLook),
+                                    !mapModal.cameraItem.getIsSelected(CameraItemType::eFreeLook)))
+                {
+                    if (ptrCamera->setCameraType(CameraType::eFreeLook, {
+                                                                            ptrCamera->position.x,
+                                                                            ptrCamera->position.y - 2.0f,
+                                                                            ptrCamera->position.z,
+                                                                        }))
+                    {
+                        mapModal.cameraItem.deselectAllBut(CameraItemType::eFreeLook);
+                        mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eFreeLook;
+                    }
+                    else
+                    {
+                        mapModal.cameraItem.deselectAllBut(mapModal.cameraItem.selectedType);
+                    }
+                }
+
+                ImGui::Dummy(ImVec2(64, 1));
+                ImGui::SameLine();
+
+                // THIRD PERSON
+                if (ImGui::MenuItem(mapModal.cameraItem.getTypeName(CameraItemType::eThirdPerson).c_str(), nullptr,
+                                    mapModal.cameraItem.getIsSelectedRef(CameraItemType::eThirdPerson),
+                                    !mapModal.cameraItem.getIsSelected(CameraItemType::eThirdPerson)))
+                {
+                    if (ptrCamera->setCameraType(CameraType::eThirdPerson, {0.0f, 0.0f, 0.0f}))
+                    {
+                        mapModal.cameraItem.deselectAllBut(CameraItemType::eThirdPerson);
+                        mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eThirdPerson;
+                    }
+                    else
+                    {
+                        mapModal.cameraItem.deselectAllBut(mapModal.cameraItem.selectedType);
+                    }
+                }
+                ImGui::TreePop();
+            }
+            ImGui::PopStyleColor(1);
             ImGui::End();
+            return;
         } // end terrain modal
+
+        inline void renderAssetModal(void)
+        {
+            auto viewport = ImGui::GetMainViewport();
+            auto pos = viewport->Size;
+            pos.x -= assetModal.width;
+            pos.y = mapModal.height + menuBarHeight;
+            ImGui::SetNextWindowPos(pos);
+            ImGui::SetNextWindowSize(ImVec2(assetModal.width, assetModal.height));
+            ImGui::Begin("Assets", nullptr, assetModal.windowFlags);
+
+            ImGui::End();
+            return;
+        } // end asset modal
 
         inline void renderDebugModal(
             std::vector<std::pair<LogHandler::MessagePriority, std::string>> p_DebugMessageList)
