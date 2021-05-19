@@ -1,28 +1,25 @@
 #include "mvSwap.h"
 
-mv::Swap::Swap(void)
+Swap::Swap(void)
 {
-    buffers = std::make_unique<std::vector<struct SwapchainBuffer>>();
-    // images = std::make_unique<std::vector<vk::Image>>();
 }
-mv::Swap::~Swap()
+Swap::~Swap()
 {
 }
 
-void mv::Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
-                    const vk::PhysicalDevice &p_PhysicalDevice)
+void Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
+                const vk::PhysicalDevice &p_PhysicalDevice)
 {
     // create window
     VkSurfaceKHR tempSurface = nullptr;
     glfwCreateWindowSurface(p_Instance, p_GLFWwindow, nullptr, &tempSurface);
-    if (!tempSurface)
-        throw std::runtime_error("Failed to create surface");
 
     // store surface
-    surface = std::make_unique<vk::SurfaceKHR>(std::move(tempSurface));
+    surface = tempSurface;
 
     // get queue family properties
-    std::vector<vk::QueueFamilyProperties> queueProperties = p_PhysicalDevice.getQueueFamilyProperties();
+    std::vector<vk::QueueFamilyProperties> queueProperties =
+        p_PhysicalDevice.getQueueFamilyProperties();
     if (queueProperties.size() < 1)
         throw std::runtime_error("No command queue families found on device");
 
@@ -30,7 +27,7 @@ void mv::Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     std::vector<vk::Bool32> supportsPresent(queueProperties.size());
     for (uint32_t i = 0; i < queueProperties.size(); i++)
     {
-        supportsPresent[i] = p_PhysicalDevice.getSurfaceSupportKHR(i, *surface);
+        supportsPresent[i] = p_PhysicalDevice.getSurfaceSupportKHR(i, surface);
     }
 
     uint32_t tempGraphicsIdx = UINT32_MAX;
@@ -58,7 +55,8 @@ void mv::Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     // allow multi queue operations
     // for now we throw
     if (tempPresentIdx == UINT32_MAX)
-        throw std::runtime_error("No queue families supported both graphics and present");
+        throw std::runtime_error(
+            "No queue families supported both graphics and present");
     // for (uint32_t i = 0; i < queue_count; i++)
     // {
     //     if (supports_present[i] == VK_TRUE)
@@ -75,12 +73,14 @@ void mv::Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     graphicsIndex = tempGraphicsIdx;
 
     // get supported surface formats
-    std::vector<vk::SurfaceFormatKHR> surfaceFormats = p_PhysicalDevice.getSurfaceFormatsKHR(*surface);
+    std::vector<vk::SurfaceFormatKHR> surfaceFormats =
+        p_PhysicalDevice.getSurfaceFormatsKHR(surface);
 
     if (surfaceFormats.size() < 1)
         throw std::runtime_error("No supported surface formats found");
 
-    if ((surfaceFormats.size() == 1) && (surfaceFormats.at(0).format == vk::Format::eUndefined))
+    if ((surfaceFormats.size() == 1) &&
+        (surfaceFormats.at(0).format == vk::Format::eUndefined))
     {
         colorFormat = vk::Format::eB8G8R8A8Unorm;
         colorSpace = surfaceFormats[0].colorSpace;
@@ -113,24 +113,27 @@ void mv::Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     return;
 }
 
-void mv::Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Device &p_MvDevice, uint32_t &p_WindowWidth,
-                      uint32_t &p_WindowHeight)
+void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice,
+                  const vk::Device &p_LogicalDevice, uint32_t &p_WindowWidth,
+                  uint32_t &p_WindowHeight)
 {
-
     // get surface capabilities
     vk::SurfaceCapabilitiesKHR capabilities;
-    vk::Result res = p_PhysicalDevice.getSurfaceCapabilitiesKHR(*surface, &capabilities);
+    vk::Result res =
+        p_PhysicalDevice.getSurfaceCapabilitiesKHR(surface, &capabilities);
     switch (res)
     {
         case vk::Result::eSuccess:
             break;
         default:
-            throw std::runtime_error("Failed to get surface capabilities, does the window no longer exist?");
+            throw std::runtime_error("Failed to get surface capabilities, does "
+                                     "the window no longer exist?");
             break;
     }
 
     // get surface present modes
-    std::vector<vk::PresentModeKHR> presentModes = p_PhysicalDevice.getSurfacePresentModesKHR(*surface);
+    std::vector<vk::PresentModeKHR> presentModes =
+        p_PhysicalDevice.getSurfacePresentModesKHR(surface);
 
     if (presentModes.size() < 1)
         throw std::runtime_error("Failed to find any surface present modes");
@@ -162,14 +165,17 @@ void mv::Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Devi
     // determine number of swap images
     uint32_t requestedImageCount = capabilities.minImageCount + 2;
     // ensure not exceeding limit
-    if ((capabilities.maxImageCount > 0) && (requestedImageCount > capabilities.maxImageCount))
+    if ((capabilities.maxImageCount > 0) &&
+        (requestedImageCount > capabilities.maxImageCount))
     {
         requestedImageCount = capabilities.maxImageCount;
     }
 
     // get transform
-    vk::SurfaceTransformFlagBitsKHR selectedTransform = capabilities.currentTransform;
-    if (capabilities.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity)
+    vk::SurfaceTransformFlagBitsKHR selectedTransform =
+        capabilities.currentTransform;
+    if (capabilities.supportedTransforms &
+        vk::SurfaceTransformFlagBitsKHR::eIdentity)
     {
         selectedTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity;
     }
@@ -178,11 +184,9 @@ void mv::Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Devi
         selectedTransform = capabilities.currentTransform;
     }
 
-    // get depth format
-    depthFormat = p_MvDevice.getSupportedDepthFormat(p_PhysicalDevice);
-
     // default ignore alpha(A = 1.0f)
-    vk::CompositeAlphaFlagBitsKHR compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+    vk::CompositeAlphaFlagBitsKHR compositeAlpha =
+        vk::CompositeAlphaFlagBitsKHR::eOpaque;
 
     std::vector<vk::CompositeAlphaFlagBitsKHR> compositeAlphaFlags = {
         vk::CompositeAlphaFlagBitsKHR::eOpaque,
@@ -201,7 +205,7 @@ void mv::Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Devi
     }
 
     vk::SwapchainCreateInfoKHR swapInfo;
-    swapInfo.surface = *surface;
+    swapInfo.surface = surface;
     swapInfo.minImageCount = requestedImageCount;
     swapInfo.imageFormat = colorFormat;
     swapInfo.imageColorSpace = colorSpace;
@@ -210,7 +214,7 @@ void mv::Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Devi
     swapInfo.preTransform = selectedTransform;
     swapInfo.imageArrayLayers = 1;
     swapInfo.imageSharingMode = vk::SharingMode::eExclusive;
-    swapInfo.queueFamilyIndexCount = 0; // only matters when concurrent sharing mode
+    swapInfo.queueFamilyIndexCount = 0;
     swapInfo.presentMode = selectedPresentMode;
     swapInfo.clipped = VK_TRUE;
     swapInfo.compositeAlpha = compositeAlpha;
@@ -226,20 +230,23 @@ void mv::Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Devi
     }
 
     // create swap chain
-    swapchain = std::make_unique<vk::SwapchainKHR>(p_MvDevice.logicalDevice->createSwapchainKHR(swapInfo));
+    std::cout << "Logical Device => " << p_LogicalDevice << "\n";
+    swapchain = p_LogicalDevice.createSwapchainKHR(swapInfo);
+    if (!swapchain)
+        throw std::runtime_error("Failed to create swapchain");
 
     // get swap chain images
     std::vector<vk::Image> tempImages;
-    tempImages = p_MvDevice.logicalDevice->getSwapchainImagesKHR(*swapchain);
+    tempImages = p_LogicalDevice.getSwapchainImagesKHR(swapchain);
 
     if (tempImages.size() < 1)
         throw std::runtime_error("Failed to retreive any swap chain images");
 
-    buffers->resize(tempImages.size());
-    for (auto &buffer : *buffers)
+    buffers.resize(tempImages.size());
+    for (auto &buffer : buffers)
     {
         // move temp images into swapchain buffer<vector>
-        buffer.image = std::move(tempImages[&buffer - &(*buffers)[0]]);
+        buffer.image = std::move(tempImages[&buffer - &buffers[0]]);
         vk::ImageViewCreateInfo viewInfo;
         viewInfo.image = buffer.image;
         viewInfo.format = colorFormat;
@@ -256,37 +263,34 @@ void mv::Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const mv::Devi
         viewInfo.subresourceRange.layerCount = 1;
         viewInfo.viewType = vk::ImageViewType::e2D;
 
-        buffer.view = p_MvDevice.logicalDevice->createImageView(viewInfo);
+        buffer.view = p_LogicalDevice.createImageView(viewInfo);
+        std::cout << "Creating swap image view => " << buffer.view << "\n";
     }
     return;
 }
 
-void mv::Swap::cleanup(const vk::Instance &p_Instance, const mv::Device &p_MvDevice, bool p_ShouldDestroySurface)
+void Swap::cleanup(const vk::Instance &p_Instance,
+                   const vk::Device &p_LogicalDevice,
+                   bool p_ShouldDestroySurface)
 {
 
     if (swapchain)
     {
-        if (buffers)
+        if (!buffers.empty())
         {
-            for (auto &swapBuffer : *buffers)
+            for (auto &swapBuffer : buffers)
             {
-                p_MvDevice.logicalDevice->destroyImageView(swapBuffer.view);
+                p_LogicalDevice.destroyImageView(swapBuffer.view);
             }
-            buffers.reset();
-            buffers = std::make_unique<std::vector<struct SwapchainBuffer>>();
         }
-        p_MvDevice.logicalDevice->destroySwapchainKHR(*swapchain);
-        swapchain.reset();
-        swapchain = std::make_unique<vk::SwapchainKHR>();
+        p_LogicalDevice.destroySwapchainKHR(swapchain);
     }
 
     if (p_ShouldDestroySurface)
     {
         if (surface)
         {
-            p_Instance.destroySurfaceKHR(*surface);
-            surface.reset();
-            surface = std::make_unique<vk::SurfaceKHR>();
+            p_Instance.destroySurfaceKHR(surface);
         }
     }
     return;

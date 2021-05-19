@@ -1,51 +1,63 @@
 #include "mvBuffer.h"
 
 // Maps vulkan buffer/memory to member variable void* mapped
-void mv::Buffer::map(const mv::Device &p_MvDevice, vk::DeviceSize p_MemorySize, vk::DeviceSize p_MemoryOffset)
+void MvBuffer::map(const vk::Device &p_LogicalDevice,
+                   vk::DeviceSize p_MemorySize, vk::DeviceSize p_MemoryOffset)
 {
-    mapped = p_MvDevice.logicalDevice->mapMemory(*memory, p_MemoryOffset, p_MemorySize);
+    mapped = p_LogicalDevice.mapMemory(memory, p_MemoryOffset, p_MemorySize);
     if (!mapped)
         throw std::runtime_error("Failed to map memory :: buffer handler");
     return;
 }
 
 // Unmaps void* mapped from vulkan buffer/memory
-void mv::Buffer::unmap(const mv::Device &p_MvDevice)
+void MvBuffer::unmap(const vk::Device &p_LogicalDevice)
 {
     if (mapped)
     {
-        p_MvDevice.logicalDevice->unmapMemory(*memory);
+        p_LogicalDevice.unmapMemory(memory);
         mapped = nullptr;
     }
 }
 
 // Bind allocated memory to buffer
-void mv::Buffer::bind(const mv::Device &p_MvDevice, vk::DeviceSize p_MemoryOffset)
+void MvBuffer::bind(const vk::Device &p_LogicalDevice,
+                    vk::DeviceSize p_MemoryOffset)
 {
     // TODO
     // Implement check against memory size & parameter memory offset
     // Should do some bounds checking instead of letting Vulkan throw for us
-    p_MvDevice.logicalDevice->bindBufferMemory(*buffer, *memory, p_MemoryOffset);
+    p_LogicalDevice.bindBufferMemory(buffer, memory, p_MemoryOffset);
+    return;
+}
+
+void MvBuffer::allocate(Allocator &p_DescriptorAllocator,
+                        vk::DescriptorSetLayout &p_Layout)
+{
+    p_DescriptorAllocator.allocateSet(p_Layout, descriptor);
+    p_DescriptorAllocator.updateSet(bufferInfo, descriptor, 0);
     return;
 }
 
 // Configure default descriptor values
-void mv::Buffer::setupDescriptor(vk::DeviceSize p_MemorySize, vk::DeviceSize p_MemoryOffset)
+void MvBuffer::setupBufferInfo(vk::DeviceSize p_MemorySize,
+                               vk::DeviceSize p_MemoryOffset)
 {
-    descriptor.buffer = *buffer;
-    descriptor.range = p_MemorySize;
-    descriptor.offset = p_MemoryOffset;
+    bufferInfo.buffer = buffer;
+    bufferInfo.range = p_MemorySize;
+    bufferInfo.offset = p_MemoryOffset;
     return;
 }
 
 // Copy buffer to another mapped buffer pointed to via function param void* data
-void mv::Buffer::copyFrom(void *p_SrcData, vk::DeviceSize p_MemoryCopySize)
+void MvBuffer::copyFrom(void *p_SrcData, vk::DeviceSize p_MemoryCopySize)
 {
     // TODO
-    // Should do bounds checking to ensure we're not attempting to copy data from
-    // Source that is larger than our own
+    // Should do bounds checking to ensure we're not attempting to copy data
+    // from Source that is larger than our own
     if (!mapped)
-        throw std::runtime_error("Requested to copy data to buffer but the buffer was never mapped :: buffer handler");
+        throw std::runtime_error("Requested to copy data to buffer but the "
+                                 "buffer was never mapped :: buffer handler");
 
     memcpy(mapped, p_SrcData, p_MemoryCopySize);
 
@@ -54,20 +66,17 @@ void mv::Buffer::copyFrom(void *p_SrcData, vk::DeviceSize p_MemoryCopySize)
 
 // Unmaps void* mapped if it was previously mapped to vulkan buffer/memory
 // Destroys buffer and frees allocated memory
-void mv::Buffer::destroy(const mv::Device &p_MvDevice)
+void MvBuffer::destroy(const vk::Device &p_LogicalDevice)
 {
-
-    unmap(p_MvDevice);
+    unmap(p_LogicalDevice);
 
     if (buffer)
     {
-        p_MvDevice.logicalDevice->destroyBuffer(*buffer);
-        buffer.reset();
+        p_LogicalDevice.destroyBuffer(buffer);
     }
 
     if (memory)
     {
-        p_MvDevice.logicalDevice->freeMemory(*memory);
-        memory.reset();
+        p_LogicalDevice.freeMemory(memory);
     }
 }

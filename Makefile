@@ -447,33 +447,6 @@ mvCollection.cpp.s:
 	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvCollection.cpp.s
 .PHONY : mvCollection.cpp.s
 
-mvDevice.o: mvDevice.cpp.o
-
-.PHONY : mvDevice.o
-
-# target to build an object file
-mvDevice.cpp.o:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvDevice.cpp.o
-.PHONY : mvDevice.cpp.o
-
-mvDevice.i: mvDevice.cpp.i
-
-.PHONY : mvDevice.i
-
-# target to preprocess a source file
-mvDevice.cpp.i:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvDevice.cpp.i
-.PHONY : mvDevice.cpp.i
-
-mvDevice.s: mvDevice.cpp.s
-
-.PHONY : mvDevice.s
-
-# target to generate assembly for a file
-mvDevice.cpp.s:
-	$(MAKE) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvDevice.cpp.s
-.PHONY : mvDevice.cpp.s
-
 mvEngine.o: mvEngine.cpp.o
 
 .PHONY : mvEngine.o
@@ -789,9 +762,6 @@ help:
 	@echo "... mvCollection.o"
 	@echo "... mvCollection.i"
 	@echo "... mvCollection.s"
-	@echo "... mvDevice.o"
-	@echo "... mvDevice.i"
-	@echo "... mvDevice.s"
 	@echo "... mvEngine.o"
 	@echo "... mvEngine.i"
 	@echo "... mvEngine.s"

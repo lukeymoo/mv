@@ -29,8 +29,7 @@ set(HEADERS
     Headers/mvModel.h
     Headers/mvBuffer.h
     Headers/mvEngine.h
-    Headers/mvSwap.h
-    Headers/mvDevice.h)
+    Headers/mvSwap.h)
 
 set(SOURCES
     Headers/imgui-1.82/backends/imgui_impl_glfw.cpp
@@ -53,11 +52,10 @@ set(SOURCES
     mvBuffer.cpp
     mvEngine.cpp
     mvSwap.cpp
-    mvDevice.cpp
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -Wextra -std=c++20 -O3 -m64 -g)
+add_compile_options(-Wall -Wextra -std=c++20 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 

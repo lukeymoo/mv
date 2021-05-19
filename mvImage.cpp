@@ -1,29 +1,34 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "mvImage.h"
 
-mv::Image::Image()
+Image::Image()
 {
     return;
 }
 
-mv::Image::~Image()
+Image::~Image()
 {
     return;
 }
 
-void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_ImageCreateInfo,
-                       std::string p_ImageFilename)
+void Image::create(Engine *p_Engine, ImageCreateInfo &p_ImageCreateInfo,
+                   std::string p_ImageFilename)
 {
+    if (!p_Engine)
+        throw std::runtime_error("Invalid engine handle passed to image");
+    if (!p_Engine->commandPool)
+        throw std::runtime_error("command pool not initialized in mv device "
+                                 "handler:: image handler");
 
-    if (!p_MvDevice.commandPool)
-        throw std::runtime_error("command pool not initialized in mv device handler:: image handler");
+    engine = p_Engine;
 
     int width = 0;
     int height = 0;
     int channels = 0;
 
     // load image
-    stbi_uc *rawImage = stbi_load(p_ImageFilename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+    stbi_uc *rawImage = stbi_load(p_ImageFilename.c_str(), &width, &height,
+                                  &channels, STBI_rgb_alpha);
     vk::DeviceSize imageSize = width * height * 4;
 
     if (!rawImage)
@@ -34,14 +39,15 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     void *stagingMapped = nullptr;
 
     // create staging buffer
-    createStagingBuffer(p_MvDevice, imageSize, stagingBuffer, stagingMemory);
+    createStagingBuffer(imageSize, stagingBuffer, stagingMemory);
 
-    stagingMapped = p_MvDevice.logicalDevice->mapMemory(stagingMemory, 0, imageSize);
+    stagingMapped =
+        p_Engine->logicalDevice.mapMemory(stagingMemory, 0, imageSize);
 
     // copy raw image to staging memory
     memcpy(stagingMapped, rawImage, static_cast<size_t>(imageSize));
 
-    p_MvDevice.logicalDevice->unmapMemory(stagingMemory);
+    p_Engine->logicalDevice.unmapMemory(stagingMemory);
 
     // free stb image
     stbi_image_free(rawImage);
@@ -57,29 +63,33 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     imageInfo.arrayLayers = 1;
     imageInfo.samples = vk::SampleCountFlagBits::e1;
     imageInfo.tiling = p_ImageCreateInfo.tiling;
-    imageInfo.usage = p_ImageCreateInfo.usage; // VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.usage =
+        p_ImageCreateInfo.usage; // VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                 // | VK_IMAGE_USAGE_SAMPLED_BIT;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
     imageInfo.initialLayout = vk::ImageLayout::eUndefined;
 
-    image = p_MvDevice.logicalDevice->createImage(imageInfo);
+    image = p_Engine->logicalDevice.createImage(imageInfo);
 
-    memoryRequirements = p_MvDevice.logicalDevice->getImageMemoryRequirements(image);
+    memoryRequirements =
+        p_Engine->logicalDevice.getImageMemoryRequirements(image);
 
     vk::MemoryAllocateInfo allocInfo;
     allocInfo.allocationSize = memoryRequirements.size;
-    allocInfo.memoryTypeIndex =
-        p_MvDevice.getMemoryType(memoryRequirements.memoryTypeBits, p_ImageCreateInfo.memoryProperties);
+    allocInfo.memoryTypeIndex = p_Engine->getMemoryType(
+        memoryRequirements.memoryTypeBits, p_ImageCreateInfo.memoryProperties);
 
     // allocate image memory
-    memory = p_MvDevice.logicalDevice->allocateMemory(allocInfo);
+    memory = p_Engine->logicalDevice.allocateMemory(allocInfo);
 
-    p_MvDevice.logicalDevice->bindImageMemory(image, memory, 0);
+    p_Engine->logicalDevice.bindImageMemory(image, memory, 0);
 
     // transition image to transfer dst
-    transitionImageLayout(p_MvDevice, &image, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    transitionImageLayout(&image, vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eTransferDstOptimal);
 
     // copy staging buffer to image
-    vk::CommandBuffer commandBuffer = beginCommandBuffer(p_MvDevice);
+    vk::CommandBuffer commandBuffer = beginCommandBuffer();
 
     vk::BufferImageCopy region;
     region.bufferOffset = 0;
@@ -90,14 +100,16 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     region.imageSubresource.baseArrayLayer = 0;
     region.imageSubresource.layerCount = 1;
     region.imageOffset = vk::Offset3D{0, 0, 0};
-    region.imageExtent = vk::Extent3D{static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
+    region.imageExtent = vk::Extent3D{static_cast<uint32_t>(width),
+                                      static_cast<uint32_t>(height), 1};
 
-    commandBuffer.copyBufferToImage(stagingBuffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+    commandBuffer.copyBufferToImage(
+        stagingBuffer, image, vk::ImageLayout::eTransferDstOptimal, region);
 
-    endCommandBuffer(p_MvDevice, commandBuffer);
+    endCommandBuffer(commandBuffer);
 
     // transition image to shader read only
-    transitionImageLayout(p_MvDevice, &image, vk::ImageLayout::eTransferDstOptimal,
+    transitionImageLayout(&image, vk::ImageLayout::eTransferDstOptimal,
                           vk::ImageLayout::eShaderReadOnlyOptimal);
 
     // create view into image
@@ -118,7 +130,7 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     viewInfo.subresourceRange.layerCount = 1;
 
     // create image view
-    imageView = p_MvDevice.logicalDevice->createImageView(viewInfo);
+    imageView = p_Engine->logicalDevice.createImageView(viewInfo);
 
     // create image sampler
     vk::SamplerCreateInfo samplerInfo;
@@ -128,7 +140,8 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
     samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
     samplerInfo.anisotropyEnable = VK_TRUE;
-    samplerInfo.maxAnisotropy = p_MvDevice.physicalProperties.limits.maxSamplerAnisotropy;
+    samplerInfo.maxAnisotropy =
+        p_Engine->physicalProperties.limits.maxSamplerAnisotropy;
     samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
     samplerInfo.compareEnable = VK_FALSE;
@@ -136,11 +149,11 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
 
     // create sampler
-    sampler = p_MvDevice.logicalDevice->createSampler(samplerInfo);
+    sampler = p_Engine->logicalDevice.createSampler(samplerInfo);
 
     // cleanup staging resources
-    p_MvDevice.logicalDevice->destroyBuffer(stagingBuffer);
-    p_MvDevice.logicalDevice->freeMemory(stagingMemory);
+    p_Engine->logicalDevice.destroyBuffer(stagingBuffer);
+    p_Engine->logicalDevice.freeMemory(stagingMemory);
 
     // setup the descriptor
     descriptor.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
@@ -150,8 +163,9 @@ void mv::Image::create(const mv::Device &p_MvDevice, struct ImageCreateInfo &p_I
     return;
 }
 
-void mv::Image::createStagingBuffer(const mv::Device &p_MvDevice, vk::DeviceSize &p_BufferSize,
-                                    vk::Buffer &p_StagingBuffer, vk::DeviceMemory &p_StagingMemory)
+void Image::createStagingBuffer(vk::DeviceSize &p_BufferSize,
+                                vk::Buffer &p_StagingBuffer,
+                                vk::DeviceMemory &p_StagingMemory)
 {
     vk::MemoryRequirements stagingReq;
 
@@ -161,41 +175,45 @@ void mv::Image::createStagingBuffer(const mv::Device &p_MvDevice, vk::DeviceSize
     bufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
 
     // create staging buffer
-    p_StagingBuffer = p_MvDevice.logicalDevice->createBuffer(bufferInfo);
+    p_StagingBuffer = engine->logicalDevice.createBuffer(bufferInfo);
 
     // get memory requirements
-    stagingReq = p_MvDevice.logicalDevice->getBufferMemoryRequirements(p_StagingBuffer);
+    stagingReq =
+        engine->logicalDevice.getBufferMemoryRequirements(p_StagingBuffer);
 
     vk::MemoryAllocateInfo allocInfo;
     allocInfo.allocationSize = stagingReq.size;
     allocInfo.memoryTypeIndex =
-        p_MvDevice.getMemoryType(stagingReq.memoryTypeBits,
-                                 vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        engine->getMemoryType(stagingReq.memoryTypeBits,
+                              vk::MemoryPropertyFlagBits::eHostVisible |
+                                  vk::MemoryPropertyFlagBits::eHostCoherent);
 
     // allocate staging memory
-    p_StagingMemory = p_MvDevice.logicalDevice->allocateMemory(allocInfo);
+    p_StagingMemory = engine->logicalDevice.allocateMemory(allocInfo);
 
     // bind staging buffer & memory
-    p_MvDevice.logicalDevice->bindBufferMemory(p_StagingBuffer, p_StagingMemory, 0);
+    engine->logicalDevice.bindBufferMemory(p_StagingBuffer, p_StagingMemory, 0);
     return;
 }
 
-vk::CommandBuffer mv::Image::beginCommandBuffer(const mv::Device &p_MvDevice)
+vk::CommandBuffer Image::beginCommandBuffer(void)
 {
-
-    if (!p_MvDevice.commandPool)
-        throw std::runtime_error("Command pool not initialized in mv device handler :: image handler");
+    if (!engine->commandPool)
+        throw std::runtime_error("Command pool not initialized in mv device "
+                                 "handler :: image handler");
 
     vk::CommandBufferAllocateInfo allocInfo;
     allocInfo.level = vk::CommandBufferLevel::ePrimary;
-    allocInfo.commandPool = *p_MvDevice.commandPool;
+    allocInfo.commandPool = engine->commandPool;
     allocInfo.commandBufferCount = 1;
 
     // create command buffer
-    std::vector<vk::CommandBuffer> cmdBuffers = p_MvDevice.logicalDevice->allocateCommandBuffers(allocInfo);
+    std::vector<vk::CommandBuffer> cmdBuffers =
+        engine->logicalDevice.allocateCommandBuffers(allocInfo);
 
     if (cmdBuffers.size() < 1)
-        throw std::runtime_error("Failed to allocate command buffers :: image handler");
+        throw std::runtime_error(
+            "Failed to allocate command buffers :: image handler");
 
     // destroy other command buffers if more than 1 created
     // shouldn't happen
@@ -209,7 +227,8 @@ vk::CommandBuffer mv::Image::beginCommandBuffer(const mv::Device &p_MvDevice)
                 toDestroy.push_back(buf);
             }
         }
-        p_MvDevice.logicalDevice->freeCommandBuffers(*p_MvDevice.commandPool, toDestroy);
+        engine->logicalDevice.freeCommandBuffers(engine->commandPool,
+                                                 toDestroy);
     }
 
     vk::CommandBufferBeginInfo begin_info;
@@ -220,14 +239,16 @@ vk::CommandBuffer mv::Image::beginCommandBuffer(const mv::Device &p_MvDevice)
     return cmdBuffers.at(0);
 }
 
-void mv::Image::endCommandBuffer(const mv::Device &p_MvDevice, vk::CommandBuffer p_CommandBuffer)
+void Image::endCommandBuffer(vk::CommandBuffer p_CommandBuffer)
 {
 
-    if (!p_MvDevice.commandPool)
-        throw std::runtime_error("Command pool invalid ending commands :: image handler");
+    if (!engine->commandPool)
+        throw std::runtime_error(
+            "Command pool invalid ending commands :: image handler");
 
-    if (!p_MvDevice.graphicsQueue)
-        throw std::runtime_error("Graphics queue reference invalid ending commands :: image handler");
+    if (!engine->graphicsQueue)
+        throw std::runtime_error("Graphics queue reference invalid ending "
+                                 "commands :: image handler");
 
     p_CommandBuffer.end();
 
@@ -235,17 +256,19 @@ void mv::Image::endCommandBuffer(const mv::Device &p_MvDevice, vk::CommandBuffer
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &p_CommandBuffer;
 
-    p_MvDevice.graphicsQueue->submit(submitInfo);
-    p_MvDevice.graphicsQueue->waitIdle();
+    engine->graphicsQueue.submit(submitInfo);
+    engine->graphicsQueue.waitIdle();
 
-    p_MvDevice.logicalDevice->freeCommandBuffers(*p_MvDevice.commandPool, p_CommandBuffer);
+    engine->logicalDevice.freeCommandBuffers(engine->commandPool,
+                                             p_CommandBuffer);
     return;
 }
 
-void mv::Image::transitionImageLayout(const mv::Device &p_MvDevice, vk::Image *p_TargetImage,
-                                      vk::ImageLayout p_StartingLayout, vk::ImageLayout p_EndingLayout)
+void Image::transitionImageLayout(vk::Image *p_TargetImage,
+                                  vk::ImageLayout p_StartingLayout,
+                                  vk::ImageLayout p_EndingLayout)
 {
-    vk::CommandBuffer commandBuffer = beginCommandBuffer(p_MvDevice);
+    vk::CommandBuffer commandBuffer = beginCommandBuffer();
 
     vk::ImageMemoryBarrier barrier;
     barrier.oldLayout = p_StartingLayout;
@@ -262,7 +285,8 @@ void mv::Image::transitionImageLayout(const mv::Device &p_MvDevice, vk::Image *p
     vk::PipelineStageFlags sourceStage;
     vk::PipelineStageFlags destinationStage;
 
-    if (p_StartingLayout == vk::ImageLayout::eUndefined && p_EndingLayout == vk::ImageLayout::eTransferDstOptimal)
+    if (p_StartingLayout == vk::ImageLayout::eUndefined &&
+        p_EndingLayout == vk::ImageLayout::eTransferDstOptimal)
     {
         barrier.srcAccessMask = vk::AccessFlagBits::eNoneKHR;
         barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
@@ -284,32 +308,34 @@ void mv::Image::transitionImageLayout(const mv::Device &p_MvDevice, vk::Image *p
         throw std::runtime_error("Layout transition requested is unsupported");
     }
 
-    commandBuffer.pipelineBarrier(sourceStage, destinationStage, vk::DependencyFlags(), nullptr, nullptr, barrier);
+    commandBuffer.pipelineBarrier(sourceStage, destinationStage,
+                                  vk::DependencyFlags(), nullptr, nullptr,
+                                  barrier);
 
-    endCommandBuffer(p_MvDevice, commandBuffer);
+    endCommandBuffer(commandBuffer);
     return;
 }
 
-void mv::Image::destroy(const mv::Device &p_MvDevice)
+void Image::destroy(void)
 {
     if (sampler)
     {
-        p_MvDevice.logicalDevice->destroySampler(sampler);
+        engine->logicalDevice.destroySampler(sampler);
         sampler = nullptr;
     }
     if (imageView)
     {
-        p_MvDevice.logicalDevice->destroyImageView(imageView);
+        engine->logicalDevice.destroyImageView(imageView);
         imageView = nullptr;
     }
     if (image)
     {
-        p_MvDevice.logicalDevice->destroyImage(image);
+        engine->logicalDevice.destroyImage(image);
         image = nullptr;
     }
     if (memory)
     {
-        p_MvDevice.logicalDevice->freeMemory(memory);
+        engine->logicalDevice.freeMemory(memory);
         memory = nullptr;
     }
     return;

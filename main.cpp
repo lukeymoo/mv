@@ -3,20 +3,22 @@
 
 #include <iostream>
 
-mv::LogHandler logger;
+LogHandler logger;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
 {
     try
     {
-        mv::Engine wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
+        Engine wnd(WINDOW_WIDTH, WINDOW_HEIGHT, "Bloody Day");
         if (wnd.good_init)
         {
             wnd.go();
         }
         else
         {
-            std::cout << std::endl << "\t[-] Bad initialization, program ending!" << std::endl;
+            std::cout << std::endl
+                      << "\t[-] Bad initialization, program ending!"
+                      << std::endl;
         }
     }
     catch (std::exception &e)
@@ -31,7 +33,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
     {
         std::cout << std::endl
                   << ":: Unhandled Exception ::" << std::endl
-                  << "Unhandled Exception! No further information available" << std::endl
+                  << "Unhandled Exception! No further information available"
+                  << std::endl
                   << std::endl;
         std::exit(-1);
     }

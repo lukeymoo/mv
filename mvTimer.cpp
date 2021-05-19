@@ -1,58 +1,67 @@
 #include "mvTimer.h"
 
-mv::Timer::Timer(void)
+Timer::Timer(void)
 {
-	start = std::chrono::high_resolution_clock::now();
-	stop = std::chrono::high_resolution_clock::now();
-	return;
+    start = std::chrono::high_resolution_clock::now();
+    stop = std::chrono::high_resolution_clock::now();
+    return;
 }
 
-mv::Timer::~Timer(void)
+Timer::~Timer(void)
 {
-	return;
+    return;
 }
 
-double mv::Timer::getElaspedMS() noexcept
+double Timer::getElaspedMS() noexcept
 {
-	if (isRunning) {
-		// auto t = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - start);
-		auto t = std::chrono::duration<double, std::ratio<1L, 1L>>(std::chrono::high_resolution_clock::now() - start);
-		return t.count();
-	}
-	else {
-		// auto t = std::chrono::duration<double, std::milli>(stop - start);
-		auto t = std::chrono::duration<double, std::ratio<1L, 1L>>(stop - start);
-		return t.count();
-	}
+    if (isRunning)
+    {
+        // auto t = std::chrono::duration<double,
+        // std::milli>(std::chrono::high_resolution_clock::now() - start);
+        auto t = std::chrono::duration<double, std::ratio<1L, 1L>>(
+            std::chrono::high_resolution_clock::now() - start);
+        return t.count();
+    }
+    else
+    {
+        // auto t = std::chrono::duration<double, std::milli>(stop - start);
+        auto t =
+            std::chrono::duration<double, std::ratio<1L, 1L>>(stop - start);
+        return t.count();
+    }
 }
 
-void mv::Timer::restart() noexcept
+void Timer::restart() noexcept
 {
-	isRunning = true;
-	start = std::chrono::high_resolution_clock::now();
-	return;
+    isRunning = true;
+    start = std::chrono::high_resolution_clock::now();
+    return;
 }
 
-bool mv::Timer::startTimer() noexcept
+bool Timer::startTimer() noexcept
 {
-	if (isRunning) {
-		return false;
-	}
-	else {
-		start = std::chrono::high_resolution_clock::now();
-		isRunning = true;
-		return true;
-	}
+    if (isRunning)
+    {
+        return false;
+    }
+    else
+    {
+        start = std::chrono::high_resolution_clock::now();
+        isRunning = true;
+        return true;
+    }
 }
 
-bool mv::Timer::stopTimer() noexcept
+bool Timer::stopTimer() noexcept
 {
-	if (!isRunning) {
-		return false;
-	}
-	else {
-		stop = std::chrono::high_resolution_clock::now();
-		isRunning = false;
-		return true;
-	}
+    if (!isRunning)
+    {
+        return false;
+    }
+    else
+    {
+        stop = std::chrono::high_resolution_clock::now();
+        isRunning = false;
+        return true;
+    }
 }

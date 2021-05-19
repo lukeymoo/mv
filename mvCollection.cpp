@@ -1,130 +1,56 @@
 #include "mvCollection.h"
+#include "mvAllocator.h"
+#include "mvBuffer.h"
+#include "mvModel.h"
 
-extern mv::LogHandler logger;
+extern LogHandler logger;
 
-mv::Collection::Collection(const mv::Device &p_MvDevice)
+Collection::Collection(Engine *p_Engine)
 {
-    // initialize containers
-    viewUniform = std::make_unique<struct mv::UniformObject>();
-    projectionUniform = std::make_unique<struct mv::UniformObject>();
-    models = std::make_unique<std::vector<mv::Model>>();
+    if (!p_Engine)
+        throw std::runtime_error("Invalid engine object passed to collection");
+
+    engine = p_Engine;
+
+    // Initialize models container
+    models = std::make_unique<std::vector<Model>>();
+
+    // Initialize view & projection uniform ptrs
+    viewUniform = std::make_unique<UniformObject>();
+    projectionUniform = std::make_unique<UniformObject>();
 
     // create uniform buffer for view matrix
-    p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,
-                            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                            &viewUniform->mvBuffer, sizeof(struct mv::UniformObject));
-    viewUniform->mvBuffer.map(p_MvDevice);
+    engine->createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,
+                         vk::MemoryPropertyFlagBits::eHostVisible |
+                             vk::MemoryPropertyFlagBits::eHostCoherent,
+                         &viewUniform->mvBuffer, sizeof(UniformObject));
+    viewUniform->mvBuffer.map(p_Engine->logicalDevice);
 
     // create uniform buffer for projection matrix
-    p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,
-                            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                            &projectionUniform->mvBuffer, sizeof(struct mv::UniformObject));
-    projectionUniform->mvBuffer.map(p_MvDevice);
+    p_Engine->createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,
+                           vk::MemoryPropertyFlagBits::eHostVisible |
+                               vk::MemoryPropertyFlagBits::eHostCoherent,
+                           &projectionUniform->mvBuffer, sizeof(UniformObject));
+    projectionUniform->mvBuffer.map(p_Engine->logicalDevice);
 }
 
-mv::Collection::~Collection()
+Collection::~Collection()
 {
 }
 
-void mv::Collection::loadTerrain(void)
-{
-    return;
-}
-
-void mv::Collection::loadModel(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator,
-                               const char *p_Filename)
-{
-    bool alreadyLoaded = false;
-    for (const auto &name : modelNames)
-    {
-        if (name.compare(p_Filename) == 0) // if same
-        {
-            logger.logMessage(LogHandler::MessagePriority::eWarning,
-                              "Skipping already loaded model name => " + std::string(p_Filename));
-            alreadyLoaded = true;
-            break;
-        }
-    }
-
-    if (!alreadyLoaded)
-    {
-        logger.logMessage("Loading model => " + std::string(p_Filename));
-        // make space for new model
-        models->push_back(mv::Model());
-        // call model routine _load
-        models->back().load(p_MvDevice, p_DescriptorAllocator, p_Filename, shouldOutputDebug);
-
-        // add filename to model_names container
-        modelNames.push_back(p_Filename);
-    }
-    return;
-}
-
-void mv::Collection::createObject(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator,
-                                  std::string p_ModelName)
-{
-
-    if (!models)
-        throw std::runtime_error("Requested to create object but models container never "
-                                 "initialized :: collection handler");
-
-    // ensure model exists
-    bool modelExist = false;
-    bool modelIndex = 0;
-
-    for (auto &model : *models)
-    {
-        if (model.modelName == p_ModelName)
-        {
-            modelExist = true;
-            modelIndex = (&model - &(*models)[0]);
-        }
-    }
-
-    if (!modelExist)
-    {
-        std::ostringstream oss;
-        oss << "[!] Requested creation of object of model type => " << p_ModelName
-            << " failed as that model has never been loaded" << std::endl;
-        throw std::runtime_error(oss.str().c_str());
-    }
-
-    logger.logMessage("Creating object of model type => " + p_ModelName);
-
-    // create new object element in specified model
-    models->at(modelIndex).objects->push_back(mv::Object());
-
-    if (shouldOutputDebug)
-        logger.logMessage(" -- Model type object count is now => " +
-                          std::to_string(models->at(modelIndex).objects->size()));
-
-    // create uniform buffer for object
-    p_MvDevice.createBuffer(vk::BufferUsageFlagBits::eUniformBuffer,
-                            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                            &models->at(modelIndex).objects->back().uniformBuffer, sizeof(Object::Matrix));
-    models->at(modelIndex).objects->back().uniformBuffer.map(p_MvDevice);
-
-    vk::DescriptorSetLayout uniformLayout = p_DescriptorAllocator.getLayout("uniform_layout");
-
-    // allocate descriptor set for object's model uniform
-    p_DescriptorAllocator.allocateSet(p_MvDevice, uniformLayout, models->at(modelIndex).objects->back().meshDescriptor);
-    p_DescriptorAllocator.updateSet(p_MvDevice, models->at(modelIndex).objects->back().uniformBuffer.descriptor,
-                                    models->at(modelIndex).objects->back().meshDescriptor, 0);
-    return;
-}
-
-void mv::Collection::update(void)
+void Collection::update(void)
 {
     if (!models)
-        throw std::runtime_error("Collection handler was requested to update but models never "
-                                 "initialized :: collection handler");
+        throw std::runtime_error(
+            "Collection handler was requested to update but models never "
+            "initialized :: collection handler");
     for (auto &model : *models)
     {
         if (!model.objects)
         {
             std::ostringstream oss;
-            oss << "In collection handler update of objects => " << model.modelName
-                << " object container never initialized\n";
+            oss << "In collection handler update of objects => "
+                << model.modelName << " object container never initialized\n";
             throw std::runtime_error(oss.str());
         }
         for (auto &object : *model.objects)
@@ -135,43 +61,54 @@ void mv::Collection::update(void)
     return;
 }
 
-void mv::Collection::cleanup(const mv::Device &p_MvDevice, mv::Allocator &p_DescriptorAllocator)
+void Collection::cleanup(void)
 {
-    p_MvDevice.logicalDevice->waitIdle();
-
-    // cleanup descriptor_allocator
-    p_DescriptorAllocator.cleanup(p_MvDevice);
+    engine->logicalDevice.waitIdle();
 
     // cleanup models & objects buffers
-    for (auto &model : *models)
-    {
-        model.cleanup(p_MvDevice);
+    if (models)
+        for (auto &model : *models)
+        {
+            model.cleanup(engine);
 
-        if (!model.objects)
-        {
-            std::ostringstream oss;
-            oss << "In collection handler cleanup of objects => " << model.modelName
-                << " object container never initialized\n";
-            throw std::runtime_error(oss.str());
+            if (model.objects)
+                for (auto &object : *model.objects)
+                {
+                    object.uniform.second.destroy(engine->logicalDevice);
+                }
         }
-        if (!model.loadedMeshes)
-        {
-            std::ostringstream oss;
-            oss << "In collection handler cleanup of objects => " << model.modelName
-                << " mesh container never initialized\n";
-            throw std::runtime_error(oss.str());
-        }
-        for (auto &object : *model.objects)
-        {
-            object.uniformBuffer.destroy(p_MvDevice);
-        }
-        // for (auto &mesh : *model.loadedMeshes)
-        // {
-        //     mesh.cleanup(p_MvDevice);
-        // }
-    }
 
-    viewUniform->mvBuffer.destroy(p_MvDevice);
-    projectionUniform->mvBuffer.destroy(p_MvDevice);
+    viewUniform->mvBuffer.destroy(engine->logicalDevice);
+    projectionUniform->mvBuffer.destroy(engine->logicalDevice);
     return;
+}
+
+uint32_t Collection::getObjectCount(void)
+{
+    uint32_t count = 0;
+    for (const auto &model : *models)
+    {
+        count += model.objects->size();
+    }
+    return count;
+}
+
+uint32_t Collection::getTriangleCount(void)
+{
+    uint32_t count = 0;
+    for (const auto &model : *models)
+    {
+        count += model.triangleCount * model.objects->size();
+    }
+    return count;
+}
+
+uint32_t Collection::getVertexCount(void)
+{
+    uint32_t count = 0;
+    for (const auto &model : *models)
+    {
+        count += model.totalIndices * model.objects->size();
+    }
+    return count;
 }

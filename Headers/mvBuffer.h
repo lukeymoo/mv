@@ -1,66 +1,65 @@
-#ifndef HEADERS_MVBUFFER_H_
-#define HEADERS_MVBUFFER_H_
+#pragma once
 
 #include <cassert>
 #include <cstring>
+#include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>
 
-#include "mvDevice.h"
+#include "mvAllocator.h"
 
-namespace mv
+class Allocator;
+class MvBuffer
 {
-
-    // Forward decl
-    struct Device;
-    struct Buffer
+  public:
+    MvBuffer()
     {
-        Buffer()
-        {
-            buffer = std::make_unique<vk::Buffer>();
-            memory = std::make_unique<vk::DeviceMemory>();
-        }
-        ~Buffer()
-        {
-        }
+    }
+    ~MvBuffer()
+    {
+    }
 
-        Buffer(const Buffer &) = delete;
-        Buffer &operator=(const Buffer &) = delete;
+    vk::Buffer buffer;
+    vk::DeviceMemory memory;
 
-        Buffer(Buffer &&) = default;
-        Buffer &operator=(Buffer &&) = default;
+    // info structures
+    // clang-format off
+    vk::DeviceSize            size;
+    vk::DeviceSize            alignment;
+    vk::DescriptorSet         descriptor;
+    vk::DescriptorBufferInfo  bufferInfo;
+    vk::BufferUsageFlags      usageFlags;
+    vk::MemoryPropertyFlags   memoryPropertyFlags;
+    void *                    mapped = nullptr;
+    // clang-format on
 
-        // owns
-        std::unique_ptr<vk::Buffer> buffer;
-        std::unique_ptr<vk::DeviceMemory> memory;
+    // Allocates and updates descriptor set for bufferInfo
+    void allocate(Allocator &p_DescriptorAllocator,
+                  vk::DescriptorSetLayout &p_Layout);
 
-        // info structures
-        // clang-format off
-        vk::DeviceSize            size;
-        vk::DeviceSize            alignment;
-        vk::DescriptorBufferInfo  descriptor;
-        vk::BufferUsageFlags      usageFlags;
-        vk::MemoryPropertyFlags   memoryPropertyFlags;
-        void *                    mapped = nullptr;
-        // clang-format on
+    void map(const vk::Device &p_LogicalDevice,
+             vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE,
+             vk::DeviceSize p_MemoryStartOffset = 0);
 
-        void map(const mv::Device &p_MvDevice, vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE,
-                 vk::DeviceSize p_MemoryStartOffset = 0);
+    void unmap(const vk::Device &p_LogicalDevice);
 
-        void unmap(const mv::Device &p_MvDevice);
+    void bind(const vk::Device &p_LogicalDevice,
+              vk::DeviceSize p_MemoryOffset = 0);
 
-        void bind(const mv::Device &p_MvDevice, vk::DeviceSize p_MemoryOffset = 0);
+    void setupBufferInfo(vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE,
+                         vk::DeviceSize p_MemoryOffset = 0);
 
-        void setupDescriptor(vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE, vk::DeviceSize p_MemoryOffset = 0);
+    void copyFrom(void *p_SourceData, vk::DeviceSize p_MemoryCopySize);
 
-        void copyFrom(void *p_SourceData, vk::DeviceSize p_MemoryCopySize);
+    // TODO
+    // flush buffer
+    // invalidate buffer
 
-        // TODO
-        // flush buffer
-        // invalidate buffer
+    void destroy(const vk::Device &p_LogicalDevice);
+};
 
-        void destroy(const mv::Device &p_MvDevice);
-    };
-
-}; // namespace mv
-
-#endif
+struct UniformObject
+{
+    alignas(16) glm::mat4 matrix = glm::mat4(1.0f);
+    MvBuffer mvBuffer;
+    vk::DescriptorSet descriptor;
+};

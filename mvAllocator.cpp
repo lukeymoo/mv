@@ -1,75 +1,70 @@
 #include "mvAllocator.h"
+#include "mvEngine.h"
+#include "mvModel.h"
 
-extern mv::LogHandler logger;
+extern LogHandler logger;
 
-mv::Allocator::Allocator(void)
+Allocator::Allocator(Engine *p_Engine)
 {
-    containers = std::make_unique<std::vector<struct Container>>();
-    layouts = std::make_unique<std::unordered_map<std::string, vk::DescriptorSetLayout>>();
+    if (!p_Engine)
+        throw std::runtime_error("Invalid engine handle passed to allocator");
+    engine = p_Engine;
     return;
 }
 
-mv::Allocator::~Allocator()
+Allocator::~Allocator()
 {
 }
 
-mv::Allocator::Container *mv::Allocator::get(void)
+Allocator::Container *Allocator::get(void)
 {
-    if (!containers || containers->empty())
-        throw std::runtime_error("Containers never allocated, attempted to get ptr to current pool "
-                                 ":: descriptor handler");
-
-    return &containers->at(currentPool);
+    return &containers.at(currentPool);
 }
 
-void mv::Allocator::cleanup(const mv::Device &p_MvDevice)
+void Allocator::cleanup(void)
 {
-    if (layouts)
+    if (!layouts.empty())
     {
-        if (!layouts->empty())
+        for (auto &layout : layouts)
         {
-            for (auto &layout : *layouts)
-            {
-                if (layout.second)
-                    p_MvDevice.logicalDevice->destroyDescriptorSetLayout(layout.second);
-            }
+            if (layout.second)
+                engine->logicalDevice.destroyDescriptorSetLayout(layout.second);
         }
-        layouts.reset();
     }
 
-    if (containers)
+    if (!containers.empty())
     {
-        if (!containers->empty())
+        for (auto &container : containers)
         {
-            for (auto &container : *containers)
-            {
-                if (container.pool)
-                    p_MvDevice.logicalDevice->destroyDescriptorPool(container.pool);
-            }
+            if (container.pool)
+                engine->logicalDevice.destroyDescriptorPool(container.pool);
         }
-        containers.reset();
     }
     return;
 }
 
-vk::DescriptorSetLayout mv::Allocator::getLayout(std::string p_LayoutName)
+vk::DescriptorSetLayout Allocator::getLayout(std::string p_LayoutName)
 {
-    if (!layouts)
-        throw std::runtime_error("Requested layout but container never initialized => " + p_LayoutName);
+    if (layouts.empty())
+        throw std::runtime_error("Attempted to get layout " + p_LayoutName +
+                                 " but none were created");
 
-    for (const auto &map : *layouts)
+    for (const auto &map : layouts)
     {
         if (map.first == p_LayoutName)
         {
             return map.second;
         }
     }
-    throw std::runtime_error("Requested layout but not found => " + p_LayoutName);
+    throw std::runtime_error("Requested layout but not found => " +
+                             p_LayoutName);
 }
 
-void mv::Allocator::createLayout(const mv::Device &p_MvDevice, std::string p_LayoutName,
-                                 vk::DescriptorType p_DescriptorType, uint32_t p_Count,
-                                 vk::ShaderStageFlagBits p_ShaderStageFlags, uint32_t p_Binding)
+void Allocator::createLayout(std::string p_LayoutName,
+                             vk::DescriptorType p_DescriptorType,
+                             uint32_t p_Count,
+                             vk::ShaderStageFlagBits p_ShaderStageFlags,
+                             uint32_t p_Binding)
 {
     vk::DescriptorSetLayoutBinding bindInfo;
     bindInfo.binding = p_Binding;
@@ -81,23 +76,18 @@ void mv::Allocator::createLayout(const mv::Device &p_MvDevice, std::string p_Lay
     layoutInfo.bindingCount = 1;
     layoutInfo.pBindings = &bindInfo;
 
-    createLayout(p_MvDevice, p_LayoutName, layoutInfo);
+    createLayout(p_LayoutName, layoutInfo);
 }
 
-void mv::Allocator::createLayout(const mv::Device &p_MvDevice, std::string p_LayoutName,
-                                 vk::DescriptorSetLayoutCreateInfo &p_CreateInfo)
+void Allocator::createLayout(std::string p_LayoutName,
+                             vk::DescriptorSetLayoutCreateInfo &p_CreateInfo)
 {
 
     bool layoutAlreadyExists = false;
-
-    if (!layouts)
-    {
-        layouts = std::make_unique<std::unordered_map<std::string, vk::DescriptorSetLayout>>();
-    }
-    else
+    if (!layouts.empty())
     {
         // ensure name not already created
-        for (const auto &map : *layouts)
+        for (const auto &map : layouts)
         {
             if (map.first == p_LayoutName)
             {
@@ -105,35 +95,42 @@ void mv::Allocator::createLayout(const mv::Device &p_MvDevice, std::string p_Lay
                 break;
             }
         }
-        if (layoutAlreadyExists)
-        {
-            logger.logMessage(LogHandler::MessagePriority::eWarning, "Request to create descriptor set layout => " +
-                                                                         p_LayoutName + " already exists; Skipping...");
-            return;
-        }
+    }
+
+    if (layoutAlreadyExists)
+    {
+        logger.logMessage(LogHandler::MessagePriority::eWarning,
+                          "Request to create descriptor set layout => " +
+                              p_LayoutName + " already exists; Skipping...");
+        return;
     }
 
     // add to map
-    layouts->insert({p_LayoutName, p_MvDevice.logicalDevice->createDescriptorSetLayout(p_CreateInfo)});
+    layouts.insert({
+        p_LayoutName,
+        engine->logicalDevice.createDescriptorSetLayout(p_CreateInfo),
+    });
     logger.logMessage("Descriptor set layout => " + p_LayoutName + " created");
     return;
 }
 
-void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, vk::DescriptorSetLayout &p_DescriptorLayout,
-                                vk::DescriptorSet &p_DestinationSet)
+void Allocator::allocateSet(vk::DescriptorSetLayout &p_DescriptorLayout,
+                            vk::DescriptorSet &p_DestinationSet)
 {
-    Container *poolContainer = &containers->at(currentPool);
+    Container *poolContainer = &containers.at(currentPool);
 
     // ensure pool exist
-    if (!poolContainer->pool)
-        throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
+    if (!poolContainer || !poolContainer->pool)
+        throw std::runtime_error(
+            "No pool ever allocated, attempting to allocate descriptor set");
 
-    if (shouldOutputDebug)
-        logger.logMessage("Allocating descriptor set");
+    logger.logMessage("Allocating descriptor set");
+
     if (!p_DescriptorLayout)
     {
         std::ostringstream oss;
-        oss << "Descriptor allocated was requested to allocate a set however the user provided "
+        oss << "Descriptor allocated was requested to allocate a set however "
+               "the user provided "
                "nullptr for layout\n";
         oss << "File => " << __FILE__ << "Line => " << __LINE__ << std::endl;
         throw std::runtime_error(oss.str().c_str());
@@ -144,14 +141,16 @@ void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, vk::DescriptorSetL
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &p_DescriptorLayout;
 
-    vk::Result result = p_MvDevice.logicalDevice->allocateDescriptorSets(&allocInfo, &p_DestinationSet);
+    vk::Result result = engine->logicalDevice.allocateDescriptorSets(
+        &allocInfo, &p_DestinationSet);
 
     if (result == vk::Result::eSuccess)
     {
         // ensure allocator index is up to date
         currentPool = poolContainer->index;
     }
-    else if (result == vk::Result::eErrorOutOfPoolMemory || result == vk::Result::eErrorFragmentedPool)
+    else if (result == vk::Result::eErrorOutOfPoolMemory ||
+             result == vk::Result::eErrorFragmentedPool)
     {
         if (result == vk::Result::eErrorOutOfPoolMemory)
         {
@@ -162,35 +161,39 @@ void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, vk::DescriptorSetL
             poolContainer->status = Container::Status::Fragmented;
         }
         // allocate new pool
-        auto newPool = allocatePool(p_MvDevice, poolContainer->count);
+        auto newPool = allocatePool(poolContainer->count);
         // use new pool to allocate set
-        allocateSet(p_MvDevice, newPool, p_DescriptorLayout, p_DestinationSet);
+        allocateSet(newPool, p_DescriptorLayout, p_DestinationSet);
         // change passed container to new one
         poolContainer = newPool;
     }
     else
     {
-        throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
+        throw std::runtime_error(
+            "Allocator failed to allocate descriptor set, fatal error");
     }
     return;
 }
 
-void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, Container *p_PoolContainer,
-                                vk::DescriptorSetLayout &p_DescriptorLayout, vk::DescriptorSet &p_DestinationSet)
+void Allocator::allocateSet(Container *p_PoolContainer,
+                            vk::DescriptorSetLayout &p_DescriptorLayout,
+                            vk::DescriptorSet &p_DestinationSet)
 {
     if (!p_PoolContainer)
-        throw std::runtime_error("Invalid container passed to allocate set :: descriptor handler");
+        throw std::runtime_error(
+            "Invalid container passed to allocate set :: descriptor handler");
 
     // ensure pool exist
     if (!p_PoolContainer->pool)
-        throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
+        throw std::runtime_error(
+            "No pool ever allocated, attempting to allocate descriptor set");
 
-    if (shouldOutputDebug)
-        logger.logMessage("Allocating descriptor set");
+    logger.logMessage("Allocating descriptor set");
     if (!p_DescriptorLayout)
     {
         std::ostringstream oss;
-        oss << "Descriptor allocated was requested to allocate a set however the user provided "
+        oss << "Descriptor allocated was requested to allocate a set however "
+               "the user provided "
                "nullptr for layout\n";
         oss << "File => " << __FILE__ << "Line => " << __LINE__ << std::endl;
         throw std::runtime_error(oss.str().c_str());
@@ -201,13 +204,15 @@ void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, Container *p_PoolC
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &p_DescriptorLayout;
 
-    vk::Result result = p_MvDevice.logicalDevice->allocateDescriptorSets(&allocInfo, &p_DestinationSet);
+    vk::Result result = engine->logicalDevice.allocateDescriptorSets(
+        &allocInfo, &p_DestinationSet);
     if (result == vk::Result::eSuccess)
     {
         // ensure allocator index is up to date
         currentPool = p_PoolContainer->index;
     }
-    else if (result == vk::Result::eErrorOutOfPoolMemory || result == vk::Result::eErrorFragmentedPool)
+    else if (result == vk::Result::eErrorOutOfPoolMemory ||
+             result == vk::Result::eErrorFragmentedPool)
     {
         if (result == vk::Result::eErrorOutOfPoolMemory)
         {
@@ -218,29 +223,33 @@ void mv::Allocator::allocateSet(const mv::Device &p_MvDevice, Container *p_PoolC
             p_PoolContainer->status = Container::Status::Fragmented;
         }
         // allocate new pool
-        auto newPool = allocatePool(p_MvDevice, p_PoolContainer->count);
+        auto newPool = allocatePool(p_PoolContainer->count);
         // use new pool to allocate set
-        allocateSet(p_MvDevice, newPool, p_DescriptorLayout, p_DestinationSet);
+        allocateSet(newPool, p_DescriptorLayout, p_DestinationSet);
         // change passed container to new one
         p_PoolContainer = newPool;
     }
     else
     {
-        throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
+        throw std::runtime_error(
+            "Allocator failed to allocate descriptor set, fatal error");
     }
 }
 
-void mv::Allocator::updateSet(const mv::Device &p_MvDevice, vk::DescriptorBufferInfo &p_BufferDescriptor,
-                              vk::DescriptorSet &p_TargetDescriptorSet, uint32_t p_DestinationBinding)
+void Allocator::updateSet(vk::DescriptorBufferInfo &p_BufferDescriptor,
+                          vk::DescriptorSet &p_TargetDescriptorSet,
+                          uint32_t p_DestinationBinding)
 {
-    Container *poolContainer = &containers->at(currentPool);
+    Container *poolContainer = &containers.at(currentPool);
 
     if (!poolContainer)
-        throw std::runtime_error("Failed to get current pool handle, updating set :: descriptor handler");
+        throw std::runtime_error("Failed to get current pool handle, updating "
+                                 "set :: descriptor handler");
 
     // ensure pool exist
     if (!poolContainer->pool)
-        throw std::runtime_error("No pool ever allocated, attempting to update descriptor set :: descriptor handler");
+        throw std::runtime_error("No pool ever allocated, attempting to update "
+                                 "descriptor set :: descriptor handler");
 
     vk::WriteDescriptorSet updateInfo;
     updateInfo.dstBinding = p_DestinationBinding;
@@ -249,13 +258,15 @@ void mv::Allocator::updateSet(const mv::Device &p_MvDevice, vk::DescriptorBuffer
     updateInfo.descriptorCount = 1;
     updateInfo.pBufferInfo = &p_BufferDescriptor;
 
-    p_MvDevice.logicalDevice->updateDescriptorSets(updateInfo, nullptr);
+    engine->logicalDevice.updateDescriptorSets(updateInfo, nullptr);
     currentPool = poolContainer->index;
     return;
 }
 
-// void mv::Allocator::updateSet(const mv::Device &p_MvDevice, Container *p_PoolContainer,
-//                               vk::DescriptorBufferInfo &p_BufferDescriptor, vk::DescriptorSet &p_TargetDescriptorSet,
+// void Allocator::updateSet(const vk::Device &p_LogicalDevice, Container
+// *p_PoolContainer,
+//                               vk::DescriptorBufferInfo &p_BufferDescriptor,
+//                               vk::DescriptorSet &p_TargetDescriptorSet,
 //                               uint32_t p_DestinationBinding)
 // {
 //     vk::WriteDescriptorSet updateInfo;
@@ -265,22 +276,25 @@ void mv::Allocator::updateSet(const mv::Device &p_MvDevice, vk::DescriptorBuffer
 //     updateInfo.descriptorCount = 1;
 //     updateInfo.pBufferInfo = &p_BufferDescriptor;
 
-//     p_MvDevice.logicalDevice->updateDescriptorSets(updateInfo, nullptr);
+//     p_LogicalDevice.logicalDevice.updateDescriptorSets(updateInfo, nullptr);
 //     currentPool = p_PoolContainer->index;
 //     return;
 // }
 
-void mv::Allocator::updateSet(const mv::Device &p_MvDevice, vk::DescriptorImageInfo &p_ImageDescriptor,
-                              vk::DescriptorSet &p_TargetDescriptorSet, uint32_t p_DestinationBinding)
+void Allocator::updateSet(vk::DescriptorImageInfo &p_ImageDescriptor,
+                          vk::DescriptorSet &p_TargetDescriptorSet,
+                          uint32_t p_DestinationBinding)
 {
-    Container *poolContainer = &containers->at(currentPool);
+    Container *poolContainer = &containers.at(currentPool);
 
     if (!poolContainer)
-        throw std::runtime_error("Failed to get current pool handle, updating set :: descriptor handler");
+        throw std::runtime_error("Failed to get current pool handle, updating "
+                                 "set :: descriptor handler");
 
     // ensure pool exist
     if (!poolContainer->pool)
-        throw std::runtime_error("No pool ever allocated, attempting to update descriptor set :: descriptor handler");
+        throw std::runtime_error("No pool ever allocated, attempting to update "
+                                 "descriptor set :: descriptor handler");
 
     vk::WriteDescriptorSet updateInfo;
     updateInfo.dstBinding = p_DestinationBinding;
@@ -289,13 +303,15 @@ void mv::Allocator::updateSet(const mv::Device &p_MvDevice, vk::DescriptorImageI
     updateInfo.descriptorCount = 1;
     updateInfo.pImageInfo = &p_ImageDescriptor;
 
-    p_MvDevice.logicalDevice->updateDescriptorSets(updateInfo, nullptr);
+    engine->logicalDevice.updateDescriptorSets(updateInfo, nullptr);
     currentPool = poolContainer->index;
     return;
 }
 
-// void mv::Allocator::updateSet(const mv::Device &p_MvDevice, Container *p_PoolContainer,
-//                               vk::DescriptorImageInfo &p_ImageDescriptor, vk::DescriptorSet &p_TargetDescriptorSet,
+// void Allocator::updateSet(const vk::Device &p_LogicalDevice, Container
+// *p_PoolContainer,
+//                               vk::DescriptorImageInfo &p_ImageDescriptor,
+//                               vk::DescriptorSet &p_TargetDescriptorSet,
 //                               uint32_t p_DestinationBinding)
 // {
 //     vk::WriteDescriptorSet updateInfo;
@@ -305,7 +321,7 @@ void mv::Allocator::updateSet(const mv::Device &p_MvDevice, vk::DescriptorImageI
 //     updateInfo.descriptorCount = 1;
 //     updateInfo.pImageInfo = &p_ImageDescriptor;
 
-//     p_MvDevice.logicalDevice->updateDescriptorSets(updateInfo, nullptr);
+//     p_LogicalDevice.logicalDevice.updateDescriptorSets(updateInfo, nullptr);
 //     currentPool = p_PoolContainer->index;
 //     return;
 // }
@@ -313,21 +329,22 @@ void mv::Allocator::updateSet(const mv::Device &p_MvDevice, vk::DescriptorImageI
 /*
     CONTAINER METHODS
 */
-mv::Allocator::Container::Container(struct ContainerInitStruct &p_ContainerInitStruct)
+Allocator::Container::Container(ContainerInitStruct &p_ContainerInitStruct)
 {
     this->parentAllocator = p_ContainerInitStruct.parentAllocator;
     this->poolContainersArray = p_ContainerInitStruct.poolContainersArray;
     this->count = p_ContainerInitStruct.count;
 }
 
-mv::Allocator::Container::~Container()
+Allocator::Container::~Container()
 {
     return;
 }
 
-struct mv::Allocator::Container *mv::Allocator::allocatePool(const mv::Device &p_MvDevice, uint32_t p_Count)
+Allocator::Container *Allocator::allocatePool(uint32_t p_Count)
 {
-    logger.logMessage("[+] Allocating descriptor pool of max sets => " + std::to_string(p_Count));
+    logger.logMessage("[+] Allocating descriptor pool of max sets => " +
+                      std::to_string(p_Count));
     std::vector<vk::DescriptorPoolSize> poolSizes = {
         {vk::DescriptorType::eSampler, 1000},
         {vk::DescriptorType::eCombinedImageSampler, 1000},
@@ -352,18 +369,108 @@ struct mv::Allocator::Container *mv::Allocator::allocatePool(const mv::Device &p
 
     struct ContainerInitStruct containerInitStruct;
     containerInitStruct.parentAllocator = this;
-    containerInitStruct.poolContainersArray = containers.get();
+    containerInitStruct.poolContainersArray = &containers;
     containerInitStruct.count = p_Count;
 
     // assign `self` after move to vector
     Container np(containerInitStruct);
-    np.pool = p_MvDevice.logicalDevice->createDescriptorPool(poolInfo);
+    np.pool = engine->logicalDevice.createDescriptorPool(poolInfo);
     np.status = Container::Status::Clear;
-    containers->push_back(std::move(np));
+    containers.push_back(std::move(np));
     // give object its addr & index
-    containers->back().self = &containers->back();
-    containers->back().index = containers->size() - 1;
-    currentPool = containers->size() - 1;
+    containers.back().self = &containers.back();
+    containers.back().index = containers.size() - 1;
+    currentPool = containers.size() - 1;
 
-    return &containers->back();
+    return &containers.back();
+}
+
+void Allocator::loadModel(std::vector<Model> *p_Models,
+                          std::vector<std::string> *p_ModelNames,
+                          const char *p_Filename)
+{
+    bool alreadyLoaded = false;
+    for (const auto &name : *p_ModelNames)
+    {
+        if (name.compare(p_Filename) == 0) // if same
+        {
+            logger.logMessage(LogHandler::MessagePriority::eWarning,
+                              "Skipping already loaded model name => " +
+                                  std::string(p_Filename));
+            alreadyLoaded = true;
+            break;
+        }
+    }
+
+    if (!alreadyLoaded)
+    {
+        logger.logMessage("Loading model => " + std::string(p_Filename));
+        // make space for new model
+        p_Models->push_back(Model());
+        // call model routine _load
+        p_Models->back().load(engine, *this, p_Filename, false);
+
+        // add filename to model_names container
+        p_ModelNames->push_back(p_Filename);
+    }
+    return;
+}
+
+void Allocator::createObject(std::vector<Model> *p_Models,
+                             std::string p_ModelName)
+{
+    if (!p_Models)
+        throw std::runtime_error("Attempted to create object, invalid model "
+                                 "container passed to allocator");
+
+    // ensure model exists
+    bool modelExist = false;
+    bool modelIndex = 0;
+
+    for (auto &model : *p_Models)
+    {
+        if (model.modelName == p_ModelName)
+        {
+            modelExist = true;
+            modelIndex = (&model - &(*p_Models)[0]);
+        }
+    }
+
+    if (!modelExist)
+    {
+        std::ostringstream oss;
+        oss << "[!] Requested creation of object of model type => "
+            << p_ModelName << " failed as that model has never been loaded"
+            << std::endl;
+        throw std::runtime_error(oss.str().c_str());
+    }
+
+    logger.logMessage("Creating object of model type => " + p_ModelName);
+
+    // create new object element in specified model
+    p_Models->at(modelIndex).objects->push_back(Object());
+
+    logger.logMessage(" -- Model type object count is now => " +
+                      std::to_string(p_Models->at(modelIndex).objects->size()));
+
+    // object's std pair uniform
+    // { vk::DescriptorSet, Buffer }
+    engine->createBuffer(
+        vk::BufferUsageFlagBits::eUniformBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible |
+            vk::MemoryPropertyFlagBits::eHostCoherent,
+        &p_Models->at(modelIndex).objects->back().uniform.second,
+        sizeof(Object::Matrix));
+    p_Models->at(modelIndex)
+        .objects->back()
+        .uniform.second.map(engine->logicalDevice);
+
+    vk::DescriptorSetLayout uniformLayout = getLayout("uniform_layout");
+
+    allocateSet(uniformLayout,
+                p_Models->at(modelIndex).objects->back().uniform.first);
+    updateSet(
+        p_Models->at(modelIndex).objects->back().uniform.second.bufferInfo,
+        p_Models->at(modelIndex).objects->back().uniform.first, 0);
+    return;
 }

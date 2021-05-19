@@ -1,72 +1,71 @@
-#ifndef HEADERS_HELPER_H_
-#define HEADERS_HELPER_H_
+#pragma once
 
 #include <iostream>
 #include <queue>
 #include <vulkan/vulkan.hpp>
 
-namespace mv
+// Global static instance declared in main
+class LogHandler
 {
-    // Global static instance declared in main
-    class LogHandler
+  public:
+    LogHandler()
     {
-      public:
-        LogHandler()
-        {
-        }
-        ~LogHandler()
-        {
-        }
+    }
+    ~LogHandler()
+    {
+    }
 
-        enum MessagePriority
-        {
-            eInfo = 0,
-            eError,
-            eWarning,
-        };
-
-        inline void trim(void)
-        {
-            if (messages.size() > 500)
-                messages.clear();
-            return;
-        }
-
-        // TODO
-        // Add multi thread support
-        inline void logMessage(std::pair<MessagePriority, std::string> p_Message)
-        {
-            trim();
-            messages.push_back(p_Message);
-        }
-        inline void logMessage(MessagePriority p_MessagePriority, std::string p_Message)
-        {
-            trim();
-            messages.push_back({p_MessagePriority, p_Message});
-        }
-        inline void logMessage(std::string p_Message)
-        {
-            trim();
-            messages.push_back({MessagePriority::eInfo, p_Message});
-        }
-        inline std::vector<std::pair<MessagePriority, std::string>> getMessages(void)
-        {
-            return messages; // return copy of list
-        }
-
-      private:
-        std::vector<std::pair<MessagePriority, std::string>> messages;
+    enum MessagePriority
+    {
+        eInfo = 0,
+        eError,
+        eWarning,
     };
 
-    namespace Helper
+    inline void trim(void)
     {
-        // Create quick one time submit command buffer
-        vk::CommandBuffer beginCommandBuffer(const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool);
+        if (messages.size() > 500)
+            messages.clear();
+        return;
+    }
 
-        // End specified command buffer & call present
-        void endCommandBuffer(const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool,
-                              const vk::CommandBuffer &p_CommandBuffer, const vk::Queue &p_GraphicsQueue);
-    }; // namespace Helper
-};     // namespace mv
+    // TODO
+    // Add multi thread support
+    inline void logMessage(std::pair<MessagePriority, std::string> p_Message)
+    {
+        trim();
+        messages.push_back(p_Message);
+    }
+    inline void logMessage(MessagePriority p_MessagePriority,
+                           std::string p_Message)
+    {
+        trim();
+        messages.push_back({p_MessagePriority, p_Message});
+    }
+    inline void logMessage(std::string p_Message)
+    {
+        trim();
+        messages.push_back({MessagePriority::eInfo, p_Message});
+    }
+    inline std::vector<std::pair<MessagePriority, std::string>> getMessages(
+        void)
+    {
+        return messages; // return copy of list
+    }
 
-#endif
+  private:
+    std::vector<std::pair<MessagePriority, std::string>> messages;
+};
+
+namespace Helper
+{
+    // Create quick one time submit command buffer
+    vk::CommandBuffer beginCommandBuffer(const vk::Device &p_LogicalDevice,
+                                         const vk::CommandPool &p_CommandPool);
+
+    // End specified command buffer & call present
+    void endCommandBuffer(const vk::Device &p_LogicalDevice,
+                          const vk::CommandPool &p_CommandPool,
+                          const vk::CommandBuffer &p_CommandBuffer,
+                          const vk::Queue &p_GraphicsQueue);
+}; // namespace Helper

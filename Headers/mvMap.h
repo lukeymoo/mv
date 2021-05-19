@@ -1,4 +1,8 @@
-#ifndef HEADERS_MVMAP_H_
-#define HEADERS_MVMAP_H_
+#pragma once
 
-#endif
+class MapHandler
+{
+  public:
+    MapHandler();
+    ~MapHandler();
+};

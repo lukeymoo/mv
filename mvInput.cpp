@@ -3,7 +3,8 @@
 /*
   KEYBOARD METHODS
 */
-template <typename T> void mv::Keyboard::trimBuffer(std::queue<T> &p_Buffer, uint32_t p_MaxSize)
+template <typename T>
+void Keyboard::trimBuffer(std::queue<T> &p_Buffer, uint32_t p_MaxSize)
 {
     while (p_Buffer.size() > p_MaxSize)
     {
@@ -12,7 +13,7 @@ template <typename T> void mv::Keyboard::trimBuffer(std::queue<T> &p_Buffer, uin
     return;
 }
 
-mv::Keyboard::Event mv::Keyboard::read(void)
+Keyboard::Event Keyboard::read(void)
 {
     Keyboard::Event e(Keyboard::Event::Type::eInvalid, GLFW_KEY_UNKNOWN);
     if (!keyBuffer.empty())
@@ -23,29 +24,29 @@ mv::Keyboard::Event mv::Keyboard::read(void)
     return e;
 }
 
-void mv::Keyboard::onKeyPress(int p_Code)
+void Keyboard::onKeyPress(int p_Code)
 {
     keyStates[p_Code] = true;
     keyBuffer.push(Keyboard::Event(Keyboard::Event::Type::ePress, p_Code));
-    trimBuffer(keyBuffer, mv::Keyboard::maxBufferSize);
+    trimBuffer(keyBuffer, Keyboard::maxBufferSize);
     return;
 }
 
-void mv::Keyboard::onKeyRelease(int p_Code)
+void Keyboard::onKeyRelease(int p_Code)
 {
     keyStates[p_Code] = false;
     keyBuffer.push(Keyboard::Event(Keyboard::Event::Type::eRelease, p_Code));
-    trimBuffer(keyBuffer, mv::Keyboard::maxBufferSize);
+    trimBuffer(keyBuffer, Keyboard::maxBufferSize);
     return;
 }
 
-void mv::Keyboard::clearState(void)
+void Keyboard::clearState(void)
 {
     keyStates.reset();
     return;
 }
 
-bool mv::Keyboard::isKeyState(int p_Code)
+bool Keyboard::isKeyState(int p_Code)
 {
     // sanity check
     if (p_Code < 0)
@@ -55,7 +56,7 @@ bool mv::Keyboard::isKeyState(int p_Code)
     return keyStates[p_Code];
 }
 
-bool mv::Keyboard::isKey(GLFWwindow *p_GLFWwindow, int p_Code)
+bool Keyboard::isKey(GLFWwindow *p_GLFWwindow, int p_Code)
 {
     // sanity check
     if (p_Code < 0)
@@ -68,7 +69,8 @@ bool mv::Keyboard::isKey(GLFWwindow *p_GLFWwindow, int p_Code)
 /*
   MOUSE METHODS
 */
-template <typename T> void mv::Mouse::trimBuffer(std::queue<T> &p_Buffer, uint32_t p_MaxSize)
+template <typename T>
+void Mouse::trimBuffer(std::queue<T> &p_Buffer, uint32_t p_MaxSize)
 {
     while (p_Buffer.size() > p_MaxSize)
     {
@@ -77,7 +79,7 @@ template <typename T> void mv::Mouse::trimBuffer(std::queue<T> &p_Buffer, uint32
     return;
 }
 
-void mv::Mouse::update(int p_NewX, int p_NewY) noexcept
+void Mouse::update(int p_NewX, int p_NewY) noexcept
 {
     lastX = currentX;
     lastY = currentY;
@@ -87,7 +89,7 @@ void mv::Mouse::update(int p_NewX, int p_NewY) noexcept
     return;
 }
 
-struct mv::Mouse::Event mv::Mouse::read(void) noexcept
+struct Mouse::Event Mouse::read(void) noexcept
 {
     Mouse::Event e;
     if (!mouseBuffer.empty())
@@ -98,7 +100,7 @@ struct mv::Mouse::Event mv::Mouse::read(void) noexcept
     return e;
 }
 
-void mv::Mouse::onLeftPress(void) noexcept
+void Mouse::onLeftPress(void) noexcept
 {
     isLeftPressed = true;
     mouseBuffer.push(Event{
@@ -112,7 +114,7 @@ void mv::Mouse::onLeftPress(void) noexcept
     trimBuffer(mouseBuffer, maxBufferSize);
     return;
 }
-void mv::Mouse::onLeftRelease(void) noexcept
+void Mouse::onLeftRelease(void) noexcept
 {
     isLeftPressed = false;
     mouseBuffer.push(Event{
@@ -127,7 +129,7 @@ void mv::Mouse::onLeftRelease(void) noexcept
     return;
 }
 
-void mv::Mouse::onRightPress(void) noexcept
+void Mouse::onRightPress(void) noexcept
 {
     isRightPressed = true;
     mouseBuffer.push(Event{
@@ -141,7 +143,7 @@ void mv::Mouse::onRightPress(void) noexcept
     trimBuffer(mouseBuffer, maxBufferSize);
     return;
 }
-void mv::Mouse::onRightRelease(void) noexcept
+void Mouse::onRightRelease(void) noexcept
 {
     isRightPressed = false;
     mouseBuffer.push(Event{
@@ -156,7 +158,7 @@ void mv::Mouse::onRightRelease(void) noexcept
     return;
 }
 
-void mv::Mouse::onMiddlePress(void) noexcept
+void Mouse::onMiddlePress(void) noexcept
 {
     isMiddlePressed = true;
     mouseBuffer.push(Event{
@@ -170,7 +172,7 @@ void mv::Mouse::onMiddlePress(void) noexcept
     trimBuffer(mouseBuffer, maxBufferSize);
     return;
 }
-void mv::Mouse::onMiddleRelease(void) noexcept
+void Mouse::onMiddleRelease(void) noexcept
 {
     isMiddlePressed = false;
     mouseBuffer.push(Event{
@@ -186,7 +188,7 @@ void mv::Mouse::onMiddleRelease(void) noexcept
 }
 
 // used internally -- use onDelta
-void mv::Mouse::onWheelUp(int p_NewX, int p_NewY) noexcept
+void Mouse::onWheelUp(int p_NewX, int p_NewY) noexcept
 {
     lastX = currentX;
     lastY = currentY;
@@ -205,7 +207,7 @@ void mv::Mouse::onWheelUp(int p_NewX, int p_NewY) noexcept
     return;
 }
 // used internally -- use onDelta
-void mv::Mouse::onWheelDown(int p_NewX, int p_NewY) noexcept
+void Mouse::onWheelDown(int p_NewX, int p_NewY) noexcept
 {
     lastX = currentX;
     lastY = currentY;
@@ -224,7 +226,7 @@ void mv::Mouse::onWheelDown(int p_NewX, int p_NewY) noexcept
     return;
 }
 
-void mv::Mouse::onWheelUp(void) noexcept
+void Mouse::onWheelUp(void) noexcept
 {
     mouseBuffer.push(Event{
         .type = Event::Type::eWheelUp,
@@ -238,7 +240,7 @@ void mv::Mouse::onWheelUp(void) noexcept
     return;
 }
 // used internally -- use onDelta
-void mv::Mouse::onWheelDown(void) noexcept
+void Mouse::onWheelDown(void) noexcept
 {
     mouseBuffer.push(Event{
         .type = Event::Type::eWheelDown,
@@ -252,7 +254,7 @@ void mv::Mouse::onWheelDown(void) noexcept
     return;
 }
 
-void mv::Mouse::calculateDelta(void) noexcept
+void Mouse::calculateDelta(void) noexcept
 {
     // if dragging calculate drag delta
     if (isDragging)
@@ -273,7 +275,7 @@ void mv::Mouse::calculateDelta(void) noexcept
     return;
 }
 
-void mv::Mouse::startDrag(void) noexcept
+void Mouse::startDrag(void) noexcept
 {
     dragStartx = currentX;
     dragStarty = currentY;
@@ -281,7 +283,7 @@ void mv::Mouse::startDrag(void) noexcept
     return;
 }
 
-void mv::Mouse::startDrag(float p_StartOrbit, float p_StartPitch) noexcept
+void Mouse::startDrag(float p_StartOrbit, float p_StartPitch) noexcept
 {
     storedOrbit = p_StartOrbit;
     storedPitch = p_StartPitch;
@@ -291,7 +293,7 @@ void mv::Mouse::startDrag(float p_StartOrbit, float p_StartPitch) noexcept
     return;
 }
 
-void mv::Mouse::endDrag(void) noexcept
+void Mouse::endDrag(void) noexcept
 {
     storedOrbit = 0.0f;
     storedPitch = 0.0f;
@@ -304,7 +306,7 @@ void mv::Mouse::endDrag(void) noexcept
 }
 
 // Clear deltas
-void mv::Mouse::clear(void) noexcept
+void Mouse::clear(void) noexcept
 {
     deltaX = 0;
     deltaY = 0;
