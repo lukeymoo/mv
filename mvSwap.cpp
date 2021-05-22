@@ -55,8 +55,7 @@ void Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     // allow multi queue operations
     // for now we throw
     if (tempPresentIdx == UINT32_MAX)
-        throw std::runtime_error(
-            "No queue families supported both graphics and present");
+        throw std::runtime_error("No queue families supported both graphics and present");
     // for (uint32_t i = 0; i < queue_count; i++)
     // {
     //     if (supports_present[i] == VK_TRUE)
@@ -79,8 +78,7 @@ void Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     if (surfaceFormats.size() < 1)
         throw std::runtime_error("No supported surface formats found");
 
-    if ((surfaceFormats.size() == 1) &&
-        (surfaceFormats.at(0).format == vk::Format::eUndefined))
+    if ((surfaceFormats.size() == 1) && (surfaceFormats.at(0).format == vk::Format::eUndefined))
     {
         colorFormat = vk::Format::eB8G8R8A8Unorm;
         colorSpace = surfaceFormats[0].colorSpace;
@@ -113,22 +111,24 @@ void Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     return;
 }
 
-void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice,
-                  const vk::Device &p_LogicalDevice, uint32_t &p_WindowWidth,
-                  uint32_t &p_WindowHeight)
+void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+                  uint32_t &p_WindowWidth, uint32_t &p_WindowHeight)
 {
     // get surface capabilities
     vk::SurfaceCapabilitiesKHR capabilities;
-    vk::Result res =
-        p_PhysicalDevice.getSurfaceCapabilitiesKHR(surface, &capabilities);
+    vk::Result res = p_PhysicalDevice.getSurfaceCapabilitiesKHR(surface, &capabilities);
     switch (res)
     {
-        case vk::Result::eSuccess:
-            break;
+        using enum vk::Result;
+        case eSuccess:
+            {
+                break;
+            }
         default:
-            throw std::runtime_error("Failed to get surface capabilities, does "
-                                     "the window no longer exist?");
-            break;
+            {
+                throw std::runtime_error("Failed to get surface capabilities, does "
+                                         "the window no longer exist?");
+            }
     }
 
     // get surface present modes
@@ -165,17 +165,14 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice,
     // determine number of swap images
     uint32_t requestedImageCount = capabilities.minImageCount + 2;
     // ensure not exceeding limit
-    if ((capabilities.maxImageCount > 0) &&
-        (requestedImageCount > capabilities.maxImageCount))
+    if ((capabilities.maxImageCount > 0) && (requestedImageCount > capabilities.maxImageCount))
     {
         requestedImageCount = capabilities.maxImageCount;
     }
 
     // get transform
-    vk::SurfaceTransformFlagBitsKHR selectedTransform =
-        capabilities.currentTransform;
-    if (capabilities.supportedTransforms &
-        vk::SurfaceTransformFlagBitsKHR::eIdentity)
+    vk::SurfaceTransformFlagBitsKHR selectedTransform = capabilities.currentTransform;
+    if (capabilities.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity)
     {
         selectedTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity;
     }
@@ -185,8 +182,7 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice,
     }
 
     // default ignore alpha(A = 1.0f)
-    vk::CompositeAlphaFlagBitsKHR compositeAlpha =
-        vk::CompositeAlphaFlagBitsKHR::eOpaque;
+    vk::CompositeAlphaFlagBitsKHR compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
 
     std::vector<vk::CompositeAlphaFlagBitsKHR> compositeAlphaFlags = {
         vk::CompositeAlphaFlagBitsKHR::eOpaque,
@@ -269,8 +265,7 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice,
     return;
 }
 
-void Swap::cleanup(const vk::Instance &p_Instance,
-                   const vk::Device &p_LogicalDevice,
+void Swap::cleanup(const vk::Instance &p_Instance, const vk::Device &p_LogicalDevice,
                    bool p_ShouldDestroySurface)
 {
 

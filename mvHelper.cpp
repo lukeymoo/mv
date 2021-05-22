@@ -1,5 +1,30 @@
 #include "mvHelper.h"
 
+void LogHandler::logMessage(std::pair<MessagePriority, std::string> p_Message)
+{
+    trim();
+    messages.push_back(p_Message);
+}
+
+void LogHandler::logMessage(MessagePriority p_MessagePriority,
+                            std::string p_Message)
+{
+    trim();
+    messages.push_back({p_MessagePriority, p_Message});
+}
+
+void LogHandler::logMessage(std::string p_Message)
+{
+    trim();
+    messages.push_back({MessagePriority::eInfo, p_Message});
+}
+
+std::vector<std::pair<LogHandler::MessagePriority, std::string>> LogHandler::
+    getMessages(void)
+{
+    return messages; // return copy of list
+}
+
 // Create quick one time submit command buffer
 vk::CommandBuffer Helper::beginCommandBuffer(
     const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool)

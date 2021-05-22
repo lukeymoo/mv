@@ -3,13 +3,12 @@
 
 extern LogHandler logger;
 
-GuiHandler::GuiHandler(
-    GLFWwindow *p_GLFWwindow, Camera *p_CameraHandler,
-    const vk::Instance &p_Instance, const vk::PhysicalDevice &p_PhysicalDevice,
-    const vk::Device &p_LogicalDevice, const Swap &p_MvSwap,
-    const vk::CommandPool &p_CommandPool, const vk::Queue &p_GraphicsQueue,
-    std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
-    const vk::DescriptorPool &p_DescriptorPool)
+GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, Camera *p_CameraHandler,
+                       const vk::Instance &p_Instance, const vk::PhysicalDevice &p_PhysicalDevice,
+                       const vk::Device &p_LogicalDevice, const Swap &p_MvSwap,
+                       const vk::CommandPool &p_CommandPool, const vk::Queue &p_GraphicsQueue,
+                       std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+                       const vk::DescriptorPool &p_DescriptorPool)
 {
     this->ptrLogger = &logger;
     if (!p_CameraHandler)
@@ -17,49 +16,44 @@ GuiHandler::GuiHandler(
     this->ptrCamera = p_CameraHandler;
     switch (ptrCamera->type)
     {
-        case CameraType::eInvalid:
+        using enum ::CameraType;
+        case eInvalid:
             {
-                throw std::runtime_error(
-                    "Camera not initialized before debugger : Camera type is "
-                    "set to eInvalid");
+                throw std::runtime_error("Camera not initialized before debugger : Camera type is "
+                                         "set to eInvalid");
                 break;
             }
-        case CameraType::eFreeLook:
+        case eFreeLook:
             {
-                mapModal.cameraItem.selectedType =
-                    MapModal::CameraItem::Type::eFreeLook;
-                mapModal.cameraItem.select(
-                    MapModal::CameraItem::Type::eFreeLook);
+                using enum MapModal::CameraItem::Type;
+                mapModal.cameraItem.selectedType = eFreeLook;
+                mapModal.cameraItem.select(eFreeLook);
                 break;
             }
-        case CameraType::eThirdPerson:
+        case eThirdPerson:
             {
-                mapModal.cameraItem.selectedType =
-                    MapModal::CameraItem::Type::eThirdPerson;
-                mapModal.cameraItem.select(
-                    MapModal::CameraItem::Type::eThirdPerson);
+                using enum MapModal::CameraItem::Type;
+                mapModal.cameraItem.selectedType = eThirdPerson;
+                mapModal.cameraItem.select(eThirdPerson);
                 break;
             }
-        case CameraType::eFirstPerson:
+        case eFirstPerson:
             {
-                mapModal.cameraItem.selectedType =
-                    MapModal::CameraItem::Type::eFirstPerson;
-                mapModal.cameraItem.select(
-                    MapModal::CameraItem::Type::eFirstPerson);
+                using enum MapModal::CameraItem::Type;
+                mapModal.cameraItem.selectedType = eFirstPerson;
+                mapModal.cameraItem.select(eFirstPerson);
                 break;
             }
-        case CameraType::eIsometric:
+        case eIsometric:
             {
-                mapModal.cameraItem.selectedType =
-                    MapModal::CameraItem::Type::eIsometric;
-                mapModal.cameraItem.select(
-                    MapModal::CameraItem::Type::eIsometric);
+                using enum MapModal::CameraItem::Type;
+                mapModal.cameraItem.selectedType = eIsometric;
+                mapModal.cameraItem.select(eIsometric);
                 break;
             }
     }
     if (!p_GLFWwindow)
-        throw std::runtime_error(
-            "Invalid GLFW window handle passed to Gui handler");
+        throw std::runtime_error("Invalid GLFW window handle passed to Gui handler");
     else
         window = p_GLFWwindow;
     // Ensure gui not already in render pass map
@@ -77,32 +71,34 @@ GuiHandler::GuiHandler(
 
     ImGui::StyleColorsDark();
 
-    ImGui_ImplVulkan_InitInfo initInfo{
-        .Instance = p_Instance,
-        .PhysicalDevice = p_PhysicalDevice,
-        .Device = p_LogicalDevice,
-        .QueueFamily = p_MvSwap.graphicsIndex,
-        .Queue = p_GraphicsQueue,
-        .PipelineCache = nullptr,
-        .DescriptorPool = p_DescriptorPool,
-        .MinImageCount = static_cast<uint32_t>(p_MvSwap.buffers.size()),
-        .ImageCount = static_cast<uint32_t>(p_MvSwap.buffers.size()),
-        .Allocator = nullptr,
-        .CheckVkResultFn = nullptr,
-    };
+    ImGui_ImplVulkan_InitInfo initInfo;
+    memset(&initInfo, 0, sizeof(ImGui_ImplVulkan_InitInfo));
+
+    initInfo.Instance = p_Instance;
+    initInfo.PhysicalDevice = p_PhysicalDevice;
+    initInfo.Device = p_LogicalDevice;
+    initInfo.QueueFamily = p_MvSwap.graphicsIndex;
+    initInfo.Queue = p_GraphicsQueue;
+    initInfo.PipelineCache = nullptr;
+    initInfo.DescriptorPool = p_DescriptorPool;
+    initInfo.MinImageCount = static_cast<uint32_t>(p_MvSwap.buffers.size());
+    initInfo.ImageCount = static_cast<uint32_t>(p_MvSwap.buffers.size());
+    initInfo.Allocator = nullptr;
+    initInfo.CheckVkResultFn = nullptr;
+    initInfo.Subpass = 0;
+    initInfo.MSAASamples = static_cast<VkSampleCountFlagBits>(vk::SampleCountFlagBits::e1);
+
     ImGui_ImplGlfw_InitForVulkan(p_GLFWwindow, true);
     ImGui_ImplVulkan_Init(&initInfo, p_RenderPassMap.at("gui"));
 
     /*
       Upload ImGui render fonts
     */
-    vk::CommandBuffer guiCommandBuffer =
-        Helper::beginCommandBuffer(p_LogicalDevice, p_CommandPool);
+    vk::CommandBuffer guiCommandBuffer = Helper::beginCommandBuffer(p_LogicalDevice, p_CommandPool);
 
     ImGui_ImplVulkan_CreateFontsTexture(guiCommandBuffer);
 
-    Helper::endCommandBuffer(p_LogicalDevice, p_CommandPool, guiCommandBuffer,
-                             p_GraphicsQueue);
+    Helper::endCommandBuffer(p_LogicalDevice, p_CommandPool, guiCommandBuffer, p_GraphicsQueue);
 
     ImGui_ImplVulkan_DestroyFontUploadObjects();
     return;
@@ -113,10 +109,9 @@ GuiHandler::~GuiHandler()
     return;
 }
 
-void GuiHandler::createRenderPass(
-    std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
-    const vk::Device &p_LogicalDevice,
-    const vk::Format &p_AttachmentColorFormat)
+void GuiHandler::createRenderPass(std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+                                  const vk::Device &p_LogicalDevice,
+                                  const vk::Format &p_AttachmentColorFormat)
 {
     std::array<vk::AttachmentDescription, 1> guiAttachments;
 
@@ -145,30 +140,23 @@ void GuiHandler::createRenderPass(
     // ImGui subpass
     guiDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
     guiDependencies[0].dstSubpass = 0;
-    guiDependencies[0].srcStageMask =
-        vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    guiDependencies[0].dstStageMask =
-        vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    guiDependencies[0].srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    guiDependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
     guiDependencies[0].srcAccessMask =
-        vk::AccessFlagBits::eColorAttachmentRead |
-        vk::AccessFlagBits::eColorAttachmentWrite;
+        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
     guiDependencies[0].dstAccessMask =
-        vk::AccessFlagBits::eColorAttachmentRead |
-        vk::AccessFlagBits::eColorAttachmentWrite;
+        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
     guiDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
     vk::RenderPassCreateInfo guiRenderPassInfo;
-    guiRenderPassInfo.attachmentCount =
-        static_cast<uint32_t>(guiAttachments.size());
+    guiRenderPassInfo.attachmentCount = static_cast<uint32_t>(guiAttachments.size());
     guiRenderPassInfo.pAttachments = guiAttachments.data();
     guiRenderPassInfo.subpassCount = static_cast<uint32_t>(guiSubpasses.size());
     guiRenderPassInfo.pSubpasses = guiSubpasses.data();
-    guiRenderPassInfo.dependencyCount =
-        static_cast<uint32_t>(guiDependencies.size());
+    guiRenderPassInfo.dependencyCount = static_cast<uint32_t>(guiDependencies.size());
     guiRenderPassInfo.pDependencies = guiDependencies.data();
 
-    vk::RenderPass newPass =
-        p_LogicalDevice.createRenderPass(guiRenderPassInfo);
+    vk::RenderPass newPass = p_LogicalDevice.createRenderPass(guiRenderPassInfo);
 
     p_RenderPassMap.insert({
         "gui",
@@ -180,8 +168,8 @@ void GuiHandler::createRenderPass(
 
 std::vector<vk::Framebuffer> GuiHandler::createFramebuffers(
     const vk::Device &p_LogicalDevice, const vk::RenderPass &p_GuiRenderPass,
-    std::vector<struct SwapchainBuffer> &p_SwapchainBuffers,
-    uint32_t p_SwapExtentWidth, uint32_t p_SwapExtentHeight)
+    std::vector<struct SwapchainBuffer> &p_SwapchainBuffers, uint32_t p_SwapExtentWidth,
+    uint32_t p_SwapExtentHeight)
 {
     std::vector<vk::Framebuffer> framebuffers;
 
@@ -191,8 +179,7 @@ std::vector<vk::Framebuffer> GuiHandler::createFramebuffers(
     // ImGui must only have 1 attachment
     vk::FramebufferCreateInfo guiFrameInfo;
     guiFrameInfo.renderPass = p_GuiRenderPass;
-    guiFrameInfo.attachmentCount =
-        static_cast<uint32_t>(imguiAttachments.size());
+    guiFrameInfo.attachmentCount = static_cast<uint32_t>(imguiAttachments.size());
     guiFrameInfo.pAttachments = imguiAttachments.data();
     guiFrameInfo.width = p_SwapExtentWidth;
     guiFrameInfo.height = p_SwapExtentHeight;
@@ -248,21 +235,19 @@ void GuiHandler::doRenderPass(const vk::RenderPass &p_RenderPass,
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), p_CommandBuffer);
 
     p_CommandBuffer.endRenderPass();
+    return;
 }
 
-void GuiHandler::update([[maybe_unused]] GLFWwindow *p_GLFWwindow,
-                        const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
-                        float p_FrameDelta, uint32_t p_ModelCount,
-                        uint32_t p_ObjectCount, uint32_t p_VertexCount,
-                        uint32_t p_TriangleCount)
+void GuiHandler::update([[maybe_unused]] GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent,
+                        float p_RenderDelta, float p_FrameDelta, uint32_t p_ModelCount,
+                        uint32_t p_ObjectCount, uint32_t p_VertexCount, uint32_t p_TriangleCount)
 {
     /*
         Determine if should update engine status deltas
     */
     auto updateEnd = std::chrono::high_resolution_clock::now();
-    float timeSince = std::chrono::duration<float, std::ratio<1L, 1L>>(
-                          updateEnd - lastDeltaUpdate)
-                          .count();
+    float timeSince =
+        std::chrono::duration<float, std::ratio<1L, 1L>>(updateEnd - lastDeltaUpdate).count();
     frameCount++;
     if (timeSince >= 1.0f)
     {
@@ -292,8 +277,7 @@ void GuiHandler::update([[maybe_unused]] GLFWwindow *p_GLFWwindow,
             show = showOpenDialog;
 
         // Save file as dialog
-        if (getIO().KeysDown[GLFW_KEY_LEFT_SHIFT] ||
-            getIO().KeysDown[GLFW_KEY_RIGHT_SHIFT])
+        if (getIO().KeysDown[GLFW_KEY_LEFT_SHIFT] || getIO().KeysDown[GLFW_KEY_RIGHT_SHIFT])
             if (getIO().KeysDown[GLFW_KEY_S])
                 show = showSaveDialog;
 
@@ -320,21 +304,21 @@ void GuiHandler::update([[maybe_unused]] GLFWwindow *p_GLFWwindow,
     /*
         Engine status data
     */
-    ImGuiWindowFlags engineDataFlags = ImGuiWindowFlags_NoResize |
-                                       ImGuiWindowFlags_NoMove |
-                                       ImGuiWindowFlags_NoTitleBar;
+    ImGuiWindowFlags engineDataFlags =
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar;
     ImGui::SetNextWindowPos(ImVec2(0, p_SwapExtent.height - 32));
     ImGui::SetNextWindowSize(ImVec2(p_SwapExtent.width - debugModal.width, 32));
     ImGui::Begin("Status", nullptr, engineDataFlags);
     ImGui::Text("Render time: %.2f ms | Frame time: %.2f ms | FPS: %i | Model "
                 "Count: %i | Object Count: %i | Vertex "
                 "Count: %i | Triangle Count: %i",
-                storedRenderDelta, storedFrameDelta, displayFPS, p_ModelCount,
-                p_ObjectCount, p_VertexCount, p_TriangleCount);
+                storedRenderDelta, storedFrameDelta, displayFPS, p_ModelCount, p_ObjectCount,
+                p_VertexCount, p_TriangleCount);
     ImGui::End();
 
     // Clear key states
     getIO().ClearInputCharacters();
+    return;
 }
 
 ImGuiIO &GuiHandler::getIO(void)
@@ -359,8 +343,7 @@ inline void GuiHandler::renderMapConfigModal(void)
     */
     ImGui::Text("Terrain file: ");
     ImGui::SameLine();
-    ImGui::Selectable(mapModal.terrainItem.filename.c_str(),
-                      &mapModal.terrainItem.isSelected,
+    ImGui::Selectable(mapModal.terrainItem.filename.c_str(), &mapModal.terrainItem.isSelected,
                       mapModal.terrainItem.flags);
     if (ImGui::IsItemHovered())
     {
@@ -381,8 +364,7 @@ inline void GuiHandler::renderMapConfigModal(void)
 
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.0f, 1.0f));
     if (ImGui::TreeNode(
-            mapModal.cameraItem.typeMap.at(mapModal.cameraItem.selectedType)
-                .first.c_str()))
+            mapModal.cameraItem.typeMap.at(mapModal.cameraItem.selectedType).first.c_str()))
     {
         using CameraItemType = GuiHandler::MapModal::CameraItem::Type;
 
@@ -390,12 +372,10 @@ inline void GuiHandler::renderMapConfigModal(void)
         ImGui::SameLine();
 
         // FREE LOOK
-        if (ImGui::MenuItem(
-                mapModal.cameraItem.getTypeName(CameraItemType::eFreeLook)
-                    .c_str(),
-                nullptr,
-                mapModal.cameraItem.getIsSelectedRef(CameraItemType::eFreeLook),
-                !mapModal.cameraItem.getIsSelected(CameraItemType::eFreeLook)))
+        if (ImGui::MenuItem(mapModal.cameraItem.getTypeName(CameraItemType::eFreeLook).c_str(),
+                            nullptr,
+                            mapModal.cameraItem.getIsSelectedRef(CameraItemType::eFreeLook),
+                            !mapModal.cameraItem.getIsSelected(CameraItemType::eFreeLook)))
         {
             if (ptrCamera->setCameraType(CameraType::eFreeLook,
                                          glm::vec3(ptrCamera->position.x,
@@ -403,13 +383,11 @@ inline void GuiHandler::renderMapConfigModal(void)
                                                    ptrCamera->position.z)))
             {
                 mapModal.cameraItem.deselectAllBut(CameraItemType::eFreeLook);
-                mapModal.cameraItem.selectedType =
-                    MapModal::CameraItem::Type::eFreeLook;
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eFreeLook;
             }
             else
             {
-                mapModal.cameraItem.deselectAllBut(
-                    mapModal.cameraItem.selectedType);
+                mapModal.cameraItem.deselectAllBut(mapModal.cameraItem.selectedType);
             }
         }
 
@@ -417,29 +395,21 @@ inline void GuiHandler::renderMapConfigModal(void)
         ImGui::SameLine();
 
         // THIRD PERSON
-        if (ImGui::MenuItem(
-                mapModal.cameraItem.getTypeName(CameraItemType::eThirdPerson)
-                    .c_str(),
-                nullptr,
-                mapModal.cameraItem.getIsSelectedRef(
-                    CameraItemType::eThirdPerson),
-                !mapModal.cameraItem.getIsSelected(
-                    CameraItemType::eThirdPerson)))
+        if (ImGui::MenuItem(mapModal.cameraItem.getTypeName(CameraItemType::eThirdPerson).c_str(),
+                            nullptr,
+                            mapModal.cameraItem.getIsSelectedRef(CameraItemType::eThirdPerson),
+                            !mapModal.cameraItem.getIsSelected(CameraItemType::eThirdPerson)))
         {
-            if (ptrCamera->setCameraType(CameraType::eThirdPerson,
-                                         {0.0f, 0.0f, 0.0f}))
+            if (ptrCamera->setCameraType(CameraType::eThirdPerson, {0.0f, 0.0f, 0.0f}))
             {
                 std::cout << "switching to third person\n";
-                mapModal.cameraItem.deselectAllBut(
-                    CameraItemType::eThirdPerson);
-                mapModal.cameraItem.selectedType =
-                    MapModal::CameraItem::Type::eThirdPerson;
+                mapModal.cameraItem.deselectAllBut(CameraItemType::eThirdPerson);
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eThirdPerson;
             }
             else
             {
                 std::cout << "switching to free look\n";
-                mapModal.cameraItem.deselectAllBut(
-                    mapModal.cameraItem.selectedType);
+                mapModal.cameraItem.deselectAllBut(mapModal.cameraItem.selectedType);
             }
         }
         ImGui::TreePop();

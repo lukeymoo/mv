@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.10)
             DESCRIPTION "Vulkan with OOP"
             LANGUAGES CXX)
 
-set(CMAKE_C_COMPILER "clang")
-set(CMAKE_CXX_COMPILER "clang++")
+set(CMAKE_C_COMPILER "gcc-11")
+set(CMAKE_CXX_COMPILER "g++-11")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -55,7 +55,7 @@ set(SOURCES
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-Wall -Wextra -std=c++20 -m64 -g)
+add_compile_options(-Wall -Wextra -std=c++20 -O0 -m64 -g)
 
 add_executable(main ${HEADERS} ${SOURCES})
 

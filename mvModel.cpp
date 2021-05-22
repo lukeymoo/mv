@@ -1,4 +1,3 @@
-#define TINYOBJLOADER_IMPLEMENTATION
 #include "mvModel.h"
 
 extern LogHandler logger;
@@ -17,15 +16,16 @@ Model::~Model()
 {
 }
 
-void Model::load(Engine *p_Engine, Allocator &p_DescriptorAllocator,
-                 const char *p_Filename, bool p_OutputDebug)
+void Model::load(Engine *p_Engine, Allocator &p_DescriptorAllocator, const char *p_Filename,
+                 bool p_OutputDebug)
 {
 
     modelName = p_Filename;
 
     Assimp::Importer importer;
     const aiScene *aiScene = importer.ReadFile(
-        p_Filename, aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs);
+        p_Filename, aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs | aiProcess_Triangulate |
+                        aiProcess_ValidateDataStructure | aiProcess_SplitLargeMeshes);
 
     if (!aiScene)
     {
@@ -55,42 +55,33 @@ void Model::load(Engine *p_Engine, Allocator &p_DescriptorAllocator,
             vk::DescriptorSetLayout samplerLayout =
                 p_DescriptorAllocator.getLayout("sampler_layout");
 
-            p_DescriptorAllocator.allocateSet(
-                samplerLayout, textureDescriptors.at(mesh.mtlIndex).first);
+            p_DescriptorAllocator.allocateSet(samplerLayout,
+                                              textureDescriptors.at(mesh.mtlIndex).first);
 
             p_DescriptorAllocator.updateSet(
                 textureDescriptors.at(mesh.mtlIndex).second.mvImage.descriptor,
                 textureDescriptors.at(mesh.mtlIndex).first, 0);
         }
 
-        auto meshVertexSize =
-            static_cast<uint32_t>(mesh.vertices.size()) * sizeof(Vertex);
-        auto meshIndexSize =
-            static_cast<uint32_t>(mesh.indices.size()) * sizeof(uint32_t);
+        auto meshVertexSize = static_cast<uint32_t>(mesh.vertices.size()) * sizeof(Vertex);
+        auto meshIndexSize = static_cast<uint32_t>(mesh.indices.size()) * sizeof(uint32_t);
 
         // Append mesh data
-        allVertices.insert(allVertices.end(), mesh.vertices.begin(),
-                           mesh.vertices.end());
-        allIndices.insert(allIndices.end(), mesh.indices.begin(),
-                          mesh.indices.end());
+        allVertices.insert(allVertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+        allIndices.insert(allIndices.end(), mesh.indices.begin(), mesh.indices.end());
 
-        // { {vertex offset, textureDescriptors index}, { Index start, Index
-        // count } }
-        std::cout << "Vertex offset => " << vertexOffset << "\n";
-        std::cout << "Mesh Mtl index => " << mesh.mtlIndex << "\n";
-        std::cout << "Index start => " << indexStart << "\n";
-        std::cout << "Indices count for mesh => " << mesh.indices.size()
-                  << "\n";
-
-        bufferOffsets.push_back(
-            {{vertexOffset, mesh.mtlIndex}, {indexStart, mesh.indices.size()}});
+        // clang-format off
+        //
+        // { {vertex offset, textureDescriptors index}, { Index start, Index count } }
+        //
+        // clang-format on
+        bufferOffsets.push_back({{vertexOffset, mesh.mtlIndex}, {indexStart, mesh.indices.size()}});
 
         indexStart += mesh.indices.size();
         // vertexOffset += meshVertexSize;
         vertexOffset += mesh.vertices.size();
         vertexTotalSize += meshVertexSize;
         indexTotalSize += meshIndexSize;
-        std::cout << "\n\n\n";
     }
 
     // Create large contiguous buffers for model data
@@ -103,27 +94,23 @@ void Model::load(Engine *p_Engine, Allocator &p_DescriptorAllocator,
     p_Engine->createBuffer(vk::BufferUsageFlagBits::eVertexBuffer,
                            vk::MemoryPropertyFlagBits::eHostCoherent |
                                vk::MemoryPropertyFlagBits::eHostVisible,
-                           vertexTotalSize, &vertexBuffer, &vertexMemory,
-                           allVertices.data());
+                           vertexTotalSize, &vertexBuffer, &vertexMemory, allVertices.data());
     // Create index buffer
     p_Engine->createBuffer(vk::BufferUsageFlagBits::eIndexBuffer,
                            vk::MemoryPropertyFlagBits::eHostCoherent |
                                vk::MemoryPropertyFlagBits::eHostVisible,
-                           indexTotalSize, &indexBuffer, &indexMemory,
-                           allIndices.data());
+                           indexTotalSize, &indexBuffer, &indexMemory, allIndices.data());
 
     if (p_OutputDebug || true)
     {
-        logger.logMessage(
-            "\t :: Loaded model => " + std::string(p_Filename) +
-            "\n\t\t Meshes => " + std::to_string(loadedMeshes->size()) +
-            "\n\t\t Textures => " + std::to_string(loadedTextures->size()));
+        logger.logMessage("\t :: Loaded model => " + std::string(p_Filename) + "\n\t\t Meshes => " +
+                          std::to_string(loadedMeshes->size()) + "\n\t\t Textures => " +
+                          std::to_string(loadedTextures->size()));
     }
     return;
 }
 
-void Model::processNode(Engine *p_Engine, aiNode *p_Node,
-                        const aiScene *p_Scene)
+void Model::processNode(Engine *p_Engine, aiNode *p_Node, const aiScene *p_Scene)
 {
     for (uint32_t i = 0; i < p_Node->mNumMeshes; i++)
     {
@@ -139,8 +126,7 @@ void Model::processNode(Engine *p_Engine, aiNode *p_Node,
     return;
 }
 
-struct Mesh Model::processMesh(Engine *p_Engine, aiMesh *p_Mesh,
-                               const aiScene *p_Scene)
+struct Mesh Model::processMesh(Engine *p_Engine, aiMesh *p_Mesh, const aiScene *p_Scene)
 {
     std::vector<uint32_t> inds;
     std::vector<struct Vertex> verts;
@@ -171,8 +157,8 @@ struct Mesh Model::processMesh(Engine *p_Engine, aiMesh *p_Mesh,
         }
 
         aiColor4D materialColor;
-        aiGetMaterialColor(p_Scene->mMaterials[p_Mesh->mMaterialIndex],
-                           AI_MATKEY_COLOR_DIFFUSE, &materialColor);
+        aiGetMaterialColor(p_Scene->mMaterials[p_Mesh->mMaterialIndex], AI_MATKEY_COLOR_DIFFUSE,
+                           &materialColor);
         v.color = {
             materialColor.r,
             materialColor.g,
@@ -198,15 +184,11 @@ struct Mesh Model::processMesh(Engine *p_Engine, aiMesh *p_Mesh,
     struct Mesh m;
 
     // get material textures
-    if (p_Mesh->mMaterialIndex >= 0)
-    {
-        aiMaterial *material = p_Scene->mMaterials[p_Mesh->mMaterialIndex];
-        std::vector<Texture> diffuseMaps =
-            loadMaterialTextures(p_Engine, material, aiTextureType_DIFFUSE,
-                                 "texture_diffuse", p_Scene, m.mtlIndex);
-        texs.insert(texs.end(), std::make_move_iterator(diffuseMaps.begin()),
-                    std::make_move_iterator(diffuseMaps.end()));
-    }
+    aiMaterial *material = p_Scene->mMaterials[p_Mesh->mMaterialIndex];
+    std::vector<Texture> diffuseMaps = loadMaterialTextures(
+        p_Engine, material, aiTextureType_DIFFUSE, "texture_diffuse", p_Scene, m.mtlIndex);
+    texs.insert(texs.end(), std::make_move_iterator(diffuseMaps.begin()),
+                std::make_move_iterator(diffuseMaps.end()));
 
     m.vertices = verts;
     m.indices = inds;
@@ -214,10 +196,11 @@ struct Mesh Model::processMesh(Engine *p_Engine, aiMesh *p_Mesh,
     return m;
 }
 
-std::vector<Texture> Model::loadMaterialTextures(
-    Engine *p_Engine, aiMaterial *p_Material, aiTextureType p_Type,
-    [[maybe_unused]] std::string p_TypeName,
-    [[maybe_unused]] const aiScene *p_Scene, int &p_MtlIndex)
+std::vector<Texture> Model::loadMaterialTextures(Engine *p_Engine, aiMaterial *p_Material,
+                                                 aiTextureType p_Type,
+                                                 [[maybe_unused]] std::string p_TypeName,
+                                                 [[maybe_unused]] const aiScene *p_Scene,
+                                                 int &p_MtlIndex)
 {
     std::vector<Texture> textures;
     for (uint32_t i = 0; i < p_Material->GetTextureCount(p_Type); i++)
@@ -250,11 +233,10 @@ std::vector<Texture> Model::loadMaterialTextures(
             tex.type = p_Type;
             Image::ImageCreateInfo createInfo;
             createInfo.format = vk::Format::eR8G8B8A8Srgb;
-            createInfo.memoryProperties =
-                vk::MemoryPropertyFlagBits::eDeviceLocal;
+            createInfo.memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
             createInfo.tiling = vk::ImageTiling::eOptimal;
-            createInfo.usage = vk::ImageUsageFlagBits::eSampled |
-                               vk::ImageUsageFlagBits::eTransferDst;
+            createInfo.usage =
+                vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
 
             // load texture
             tex.mvImage.create(p_Engine, createInfo, filename);
@@ -264,10 +246,8 @@ std::vector<Texture> Model::loadMaterialTextures(
             // duplicate
             loadedTextures->push_back(tex);
             vk::DescriptorSet descriptor;
-            std::cout << "Pushing back texture for => " << filename;
             textureDescriptors.push_back(std::make_pair(descriptor, tex));
             p_MtlIndex = textureDescriptors.size() - 1;
-            std::cout << " mtl index => " << p_MtlIndex << "\n";
         }
     }
     return textures;

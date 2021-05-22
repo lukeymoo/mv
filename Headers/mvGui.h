@@ -7,11 +7,11 @@
 #include "imgui_impl_vulkan.h"
 // clang-format on
 
-#include <iostream>
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <iostream>
 #include <unordered_map>
-#include <algorithm>
 
 #include "mvHelper.h"
 #include "mvSwap.h"
@@ -20,11 +20,9 @@ struct Camera;
 class GuiHandler
 {
   public:
-    GuiHandler(GLFWwindow *p_GLFWwindow, Camera *p_CameraHandler,
-               const vk::Instance &p_Instance,
-               const vk::PhysicalDevice &p_PhysicalDevice,
-               const vk::Device &p_LogicalDevice, const Swap &p_MvSwap,
-               const vk::CommandPool &p_CommandPool,
+    GuiHandler(GLFWwindow *p_GLFWwindow, Camera *p_CameraHandler, const vk::Instance &p_Instance,
+               const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+               const Swap &p_MvSwap, const vk::CommandPool &p_CommandPool,
                const vk::Queue &p_GraphicsQueue,
                std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
                const vk::DescriptorPool &p_DescriptorPool);
@@ -51,9 +49,8 @@ class GuiHandler
     {
         const int width = 300;
         const int height = 100;
-        ImGuiWindowFlags windowFlags =
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
     } assetModal;
 
     struct DebugModal
@@ -62,8 +59,7 @@ class GuiHandler
         const int height = 600;
         bool isOpen = true;
         bool autoScroll = true;
-        ImGuiWindowFlags windowFlags =
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
     } debugModal;
 
     struct MapModal
@@ -143,20 +139,17 @@ class GuiHandler
         struct
         {
             bool isOpen;
-            std::filesystem::path currentDirectory =
-                std::filesystem::current_path();
+            std::filesystem::path currentDirectory = std::filesystem::current_path();
             ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoScrollbar |
                                            ImGuiWindowFlags_NoScrollWithMouse |
-                                           ImGuiWindowFlags_NoResize |
-                                           ImGuiWindowFlags_NoMove;
+                                           ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
         } selectTerrainModal;
 
         const int width = 300;
         const int height = 100;
         // Parent modal
-        ImGuiWindowFlags windowFlags =
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
     } mapModal;
 
     struct FileSystem
@@ -166,11 +159,9 @@ class GuiHandler
             eFile = 0,
             eDirectory
         };
-        std::filesystem::path currentDirectory =
-            std::filesystem::current_path();
+        std::filesystem::path currentDirectory = std::filesystem::current_path();
 
-        std::vector<std::pair<FileType, std::string>> listDirectory(
-            std::filesystem::path p_Path);
+        std::vector<std::pair<FileType, std::string>> listDirectory(std::filesystem::path p_Path);
     } fileSystem;
 
     struct FileMenu
@@ -186,8 +177,7 @@ class GuiHandler
             bool isOpen = false;
             ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar |
                                      ImGuiWindowFlags_NoScrollWithMouse |
-                                     ImGuiWindowFlags_NoResize |
-                                     ImGuiWindowFlags_NoMove;
+                                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
         } saveAsModal;
 
         struct QuitModal
@@ -195,8 +185,7 @@ class GuiHandler
             bool isOpen = false;
             ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar |
                                      ImGuiWindowFlags_NoScrollWithMouse |
-                                     ImGuiWindowFlags_NoResize |
-                                     ImGuiWindowFlags_NoMove;
+                                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
         } quitModal;
 
     } fileMenu;
@@ -209,37 +198,31 @@ class GuiHandler
 
   public:
     ImGuiIO &getIO(void);
-    void update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent,
-                float p_RenderDelta, float p_FrameDelta, uint32_t p_ModelCount,
-                uint32_t p_ObjectCount, uint32_t p_VertexCount,
-                uint32_t p_TriangleCount);
+    void update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
+                float p_FrameDelta, uint32_t p_ModelCount, uint32_t p_ObjectCount,
+                uint32_t p_VertexCount, uint32_t p_TriangleCount);
 
     std::vector<vk::Framebuffer> createFramebuffers(
-        const vk::Device &p_LogicalDevice,
-        const vk::RenderPass &p_GuiRenderPass,
-        std::vector<struct SwapchainBuffer> &p_SwapchainBuffers,
-        uint32_t p_SwapExtentWidth, uint32_t p_SwapExtentHeight);
+        const vk::Device &p_LogicalDevice, const vk::RenderPass &p_GuiRenderPass,
+        std::vector<struct SwapchainBuffer> &p_SwapchainBuffers, uint32_t p_SwapExtentWidth,
+        uint32_t p_SwapExtentHeight);
     void newFrame(void);
     void renderFrame(void);
 
-    void doRenderPass(const vk::RenderPass &p_RenderPass,
-                      const vk::Framebuffer &p_Framebuffer,
-                      const vk::CommandBuffer &p_CommandBuffer,
-                      vk::Extent2D &p_RenderAreaExtent);
+    void doRenderPass(const vk::RenderPass &p_RenderPass, const vk::Framebuffer &p_Framebuffer,
+                      const vk::CommandBuffer &p_CommandBuffer, vk::Extent2D &p_RenderAreaExtent);
 
     void cleanup(const vk::Device &p_LogicalDevice);
 
   private:
-    void createRenderPass(
-        std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
-        const vk::Device &p_LogicalDevice,
-        const vk::Format &p_AttachmentColorFormat);
+    void createRenderPass(std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+                          const vk::Device &p_LogicalDevice,
+                          const vk::Format &p_AttachmentColorFormat);
 
     /*
       OPEN FILE DIALOG
     */
-    inline std::vector<std::pair<int, std::string>> splitPath(
-        std::string p_Path)
+    inline std::vector<std::pair<int, std::string>> splitPath(std::string p_Path)
     {
         int buttonIndex = 0;
         std::vector<std::pair<int, std::string>> directoryButtons;
@@ -262,24 +245,20 @@ class GuiHandler
     }
 
     inline void outputSelectableList(
-        std::vector<std::pair<FileSystem::FileType,
-                              std::pair<std::string, bool>>> &p_List,
+        std::vector<std::pair<FileSystem::FileType, std::pair<std::string, bool>>> &p_List,
         std::filesystem::path &p_TargetPath)
     {
         for (auto &file : p_List)
         {
             if (file.first == FileSystem::FileType::eFile)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text,
-                                      ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
             }
             else if (file.first == FileSystem::FileType::eDirectory)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text,
-                                      ImVec4(0.75f, 0.25f, 0.25f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.75f, 0.25f, 0.25f, 1.0f));
             }
-            ImGui::PushStyleColor(ImGuiCol_Button,
-                                  ImVec4(0.25f, 0.25f, 0.25f, 0.5f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.25f, 0.25f, 0.5f));
 
             // If user clicks entry & is directory; append to path
             ImGui::Selectable(file.second.first.c_str(), &file.second.second,
@@ -306,17 +285,14 @@ class GuiHandler
 
     void (*showOpenDialog)(GuiHandler *p_This) = [](GuiHandler *p_This) {
         if (!ImGui::IsPopupOpen("Load map file...",
-                                ImGuiPopupFlags_AnyPopupId |
-                                    ImGuiPopupFlags_AnyPopupLevel))
+                                ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
         {
             p_This->fileMenu.openModal.isOpen = true;
             ImGui::SetNextWindowSize(ImVec2(800, 600));
-            ImGui::OpenPopup("Load map file...",
-                             ImGuiPopupFlags_NoOpenOverExistingPopup);
+            ImGui::OpenPopup("Load map file...", ImGuiPopupFlags_NoOpenOverExistingPopup);
         }
 
-        if (ImGui::BeginPopupModal("Load map file...",
-                                   &p_This->fileMenu.openModal.isOpen,
+        if (ImGui::BeginPopupModal("Load map file...", &p_This->fileMenu.openModal.isOpen,
                                    p_This->fileMenu.openModal.flags))
         {
             p_This->hasFocus = true;
@@ -327,55 +303,47 @@ class GuiHandler
                 p_This->splitPath(p_This->fileSystem.currentDirectory.string());
 
             // Output directory path as buttons
-            auto outputSplitPathAsButtons =
-                [&](std::pair<int, std::string> p_Directory) {
-                    if (ImGui::Button(p_Directory.second.c_str()))
+            auto outputSplitPathAsButtons = [&](std::pair<int, std::string> p_Directory) {
+                if (ImGui::Button(p_Directory.second.c_str()))
+                {
+                    std::string newDirectory;
+                    for (int i = 0; i <= p_Directory.first; i++)
                     {
-                        std::string newDirectory;
-                        for (int i = 0; i <= p_Directory.first; i++)
-                        {
-                            newDirectory.append(directoryButtons.at(i).second +
-                                                "/");
-                        }
-                        p_This->fileSystem.currentDirectory =
-                            "/" + newDirectory;
+                        newDirectory.append(directoryButtons.at(i).second + "/");
                     }
-                    ImGui::SameLine();
-                    ImGui::Text("/");
-                    ImGui::SameLine();
-                };
+                    p_This->fileSystem.currentDirectory = "/" + newDirectory;
+                }
+                ImGui::SameLine();
+                ImGui::Text("/");
+                ImGui::SameLine();
+            };
             std::for_each(directoryButtons.begin(), directoryButtons.end(),
                           outputSplitPathAsButtons);
 
-            std::vector<
-                std::pair<FileSystem::FileType, std::pair<std::string, bool>>>
+            std::vector<std::pair<FileSystem::FileType, std::pair<std::string, bool>>>
                 filesInDirectory;
 
             // Get directory entries in current path
             try
             {
-                auto directoryIterator = std::filesystem::directory_iterator(
-                    p_This->fileSystem.currentDirectory);
+                auto directoryIterator =
+                    std::filesystem::directory_iterator(p_This->fileSystem.currentDirectory);
                 for (const auto &file : directoryIterator)
                 {
-                    bool shouldDisplay = false;
                     FileSystem::FileType entryType;
                     try
                     {
                         if (file.is_directory())
                         {
-                            shouldDisplay = true;
                             entryType = FileSystem::FileType::eDirectory;
                         }
                         else if (file.is_regular_file())
                         {
-                            shouldDisplay = true;
                             entryType = FileSystem::FileType::eFile;
                         }
                     }
                     catch (std::filesystem::filesystem_error &e)
                     {
-                        shouldDisplay = false;
                         p_This->ptrLogger->logMessage("File system error => " +
                                                       std::string(e.what()));
                     }
@@ -383,9 +351,7 @@ class GuiHandler
                     std::string filePath = file.path().string();
 
                     std::string filename = filePath.replace(
-                        0,
-                        p_This->fileSystem.currentDirectory.string().length(),
-                        "");
+                        0, p_This->fileSystem.currentDirectory.string().length(), "");
 
                     // Remove slash if it exists
                     auto slash = filename.find('/');
@@ -407,8 +373,7 @@ class GuiHandler
                         }
                         else
                         {
-                            auto ext = filename.substr(extStart,
-                                                       filename.length() - 1);
+                            auto ext = filename.substr(extStart, filename.length() - 1);
                             if (ext != ".mvmap")
                                 continue;
                         }
@@ -426,13 +391,11 @@ class GuiHandler
             }
             catch (std::range_error &e)
             {
-                p_This->ptrLogger->logMessage("Range error => " +
-                                              std::string(e.what()));
+                p_This->ptrLogger->logMessage("Range error => " + std::string(e.what()));
             }
             catch (std::filesystem::filesystem_error &e)
             {
-                p_This->ptrLogger->logMessage("Directory error => " +
-                                              std::string(e.what()));
+                p_This->ptrLogger->logMessage("Directory error => " + std::string(e.what()));
             }
 
             ImGui::Spacing();
@@ -445,8 +408,7 @@ class GuiHandler
             // Display directory entries, color coded...
             // Red for directory
             // White for file
-            p_This->outputSelectableList(filesInDirectory,
-                                         p_This->fileSystem.currentDirectory);
+            p_This->outputSelectableList(filesInDirectory, p_This->fileSystem.currentDirectory);
 
             ImGui::EndGroup();
 
@@ -474,8 +436,7 @@ class GuiHandler
     */
     void (*showQuitDialog)(GuiHandler *p_This) = [](GuiHandler *p_This) {
         if (!ImGui::IsPopupOpen("Are you sure?",
-                                ImGuiPopupFlags_AnyPopupId |
-                                    ImGuiPopupFlags_AnyPopupLevel))
+                                ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
         {
             p_This->fileMenu.quitModal.isOpen = true;
             auto viewport = ImGui::GetMainViewport();
@@ -485,15 +446,12 @@ class GuiHandler
             const auto min = ImVec2(200, 50);
             const auto max = ImVec2(200, 50);
             ImGui::SetNextWindowSizeConstraints(min, max);
-            ImGui::SetNextWindowSize(max,
-                                     ImGuiPopupFlags_NoOpenOverExistingPopup);
+            ImGui::SetNextWindowSize(max, ImGuiPopupFlags_NoOpenOverExistingPopup);
             ImGui::SetNextWindowPos(center);
-            ImGui::OpenPopup("Are you sure?",
-                             ImGuiPopupFlags_NoOpenOverExistingPopup);
+            ImGui::OpenPopup("Are you sure?", ImGuiPopupFlags_NoOpenOverExistingPopup);
         }
 
-        if (ImGui::BeginPopupModal("Are you sure?",
-                                   &p_This->fileMenu.quitModal.isOpen,
+        if (ImGui::BeginPopupModal("Are you sure?", &p_This->fileMenu.quitModal.isOpen,
                                    p_This->fileMenu.quitModal.flags))
         {
             p_This->hasFocus = true;
@@ -533,50 +491,42 @@ class GuiHandler
 
     void (*selectNewTerrainFile)(GuiHandler *p_This) = [](GuiHandler *p_This) {
         if (!ImGui::IsPopupOpen("Select terrain file",
-                                ImGuiPopupFlags_AnyPopupId |
-                                    ImGuiPopupFlags_AnyPopupLevel))
+                                ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
         {
             p_This->mapModal.selectTerrainModal.isOpen = true;
             ImGui::SetNextWindowSize(ImVec2(800, 600));
-            ImGui::OpenPopup("Select terrain file",
-                             ImGuiPopupFlags_NoOpenOverExistingPopup);
+            ImGui::OpenPopup("Select terrain file", ImGuiPopupFlags_NoOpenOverExistingPopup);
         }
 
-        if (ImGui::BeginPopupModal(
-                "Select terrain file",
-                &p_This->mapModal.selectTerrainModal.isOpen,
-                p_This->mapModal.selectTerrainModal.windowFlags))
+        if (ImGui::BeginPopupModal("Select terrain file",
+                                   &p_This->mapModal.selectTerrainModal.isOpen,
+                                   p_This->mapModal.selectTerrainModal.windowFlags))
         {
             p_This->hasFocus = true;
 
             // Split current path for terrain modal
             std::vector<std::pair<int, std::string>> directoryButtons =
-                p_This->splitPath(p_This->mapModal.selectTerrainModal
-                                      .currentDirectory.string());
+                p_This->splitPath(p_This->mapModal.selectTerrainModal.currentDirectory.string());
 
             // Output split path as buttons
-            auto outputSplitPathAsButtons =
-                [&](std::pair<int, std::string> p_Directory) {
-                    if (ImGui::Button(p_Directory.second.c_str()))
+            auto outputSplitPathAsButtons = [&](std::pair<int, std::string> p_Directory) {
+                if (ImGui::Button(p_Directory.second.c_str()))
+                {
+                    std::string newDirectory;
+                    for (int i = 0; i <= p_Directory.first; i++)
                     {
-                        std::string newDirectory;
-                        for (int i = 0; i <= p_Directory.first; i++)
-                        {
-                            newDirectory.append(directoryButtons.at(i).second +
-                                                "/");
-                        }
-                        p_This->mapModal.selectTerrainModal.currentDirectory =
-                            "/" + newDirectory;
+                        newDirectory.append(directoryButtons.at(i).second + "/");
                     }
-                    ImGui::SameLine();
-                    ImGui::Text("/");
-                    ImGui::SameLine();
-                };
+                    p_This->mapModal.selectTerrainModal.currentDirectory = "/" + newDirectory;
+                }
+                ImGui::SameLine();
+                ImGui::Text("/");
+                ImGui::SameLine();
+            };
             std::for_each(directoryButtons.begin(), directoryButtons.end(),
                           outputSplitPathAsButtons);
 
-            std::vector<
-                std::pair<FileSystem::FileType, std::pair<std::string, bool>>>
+            std::vector<std::pair<FileSystem::FileType, std::pair<std::string, bool>>>
                 filesInDirectory;
 
             // Get directory entries in current path
@@ -586,24 +536,20 @@ class GuiHandler
                     p_This->mapModal.selectTerrainModal.currentDirectory);
                 for (const auto &file : directoryIterator)
                 {
-                    bool shouldDisplay = false;
                     FileSystem::FileType entryType;
                     try
                     {
                         if (file.is_directory())
                         {
-                            shouldDisplay = true;
                             entryType = FileSystem::FileType::eDirectory;
                         }
                         else if (file.is_regular_file())
                         {
-                            shouldDisplay = true;
                             entryType = FileSystem::FileType::eFile;
                         }
                     }
                     catch (std::filesystem::filesystem_error &e)
                     {
-                        shouldDisplay = false;
                         p_This->ptrLogger->logMessage("File system error => " +
                                                       std::string(e.what()));
                     }
@@ -611,10 +557,7 @@ class GuiHandler
                     std::string filePath = file.path().string();
 
                     std::string filename = filePath.replace(
-                        0,
-                        p_This->mapModal.selectTerrainModal.currentDirectory
-                            .string()
-                            .length(),
+                        0, p_This->mapModal.selectTerrainModal.currentDirectory.string().length(),
                         "");
 
                     // Remove slash if it exists
@@ -638,8 +581,7 @@ class GuiHandler
                         }
                         else
                         {
-                            auto ext = filename.substr(extStart,
-                                                       filename.length() - 1);
+                            auto ext = filename.substr(extStart, filename.length() - 1);
                             if (ext != ".ter")
                                 continue;
                         }
@@ -657,13 +599,11 @@ class GuiHandler
             }
             catch (std::range_error &e)
             {
-                p_This->ptrLogger->logMessage("Range error => " +
-                                              std::string(e.what()));
+                p_This->ptrLogger->logMessage("Range error => " + std::string(e.what()));
             }
             catch (std::filesystem::filesystem_error &e)
             {
-                p_This->ptrLogger->logMessage("Directory error => " +
-                                              std::string(e.what()));
+                p_This->ptrLogger->logMessage("Directory error => " + std::string(e.what()));
             }
 
             ImGui::Spacing();
@@ -676,9 +616,8 @@ class GuiHandler
             // Display directory entries, color coded...
             // Red for directory
             // White for file
-            p_This->outputSelectableList(
-                filesInDirectory,
-                p_This->mapModal.selectTerrainModal.currentDirectory);
+            p_This->outputSelectableList(filesInDirectory,
+                                         p_This->mapModal.selectTerrainModal.currentDirectory);
 
             ImGui::EndGroup();
 
@@ -756,8 +695,7 @@ class GuiHandler
     } // end asset modal
 
     inline void renderDebugModal(
-        std::vector<std::pair<LogHandler::MessagePriority, std::string>>
-            p_DebugMessageList)
+        std::vector<std::pair<LogHandler::MessagePriority, std::string>> p_DebugMessageList)
     {
         // Terrain info
         auto viewport = ImGui::GetMainViewport();
@@ -767,8 +705,7 @@ class GuiHandler
         if (debugModal.isOpen)
         {
             pos.y -= debugModal.height;
-            ImGui::SetNextWindowSize(
-                ImVec2(debugModal.width, debugModal.height));
+            ImGui::SetNextWindowSize(ImVec2(debugModal.width, debugModal.height));
         }
         else
         {
@@ -803,15 +740,13 @@ class GuiHandler
         {
             if (message.first == LogHandler::MessagePriority::eError)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text,
-                                      ImVec4(1.0f, 0.10f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.10f, 0.0f, 1.0f));
                 ImGui::Text("[-] %s", message.second.c_str());
                 ImGui::PopStyleColor();
             }
             else if (message.first == LogHandler::MessagePriority::eWarning)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text,
-                                      ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
                 ImGui::Text("[!] %s", message.second.c_str());
                 ImGui::PopStyleColor();
             }

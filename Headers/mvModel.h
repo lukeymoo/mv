@@ -10,8 +10,11 @@
 #include <glm/gtx/string_cast.hpp>
 
 #include <assimp/Importer.hpp>
+#include <assimp/material.h>
+#include <assimp/matrix4x4.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <assimp/texture.h>
 
 #include "mvAllocator.h"
 #include "mvBuffer.h"

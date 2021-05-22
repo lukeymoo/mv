@@ -23,21 +23,18 @@ Camera::Camera(CameraInitStruct &p_CameraInitStruct)
     }
     if (p_CameraInitStruct.projectionUniformObject == nullptr)
     {
-        throw std::runtime_error(
-            "No projection matrix uniform object specified");
+        throw std::runtime_error("No projection matrix uniform object specified");
     }
 
     if (type == CameraType::eInvalid)
-        throw std::runtime_error(
-            "No camera type specified in camera initialization structure");
+        throw std::runtime_error("No camera type specified in camera initialization structure");
 
     // ensure target is given if type is third person
     if (type == CameraType::eThirdPerson)
     {
         if (p_CameraInitStruct.target == nullptr)
-            throw std::runtime_error(
-                "Camera type is specified as third person yet no target "
-                "specified in initialization structure");
+            throw std::runtime_error("Camera type is specified as third person yet no target "
+                                     "specified in initialization structure");
         target = p_CameraInitStruct.target;
     }
 
@@ -50,14 +47,12 @@ Camera::Camera(CameraInitStruct &p_CameraInitStruct)
 
     update();
 
-    projectionUniformObject->matrix =
-        glm::perspective(glm::radians(fov), aspect, nearz, farz);
+    projectionUniformObject->matrix = glm::perspective(glm::radians(fov), aspect, nearz, farz);
     projectionUniformObject->matrix[1][1] *= -1.0f;
     // TODO
     // add non host visible/coherent update support
     // update projection matrix buffer
-    memcpy(projectionUniformObject->mvBuffer.mapped,
-           &projectionUniformObject->matrix,
+    memcpy(projectionUniformObject->mvBuffer.mapped, &projectionUniformObject->matrix,
            sizeof(projectionUniformObject->matrix));
 }
 
@@ -111,8 +106,7 @@ void Camera::update(void)
         */
         if (orbitAngle != targetOrbit)
         {
-            orbitAngle = orbitAngle * (1 - orbitSmoothness) +
-                         targetOrbit * orbitSmoothness;
+            orbitAngle = orbitAngle * (1 - orbitSmoothness) + targetOrbit * orbitSmoothness;
         }
         else
         {
@@ -124,8 +118,7 @@ void Camera::update(void)
         */
         if (pitch != targetPitch)
         {
-            pitch =
-                pitch * (1 - pitchSmoothness) + targetPitch * pitchSmoothness;
+            pitch = pitch * (1 - pitchSmoothness) + targetPitch * pitchSmoothness;
         }
     }
 
@@ -135,8 +128,7 @@ void Camera::update(void)
     }
     else if (type == CameraType::eFirstPerson)
     {
-        throw std::runtime_error(
-            "first person camera mode currently unsupported");
+        throw std::runtime_error("first person camera mode currently unsupported");
     }
     else if (type == CameraType::eThirdPerson)
     {
@@ -343,14 +335,13 @@ void Camera::getFrontFace(float p_OrbitAngle)
 void Camera::move(float p_Angle, glm::vec3 p_TargetAxii, bool p_Boost)
 {
     constexpr float newMoveSpeed = MOVESPEED * 3.0f;
-    position += rotateVector(p_Angle, {p_TargetAxii, 1.0f}) *
-                ((p_Boost) ? newMoveSpeed : MOVESPEED);
+    position +=
+        rotateVector(p_Angle, {p_TargetAxii, 1.0f}) * ((p_Boost) ? newMoveSpeed : MOVESPEED);
     return;
 }
 
-void Camera::rotate(
-    glm::vec3 p_Delta,
-    float p_FrameDelta) // should remain unused while using timesteps
+void Camera::rotate(glm::vec3 p_Delta,
+                    float p_FrameDelta) // should remain unused while using timesteps
 {
     float speedLimit = 0.5f;
     float toApplyX = (p_Delta.x * p_FrameDelta * speedLimit);
@@ -393,14 +384,12 @@ void Camera::moveDown(void)
 void Camera::moveLeft(void)
 {
     getFrontFace();
-    position -= glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f))) *
-                MOVESPEED;
+    position -= glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED;
 }
 void Camera::moveRight(void)
 {
     getFrontFace();
-    position += glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f))) *
-                MOVESPEED;
+    position += glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f))) * MOVESPEED;
 }
 void Camera::moveForward(void)
 {
@@ -417,21 +406,21 @@ bool Camera::setCameraType(CameraType p_CameraType, glm::vec3 p_Position)
 {
     switch (p_CameraType)
     {
-        case CameraType::eThirdPerson:
+        using enum CameraType;
+        case eThirdPerson:
             {
+                using enum LogHandler::MessagePriority;
                 if (!target)
                 {
-                    ptrLogger->logMessage(
-                        LogHandler::MessagePriority::eError,
-                        "Can't set to third person due to no target");
+                    ptrLogger->logMessage(eError, "Can't set to third person due to no target");
                     return false;
                 }
                 break;
             }
-        case CameraType::eFirstPerson:
+        case eFirstPerson:
             {
-                ptrLogger->logMessage(LogHandler::MessagePriority::eError,
-                                      "First person mode not implemented yet");
+                using enum LogHandler::MessagePriority;
+                ptrLogger->logMessage(eError, "First person mode not implemented yet");
                 return false;
                 break;
             }
@@ -447,10 +436,8 @@ bool Camera::setCameraType(CameraType p_CameraType, glm::vec3 p_Position)
 
 void Camera::updateFreelook(void)
 {
-    glm::mat4 xMat = glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x),
-                                 {1.0f, 0.0f, 0.0f});
-    glm::mat4 yMat = glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y),
-                                 {0.0f, 1.0f, 0.0f});
+    glm::mat4 xMat = glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), {1.0f, 0.0f, 0.0f});
+    glm::mat4 yMat = glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y), {0.0f, 1.0f, 0.0f});
 
     glm::mat4 rotMat = yMat * xMat;
 
@@ -463,26 +450,24 @@ void Camera::updateFreelook(void)
 void Camera::updateThirdPerson(void)
 {
     // set camera origin to target's position
-    position = glm::vec3(target->position.x, target->position.y - 1.0f,
-                         target->position.z);
+    position = glm::vec3(target->position.x, target->position.y - 1.0f, target->position.z);
 
     // angle around player
     // to make the camera stick at to a particular angle relative to
     // player add the following to orbit_angle `target->rotation.y` =>
     // orbit_angle + target.y
-    glm::mat4 y_mat = glm::rotate(glm::mat4(1.0f), glm::radians(orbitAngle),
-                                  glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 y_mat =
+        glm::rotate(glm::mat4(1.0f), glm::radians(orbitAngle), glm::vec3(0.0f, 1.0f, 0.0f));
 
     // camera pitch angle
-    glm::mat4 x_mat = glm::rotate(glm::mat4(1.0f), glm::radians(pitch),
-                                  glm::vec3(1.0f, 0.0f, 0.0f));
+    glm::mat4 x_mat =
+        glm::rotate(glm::mat4(1.0f), glm::radians(pitch), glm::vec3(1.0f, 0.0f, 0.0f));
 
     glm::mat4 rotationMatrix = y_mat * x_mat;
 
-    glm::mat4 targetMat = glm::translate(
-        glm::mat4(1.0f), glm::vec3(position.x, position.y, position.z));
-    glm::mat4 distanceMat =
-        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, zoomLevel));
+    glm::mat4 targetMat =
+        glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y, position.z));
+    glm::mat4 distanceMat = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, zoomLevel));
 
     viewUniformObject->matrix = targetMat * rotationMatrix * distanceMat;
     viewUniformObject->matrix = glm::inverse(viewUniformObject->matrix);
@@ -493,8 +478,8 @@ glm::vec3 Camera::rotateVector(float p_OrbitAngle, glm::vec4 p_TargetAxii)
 {
     // construct rotation matrix from orbit angle
     glm::mat4 rotationMatrix = glm::mat4(1.0);
-    rotationMatrix = glm::rotate(rotationMatrix, glm::radians(p_OrbitAngle),
-                                 glm::vec3(0.0f, 1.0f, 0.0f));
+    rotationMatrix =
+        glm::rotate(rotationMatrix, glm::radians(p_OrbitAngle), glm::vec3(0.0f, 1.0f, 0.0f));
 
     // multiply our def vec
 

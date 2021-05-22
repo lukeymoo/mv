@@ -31,32 +31,18 @@ class LogHandler
 
     // TODO
     // Add multi thread support
-    inline void logMessage(std::pair<MessagePriority, std::string> p_Message)
-    {
-        trim();
-        messages.push_back(p_Message);
-    }
-    inline void logMessage(MessagePriority p_MessagePriority,
-                           std::string p_Message)
-    {
-        trim();
-        messages.push_back({p_MessagePriority, p_Message});
-    }
-    inline void logMessage(std::string p_Message)
-    {
-        trim();
-        messages.push_back({MessagePriority::eInfo, p_Message});
-    }
-    inline std::vector<std::pair<MessagePriority, std::string>> getMessages(
-        void)
-    {
-        return messages; // return copy of list
-    }
+    void logMessage(std::pair<MessagePriority, std::string> p_Message);
+    void logMessage(MessagePriority p_MessagePriority, std::string p_Message);
+    void logMessage(std::string p_Message);
+    std::vector<std::pair<MessagePriority, std::string>> getMessages(void);
 
   private:
     std::vector<std::pair<MessagePriority, std::string>> messages;
-};
+}; // End class LogHandler
 
+/*
+    General Helper Methods
+*/
 namespace Helper
 {
     // Create quick one time submit command buffer

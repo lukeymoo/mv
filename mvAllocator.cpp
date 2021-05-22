@@ -56,14 +56,11 @@ vk::DescriptorSetLayout Allocator::getLayout(std::string p_LayoutName)
             return map.second;
         }
     }
-    throw std::runtime_error("Requested layout but not found => " +
-                             p_LayoutName);
+    throw std::runtime_error("Requested layout but not found => " + p_LayoutName);
 }
 
-void Allocator::createLayout(std::string p_LayoutName,
-                             vk::DescriptorType p_DescriptorType,
-                             uint32_t p_Count,
-                             vk::ShaderStageFlagBits p_ShaderStageFlags,
+void Allocator::createLayout(std::string p_LayoutName, vk::DescriptorType p_DescriptorType,
+                             uint32_t p_Count, vk::ShaderStageFlagBits p_ShaderStageFlags,
                              uint32_t p_Binding)
 {
     vk::DescriptorSetLayoutBinding bindInfo;
@@ -82,7 +79,6 @@ void Allocator::createLayout(std::string p_LayoutName,
 void Allocator::createLayout(std::string p_LayoutName,
                              vk::DescriptorSetLayoutCreateInfo &p_CreateInfo)
 {
-
     bool layoutAlreadyExists = false;
     if (!layouts.empty())
     {
@@ -100,8 +96,8 @@ void Allocator::createLayout(std::string p_LayoutName,
     if (layoutAlreadyExists)
     {
         logger.logMessage(LogHandler::MessagePriority::eWarning,
-                          "Request to create descriptor set layout => " +
-                              p_LayoutName + " already exists; Skipping...");
+                          "Request to create descriptor set layout => " + p_LayoutName +
+                              " already exists; Skipping...");
         return;
     }
 
@@ -121,8 +117,7 @@ void Allocator::allocateSet(vk::DescriptorSetLayout &p_DescriptorLayout,
 
     // ensure pool exist
     if (!poolContainer || !poolContainer->pool)
-        throw std::runtime_error(
-            "No pool ever allocated, attempting to allocate descriptor set");
+        throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
 
     logger.logMessage("Allocating descriptor set");
 
@@ -141,8 +136,7 @@ void Allocator::allocateSet(vk::DescriptorSetLayout &p_DescriptorLayout,
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &p_DescriptorLayout;
 
-    vk::Result result = engine->logicalDevice.allocateDescriptorSets(
-        &allocInfo, &p_DestinationSet);
+    vk::Result result = engine->logicalDevice.allocateDescriptorSets(&allocInfo, &p_DestinationSet);
 
     if (result == vk::Result::eSuccess)
     {
@@ -169,24 +163,20 @@ void Allocator::allocateSet(vk::DescriptorSetLayout &p_DescriptorLayout,
     }
     else
     {
-        throw std::runtime_error(
-            "Allocator failed to allocate descriptor set, fatal error");
+        throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
     }
     return;
 }
 
-void Allocator::allocateSet(Container *p_PoolContainer,
-                            vk::DescriptorSetLayout &p_DescriptorLayout,
+void Allocator::allocateSet(Container *p_PoolContainer, vk::DescriptorSetLayout &p_DescriptorLayout,
                             vk::DescriptorSet &p_DestinationSet)
 {
     if (!p_PoolContainer)
-        throw std::runtime_error(
-            "Invalid container passed to allocate set :: descriptor handler");
+        throw std::runtime_error("Invalid container passed to allocate set :: descriptor handler");
 
     // ensure pool exist
     if (!p_PoolContainer->pool)
-        throw std::runtime_error(
-            "No pool ever allocated, attempting to allocate descriptor set");
+        throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
 
     logger.logMessage("Allocating descriptor set");
     if (!p_DescriptorLayout)
@@ -204,8 +194,7 @@ void Allocator::allocateSet(Container *p_PoolContainer,
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &p_DescriptorLayout;
 
-    vk::Result result = engine->logicalDevice.allocateDescriptorSets(
-        &allocInfo, &p_DestinationSet);
+    vk::Result result = engine->logicalDevice.allocateDescriptorSets(&allocInfo, &p_DestinationSet);
     if (result == vk::Result::eSuccess)
     {
         // ensure allocator index is up to date
@@ -231,14 +220,12 @@ void Allocator::allocateSet(Container *p_PoolContainer,
     }
     else
     {
-        throw std::runtime_error(
-            "Allocator failed to allocate descriptor set, fatal error");
+        throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
     }
 }
 
 void Allocator::updateSet(vk::DescriptorBufferInfo &p_BufferDescriptor,
-                          vk::DescriptorSet &p_TargetDescriptorSet,
-                          uint32_t p_DestinationBinding)
+                          vk::DescriptorSet &p_TargetDescriptorSet, uint32_t p_DestinationBinding)
 {
     Container *poolContainer = &containers.at(currentPool);
 
@@ -282,8 +269,7 @@ void Allocator::updateSet(vk::DescriptorBufferInfo &p_BufferDescriptor,
 // }
 
 void Allocator::updateSet(vk::DescriptorImageInfo &p_ImageDescriptor,
-                          vk::DescriptorSet &p_TargetDescriptorSet,
-                          uint32_t p_DestinationBinding)
+                          vk::DescriptorSet &p_TargetDescriptorSet, uint32_t p_DestinationBinding)
 {
     Container *poolContainer = &containers.at(currentPool);
 
@@ -343,20 +329,21 @@ Allocator::Container::~Container()
 
 Allocator::Container *Allocator::allocatePool(uint32_t p_Count)
 {
-    logger.logMessage("[+] Allocating descriptor pool of max sets => " +
-                      std::to_string(p_Count));
+    logger.logMessage("[+] Allocating descriptor pool of max sets => " + std::to_string(p_Count));
+
+    using enum vk::DescriptorType;
     std::vector<vk::DescriptorPoolSize> poolSizes = {
-        {vk::DescriptorType::eSampler, 1000},
-        {vk::DescriptorType::eCombinedImageSampler, 1000},
-        {vk::DescriptorType::eSampledImage, 1000},
-        {vk::DescriptorType::eStorageImage, 1000},
-        {vk::DescriptorType::eUniformTexelBuffer, 1000},
-        {vk::DescriptorType::eStorageTexelBuffer, 1000},
-        {vk::DescriptorType::eUniformBuffer, 1000},
-        {vk::DescriptorType::eStorageBuffer, 1000},
-        {vk::DescriptorType::eUniformBufferDynamic, 1000},
-        {vk::DescriptorType::eStorageBufferDynamic, 1000},
-        {vk::DescriptorType::eInputAttachment, 1000},
+        {eSampler, 1000},
+        {eCombinedImageSampler, 1000},
+        {eSampledImage, 1000},
+        {eStorageImage, 1000},
+        {eUniformTexelBuffer, 1000},
+        {eStorageTexelBuffer, 1000},
+        {eUniformBuffer, 1000},
+        {eStorageBuffer, 1000},
+        {eUniformBufferDynamic, 1000},
+        {eStorageBufferDynamic, 1000},
+        {eInputAttachment, 1000},
     };
 
     if (poolSizes.empty())
@@ -385,8 +372,7 @@ Allocator::Container *Allocator::allocatePool(uint32_t p_Count)
     return &containers.back();
 }
 
-void Allocator::loadModel(std::vector<Model> *p_Models,
-                          std::vector<std::string> *p_ModelNames,
+void Allocator::loadModel(std::vector<Model> *p_Models, std::vector<std::string> *p_ModelNames,
                           const char *p_Filename)
 {
     bool alreadyLoaded = false;
@@ -395,8 +381,7 @@ void Allocator::loadModel(std::vector<Model> *p_Models,
         if (name.compare(p_Filename) == 0) // if same
         {
             logger.logMessage(LogHandler::MessagePriority::eWarning,
-                              "Skipping already loaded model name => " +
-                                  std::string(p_Filename));
+                              "Skipping already loaded model name => " + std::string(p_Filename));
             alreadyLoaded = true;
             break;
         }
@@ -416,8 +401,7 @@ void Allocator::loadModel(std::vector<Model> *p_Models,
     return;
 }
 
-void Allocator::createObject(std::vector<Model> *p_Models,
-                             std::string p_ModelName)
+void Allocator::createObject(std::vector<Model> *p_Models, std::string p_ModelName)
 {
     if (!p_Models)
         throw std::runtime_error("Attempted to create object, invalid model "
@@ -439,9 +423,8 @@ void Allocator::createObject(std::vector<Model> *p_Models,
     if (!modelExist)
     {
         std::ostringstream oss;
-        oss << "[!] Requested creation of object of model type => "
-            << p_ModelName << " failed as that model has never been loaded"
-            << std::endl;
+        oss << "[!] Requested creation of object of model type => " << p_ModelName
+            << " failed as that model has never been loaded" << std::endl;
         throw std::runtime_error(oss.str().c_str());
     }
 
@@ -457,20 +440,14 @@ void Allocator::createObject(std::vector<Model> *p_Models,
     // { vk::DescriptorSet, Buffer }
     engine->createBuffer(
         vk::BufferUsageFlagBits::eUniformBuffer,
-        vk::MemoryPropertyFlagBits::eHostVisible |
-            vk::MemoryPropertyFlagBits::eHostCoherent,
-        &p_Models->at(modelIndex).objects->back().uniform.second,
-        sizeof(Object::Matrix));
-    p_Models->at(modelIndex)
-        .objects->back()
-        .uniform.second.map(engine->logicalDevice);
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+        &p_Models->at(modelIndex).objects->back().uniform.second, sizeof(Object::Matrix));
+    p_Models->at(modelIndex).objects->back().uniform.second.map(engine->logicalDevice);
 
     vk::DescriptorSetLayout uniformLayout = getLayout("uniform_layout");
 
-    allocateSet(uniformLayout,
-                p_Models->at(modelIndex).objects->back().uniform.first);
-    updateSet(
-        p_Models->at(modelIndex).objects->back().uniform.second.bufferInfo,
-        p_Models->at(modelIndex).objects->back().uniform.first, 0);
+    allocateSet(uniformLayout, p_Models->at(modelIndex).objects->back().uniform.first);
+    updateSet(p_Models->at(modelIndex).objects->back().uniform.second.bufferInfo,
+              p_Models->at(modelIndex).objects->back().uniform.first, 0);
     return;
 }
