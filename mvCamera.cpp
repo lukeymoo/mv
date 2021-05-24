@@ -334,7 +334,7 @@ void Camera::getFrontFace(float p_OrbitAngle)
 
 void Camera::move(float p_Angle, glm::vec3 p_TargetAxii, bool p_Boost)
 {
-    constexpr float newMoveSpeed = MOVESPEED * 3.0f;
+    constexpr float newMoveSpeed = MOVESPEED * 10.0f;
     position +=
         rotateVector(p_Angle, {p_TargetAxii, 1.0f}) * ((p_Boost) ? newMoveSpeed : MOVESPEED);
     return;
@@ -376,10 +376,24 @@ void Camera::moveUp(void)
     position.y -= MOVESPEED * 1.5f;
     return;
 }
+void Camera::moveUp(bool p_IsBoost)
+{
+    if(p_IsBoost)
+        position.y -= MOVESPEED * 5.0f;
+    else
+        position.y -= MOVESPEED * 1.5f;
+}
 void Camera::moveDown(void)
 {
     position.y += MOVESPEED * 1.5f;
     return;
+}
+void Camera::moveDown(bool p_IsBoost)
+{
+    if(p_IsBoost)
+        position.y += MOVESPEED * 5.0f;
+    else
+        position.y += MOVESPEED * 1.5f;
 }
 void Camera::moveLeft(void)
 {

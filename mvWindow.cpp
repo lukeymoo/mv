@@ -34,8 +34,6 @@ Window::Window(int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle)
     {
         bool found = false;
 
-        std::cout << "glfw requesting => " << glfw_req << "\n";
-
         // iterate already requested list
         for (const auto &extensionName : instanceExtensions)
         {
@@ -62,8 +60,7 @@ Window::Window(int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle)
     glfwWindowHint(GLFW_REFRESH_RATE, videoMode->refreshRate);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window = glfwCreateWindow(videoMode->width, videoMode->height,
-                              title.c_str(), monitor, nullptr);
+    window = glfwCreateWindow(videoMode->width, videoMode->height, title.c_str(), monitor, nullptr);
     if (!window)
         throw std::runtime_error("Failed to create window");
 
@@ -210,12 +207,10 @@ void Window::prepare(void)
     setupFramebuffer();
 
     // load device extension functions
-    pfn_vkCmdSetPrimitiveTopology =
-        reinterpret_cast<PFN_vkCmdSetPrimitiveTopologyEXT>(
-            vkGetInstanceProcAddr(instance, "vkCmdSetPrimitiveTopologyEXT"));
+    pfn_vkCmdSetPrimitiveTopology = reinterpret_cast<PFN_vkCmdSetPrimitiveTopologyEXT>(
+        vkGetInstanceProcAddr(instance, "vkCmdSetPrimitiveTopologyEXT"));
     if (!pfn_vkCmdSetPrimitiveTopology)
-        throw std::runtime_error(
-            "Failed to load extended dynamic state extensions");
+        throw std::runtime_error("Failed to load extended dynamic state extensions");
     return;
 }
 
@@ -224,14 +219,12 @@ void Window::initVulkan(void)
     // creates vulkan instance with specified instance extensions/layers
     createInstance();
 
-    std::vector<vk::PhysicalDevice> physicalDevices =
-        instance.enumeratePhysicalDevices();
+    std::vector<vk::PhysicalDevice> physicalDevices = instance.enumeratePhysicalDevices();
 
     if (physicalDevices.size() < 1)
         throw std::runtime_error("No physical devices found");
 
-    std::cout << "[+] Fetching physical device " << physicalDevices.at(0)
-              << "\n";
+    std::cout << "[+] Fetching physical device " << physicalDevices.at(0) << "\n";
     // Select device
     physicalDevice = physicalDevices.at(0);
 
@@ -260,20 +253,14 @@ void Window::initVulkan(void)
     // requestedLogicalDeviceExtensions
     for (const auto &requested : requestedDeviceExtensions)
     {
-        std::cout << "Adding requested extension => " << requested
-                  << " to local member for logical device creation\n";
         requestedLogicalDeviceExtensions.push_back(requested);
     }
 
     auto checkIfSupported = [&, this](const std::string requested_ext) {
         for (const auto &supportedExtension : physicalDeviceExtensions)
         {
-            if (strcmp(supportedExtension.extensionName,
-                       requested_ext.c_str()) == 0)
+            if (strcmp(supportedExtension.extensionName, requested_ext.c_str()) == 0)
             {
-                std::cout << "Found device extension => " +
-                                 std::string(supportedExtension.extensionName)
-                          << "\n";
                 return true;
             }
         }
@@ -281,19 +268,15 @@ void Window::initVulkan(void)
         return false;
     };
 
-    bool haveAllExtensions =
-        std::all_of(requestedLogicalDeviceExtensions.begin(),
-                    requestedLogicalDeviceExtensions.end(), checkIfSupported);
+    bool haveAllExtensions = std::all_of(requestedLogicalDeviceExtensions.begin(),
+                                         requestedLogicalDeviceExtensions.end(), checkIfSupported);
 
     if (!haveAllExtensions)
-        throw std::runtime_error(
-            "Failed to find all requested device extensions");
+        throw std::runtime_error("Failed to find all requested device extensions");
 
     std::vector<std::string> tmp;
     for (const auto &extensionName : requestedDeviceExtensions)
     {
-        std::cout << "Requesting device extension " + std::string(extensionName)
-                  << "\n";
         tmp.push_back(extensionName);
     }
 
@@ -336,14 +319,12 @@ void Window::createInstance(void)
 /* If debugging enabled */
 #ifndef NDEBUG
     vk::DebugUtilsMessengerCreateInfoEXT debuggerSettings;
-    debuggerSettings.messageSeverity =
-        vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
-        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
-    debuggerSettings.messageType =
-        vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-        vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-        vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+    debuggerSettings.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+                                       vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+                                       vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
+    debuggerSettings.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                                   vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+                                   vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
     debuggerSettings.pfnUserCallback = debug_message_processor;
     debuggerSettings.pUserData = nullptr;
 
@@ -351,14 +332,11 @@ void Window::createInstance(void)
     std::vector<const char *> req_layers;
     for (auto &layerName : requestedValidationLayers)
     {
-        std::cout << "Requesting layer => " + std::string(layerName) << "\n";
         req_layers.push_back(layerName);
     }
     std::vector<const char *> req_inst_ext;
     for (auto &ext : instanceExtensions)
     {
-        std::cout << "Requesting instance extension => " + std::string(ext)
-                  << "\n";
         req_inst_ext.push_back(ext.c_str());
     }
 
@@ -367,8 +345,7 @@ void Window::createInstance(void)
     createInfo.pApplicationInfo = &appInfo;
     createInfo.enabledLayerCount = static_cast<uint32_t>(req_layers.size());
     createInfo.ppEnabledLayerNames = req_layers.data();
-    createInfo.enabledExtensionCount =
-        static_cast<uint32_t>(req_inst_ext.size());
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
     createInfo.ppEnabledExtensionNames = req_inst_ext.data();
 #endif
 #ifdef NDEBUG /* Debugging disabled */
@@ -380,8 +357,7 @@ void Window::createInstance(void)
 
     vk::InstanceCreateInfo createInfo;
     createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledExtensionCount =
-        static_cast<uint32_t>(req_inst_ext.size());
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
     createInfo.ppEnabledExtensionNames = req_inst_ext.data();
 #endif
 
@@ -413,20 +389,17 @@ void Window::createLogicalDevice(void)
     std::vector<const char *> enabledExtensions;
     for (const auto &req : requestedLogicalDeviceExtensions)
     {
-        std::cout << "Requesting => " << req << "\n";
         enabledExtensions.push_back(req.c_str());
     }
     vk::DeviceCreateInfo deviceCreateInfo;
     deviceCreateInfo.pNext = &physicalFeatures2;
-    deviceCreateInfo.queueCreateInfoCount =
-        static_cast<uint32_t>(queueCreateInfos.size());
+    deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
 
     // if pnext is phys features2, must be nullptr
     // device_create_info.pEnabledFeatures = &physical_features;
 
-    deviceCreateInfo.enabledExtensionCount =
-        static_cast<uint32_t>(enabledExtensions.size());
+    deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data();
 
     // create logical device
@@ -492,8 +465,8 @@ void Window::setupDepthStencil(void)
 
     vk::MemoryAllocateInfo allocInfo;
     allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = getMemoryType(
-        memReq.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    allocInfo.memoryTypeIndex =
+        getMemoryType(memReq.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     // allocate depth stencil image memory
     depthStencil.mem = logicalDevice.allocateMemory(allocInfo);
@@ -515,8 +488,7 @@ void Window::setupDepthStencil(void)
     // if physical device supports high enough format add stenciling
     if (swapchain.depthFormat >= vk::Format::eD16UnormS8Uint)
     {
-        viewInfo.subresourceRange.aspectMask |=
-            vk::ImageAspectFlagBits::eStencil;
+        viewInfo.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
     }
 
     depthStencil.view = logicalDevice.createImageView(viewInfo);
@@ -544,8 +516,7 @@ void Window::setupRenderPass(void)
     coreAttachments[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
     coreAttachments[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
     coreAttachments[1].initialLayout = vk::ImageLayout::eUndefined;
-    coreAttachments[1].finalLayout =
-        vk::ImageLayout::eDepthStencilAttachmentOptimal;
+    coreAttachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
     /*
         Core render references
@@ -572,35 +543,24 @@ void Window::setupRenderPass(void)
     coreDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
     coreDependencies[0].dstSubpass = 0;
     coreDependencies[0].srcStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
-    coreDependencies[0].dstStageMask =
-        vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    coreDependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
     coreDependencies[0].srcAccessMask = vk::AccessFlagBits::eMemoryRead;
     coreDependencies[0].dstAccessMask =
-        vk::AccessFlagBits::eColorAttachmentRead |
-        vk::AccessFlagBits::eColorAttachmentWrite;
+        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
     coreDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
     vk::RenderPassCreateInfo coreRenderPassInfo;
-    coreRenderPassInfo.attachmentCount =
-        static_cast<uint32_t>(coreAttachments.size());
+    coreRenderPassInfo.attachmentCount = static_cast<uint32_t>(coreAttachments.size());
     coreRenderPassInfo.pAttachments = coreAttachments.data();
-    coreRenderPassInfo.subpassCount =
-        static_cast<uint32_t>(coreSubpasses.size());
+    coreRenderPassInfo.subpassCount = static_cast<uint32_t>(coreSubpasses.size());
     coreRenderPassInfo.pSubpasses = coreSubpasses.data();
-    coreRenderPassInfo.dependencyCount =
-        static_cast<uint32_t>(coreDependencies.size());
+    coreRenderPassInfo.dependencyCount = static_cast<uint32_t>(coreDependencies.size());
     coreRenderPassInfo.pDependencies = coreDependencies.data();
 
-    std::cout << "Creating render pass for core renderer...\nAttachments => " +
-                     std::to_string(coreAttachments.size()) +
-                     "\nSubpasses => " + std::to_string(coreSubpasses.size()) +
-                     "\nDependencies => " +
-                     std::to_string(coreDependencies.size()) + "\n";
-    vk::RenderPass tempCore =
-        logicalDevice.createRenderPass(coreRenderPassInfo);
+    vk::RenderPass tempCore = logicalDevice.createRenderPass(coreRenderPassInfo);
 
     renderPasses.insert({
-        "core",
+        eCore,
         std::move(tempCore),
     });
     return;
@@ -629,9 +589,8 @@ void Window::setupFramebuffer(void)
 
     // core engine render will use color attachment buffer & depth buffer
     vk::FramebufferCreateInfo coreFrameInfo;
-    coreFrameInfo.renderPass = renderPasses.at("core");
-    coreFrameInfo.attachmentCount =
-        static_cast<uint32_t>(coreAttachments.size());
+    coreFrameInfo.renderPass = renderPasses.at(eCore);
+    coreFrameInfo.attachmentCount = static_cast<uint32_t>(coreAttachments.size());
     coreFrameInfo.pAttachments = coreAttachments.data();
     coreFrameInfo.width = swapchain.swapExtent.width;
     coreFrameInfo.height = swapchain.swapExtent.height;
@@ -642,11 +601,11 @@ void Window::setupFramebuffer(void)
     for (size_t i = 0; i < coreFramebuffers.size(); i++)
     {
         if (!swapchain.buffers.at(i).image)
-            throw std::runtime_error("Swapchain buffer at index " +
-                                     std::to_string(i) + " has nullptr image");
+            throw std::runtime_error("Swapchain buffer at index " + std::to_string(i) +
+                                     " has nullptr image");
         if (!swapchain.buffers.at(i).view)
-            throw std::runtime_error("Swapchain buffer at index " +
-                                     std::to_string(i) + " has nullptr view");
+            throw std::runtime_error("Swapchain buffer at index " + std::to_string(i) +
+                                     " has nullptr view");
         // Assign each swapchain image to a frame buffer
         coreAttachments[0] = swapchain.buffers.at(i).view;
 
@@ -657,8 +616,7 @@ void Window::setupFramebuffer(void)
 
 void Window::checkValidationSupport(void)
 {
-    std::vector<vk::LayerProperties> enumeratedInstLayers =
-        vk::enumerateInstanceLayerProperties();
+    std::vector<vk::LayerProperties> enumeratedInstLayers = vk::enumerateInstanceLayerProperties();
 
     if (enumeratedInstLayers.size() == 0 && !requestedValidationLayers.empty())
         throw std::runtime_error("No supported validation layers found");
@@ -702,20 +660,17 @@ void Window::checkInstanceExt(void)
         vk::enumerateInstanceExtensionProperties();
 
     // use f_req vector for instance extensions
-    if (enumeratedInstExtensions.size() < 1 &&
-        !requestedInstanceExtensions.empty())
+    if (enumeratedInstExtensions.size() < 1 && !requestedInstanceExtensions.empty())
         throw std::runtime_error("No instance extensions found");
 
-    std::string prelude =
-        "The following instance extensions were not found...\n";
+    std::string prelude = "The following instance extensions were not found...\n";
     std::string failed;
     for (const auto &reqInstExtensionName : requestedInstanceExtensions)
     {
         bool match = false;
         for (const auto &availableExtension : enumeratedInstExtensions)
         {
-            if (strcmp(reqInstExtensionName,
-                       availableExtension.extensionName) == 0)
+            if (strcmp(reqInstExtensionName, availableExtension.extensionName) == 0)
             {
                 match = true;
                 break;
@@ -739,14 +694,12 @@ void Window::checkInstanceExt(void)
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(
     VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
     [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
-    const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
-    [[maybe_unused]] void *p_UserData)
+    const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData, [[maybe_unused]] void *p_UserData)
 {
     if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
     {
         std::ostringstream oss;
-        oss << "Vulkan Performance Validation => "
-            << p_CallbackData->messageIdNumber << ", "
+        oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
             << p_CallbackData->pMessageIdName << "\n"
             << p_CallbackData->pMessage << "\n\n";
         std::cout << oss.str();
@@ -803,7 +756,9 @@ std::vector<char> Window::readFile(std::string p_Filename)
     // check if file exists
     try
     {
-        std::filesystem::exists(p_Filename);
+        if (!std::filesystem::exists(p_Filename))
+            throw std::runtime_error("Shader file " + p_Filename + " does not exist");
+
         file.open(p_Filename, std::ios::ate | std::ios::binary);
 
         if (!file.is_open())
@@ -841,28 +796,25 @@ std::vector<char> Window::readFile(std::string p_Filename)
 
     if (buffer.empty())
     {
-        throw std::runtime_error(
-            "File reading operation returned empty buffer :: shaders?");
+        throw std::runtime_error("File reading operation returned empty buffer :: shaders?");
     }
 
     return buffer;
 }
 
-vk::ShaderModule Window::createShaderModule(
-    const std::vector<char> &p_ShaderCharBuffer)
+vk::ShaderModule Window::createShaderModule(const std::vector<char> &p_ShaderCharBuffer)
 {
     vk::ShaderModuleCreateInfo moduleInfo;
     moduleInfo.codeSize = p_ShaderCharBuffer.size();
-    moduleInfo.pCode =
-        reinterpret_cast<const uint32_t *>(p_ShaderCharBuffer.data());
+    moduleInfo.pCode = reinterpret_cast<const uint32_t *>(p_ShaderCharBuffer.data());
 
     vk::ShaderModule module = logicalDevice.createShaderModule(moduleInfo);
 
     return module;
 }
 
-vk::CommandPool Window::createCommandPool(
-    uint32_t p_QueueIndex, vk::CommandPoolCreateFlags p_CreateFlags)
+vk::CommandPool Window::createCommandPool(uint32_t p_QueueIndex,
+                                          vk::CommandPoolCreateFlags p_CreateFlags)
 {
     vk::CommandPoolCreateInfo poolInfo;
     poolInfo.flags = p_CreateFlags;
@@ -874,15 +826,13 @@ vk::CommandPool Window::createCommandPool(
 vk::Format Window::getSupportedDepthFormat(void) const
 {
     std::vector<vk::Format> depthFormats = {
-        vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat,
-        vk::Format::eD24UnormS8Uint,  vk::Format::eD16UnormS8Uint,
-        vk::Format::eD16Unorm,
+        vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat, vk::Format::eD24UnormS8Uint,
+        vk::Format::eD16UnormS8Uint,  vk::Format::eD16Unorm,
     };
 
     for (auto &format : depthFormats)
     {
-        vk::FormatProperties formatProperties =
-            physicalDevice.getFormatProperties(format);
+        vk::FormatProperties formatProperties = physicalDevice.getFormatProperties(format);
         if (formatProperties.optimalTilingFeatures &
             vk::FormatFeatureFlagBits::eDepthStencilAttachment)
         {
@@ -903,8 +853,7 @@ uint32_t Window::getMemoryType(uint32_t p_MemoryTypeBits,
     {
         if ((p_MemoryTypeBits & 1) == 1)
         {
-            if ((physicalMemoryProperties.memoryTypes[i].propertyFlags &
-                 p_MemoryProperties))
+            if ((physicalMemoryProperties.memoryTypes[i].propertyFlags & p_MemoryProperties))
             {
                 if (p_IsMemoryTypeFound)
                 {

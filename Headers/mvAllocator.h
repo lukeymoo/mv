@@ -42,17 +42,20 @@ class Allocator
 
         // references
         Allocator *parentAllocator = nullptr;
-        std::vector<Container> *poolContainersArray =
-            nullptr; // pointer to container for all pools
+        std::vector<Container> *poolContainersArray = nullptr; // pointer to container for all pools
 
         // infos
-        uint32_t index = 0; // index to self in pools_array
-        uint32_t count = 0; // max sets requested from this pool on allocation
-        vk::DescriptorType
-            type; // type of descriptors this pool was created for
+        uint32_t index = 0;      // index to self in pools_array
+        uint32_t count = 0;      // max sets requested from this pool on allocation
+        vk::DescriptorType type; // type of descriptors this pool was created for
         Container *self = nullptr;
         Container::Status status = Status::Clear;
     };
+
+  private:
+    Container *retryAllocateSet(vk::DescriptorSetLayout p_DescriptorLayout,
+                                vk::DescriptorSet p_DestinationDescriptorSet,
+                                uint32_t p_PoolMaxDescriptorSets);
 
   public:
     Engine *engine = nullptr;
@@ -75,8 +78,7 @@ class Allocator
     ~Allocator();
 
     // Load model
-    void loadModel(std::vector<Model> *p_Models,
-                   std::vector<std::string> *p_ModelNames,
+    void loadModel(std::vector<Model> *p_Models, std::vector<std::string> *p_ModelNames,
                    const char *p_Filename);
 
     // Creates object with specified model data
@@ -89,13 +91,11 @@ class Allocator
 
     Container *allocatePool(uint32_t p_Count);
 
-    void createLayout(std::string p_LayoutName,
-                      vk::DescriptorType p_DescriptorType, uint32_t p_Count,
-                      vk::ShaderStageFlagBits p_ShaderStageFlags,
+    void createLayout(std::string p_LayoutName, vk::DescriptorType p_DescriptorType,
+                      uint32_t p_Count, vk::ShaderStageFlagBits p_ShaderStageFlags,
                       uint32_t p_Binding);
 
-    void createLayout(std::string p_LayoutName,
-                      vk::DescriptorSetLayoutCreateInfo &p_CreateInfo);
+    void createLayout(std::string p_LayoutName, vk::DescriptorSetLayoutCreateInfo &p_CreateInfo);
 
     vk::DescriptorSetLayout getLayout(std::string p_LayoutName);
 
@@ -110,8 +110,7 @@ class Allocator
         Allocate descriptor set
         Automatically uses latest allocated pool as source for allocation
     */
-    void allocateSet(Container *p_PoolContainer,
-                     vk::DescriptorSetLayout &p_DescriptorLayout,
+    void allocateSet(Container *p_PoolContainer, vk::DescriptorSetLayout &p_DescriptorLayout,
                      vk::DescriptorSet &p_DestinationSet);
 
     /*
@@ -119,8 +118,7 @@ class Allocator
         Automatically selects latest allocated pool
     */
     void updateSet(vk::DescriptorBufferInfo &p_BufferDescriptor,
-                   vk::DescriptorSet &p_TargetDescriptorSet,
-                   uint32_t p_DestinationBinding);
+                   vk::DescriptorSet &p_TargetDescriptorSet, uint32_t p_DestinationBinding);
 
     /*
         Bind buffer descriptor to target descriptor set
@@ -137,8 +135,7 @@ class Allocator
         Automatically selects latest allocated pool
     */
     void updateSet(vk::DescriptorImageInfo &p_ImageDescriptor,
-                   vk::DescriptorSet &p_TargetDescriptorSet,
-                   uint32_t p_DestinationBinding);
+                   vk::DescriptorSet &p_TargetDescriptorSet, uint32_t p_DestinationBinding);
 
     /*
         Bind image descriptor to a target descriptor set
@@ -154,10 +151,9 @@ class Allocator
     {
         uint32_t count = 1000; // max sets specified at pool allocation
 
-        // READ ONLY USE
-        Allocator *parentAllocator =
-            nullptr; // ptr to allocator all pools have been allocated with
-        std::vector<Allocator::Container>
-            *poolContainersArray; // ptr to container for all pools
+        // ptr to allocator all pools have been allocated with
+        Allocator *parentAllocator = nullptr;
+        // ptr to container for all pools
+        std::vector<Allocator::Container> *poolContainersArray = nullptr;
     };
 };

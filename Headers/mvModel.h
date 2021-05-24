@@ -102,8 +102,8 @@ class Object
 
         // construct rotation matrix from orbit angle
         glm::mat4 rotationMatrix = glm::mat4(1.0);
-        rotationMatrix = glm::rotate(rotationMatrix, glm::radians(p_OrbitAngle),
-                                     glm::vec3(0.0f, 1.0f, 0.0f));
+        rotationMatrix =
+            glm::rotate(rotationMatrix, glm::radians(p_OrbitAngle), glm::vec3(0.0f, 1.0f, 0.0f));
 
         // multiply our def vec
 
@@ -147,15 +147,14 @@ class Object
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0), position);
 
         glm::mat4 rotationMatrix = glm::mat4(1.0);
-        rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.x),
-                                     glm::vec3(1.0f, 0.0f, 0.0f));
-        rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.y),
-                                     glm::vec3(0.0f, 1.0f, 0.0f));
-        rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.z),
-                                     glm::vec3(0.0f, 0.0f, 1.0f));
+        rotationMatrix =
+            glm::rotate(rotationMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        rotationMatrix =
+            glm::rotate(rotationMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        rotationMatrix =
+            glm::rotate(rotationMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
-        glm::mat4 scaleMatrix =
-            glm::scale(glm::mat4(1.0), glm::vec3(scaleFactor));
+        glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0), glm::vec3(scaleFactor));
 
         matrix.model = translationMatrix * rotationMatrix * scaleMatrix;
 
@@ -170,11 +169,15 @@ class Object
     }
 };
 
+// Contains...
+// glm::vec4 position
+// glm::vec4 color
+// glm::vec4 uv
 struct Vertex
 {
-    glm::vec4 uv = {0.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec4 color = {0.0f, 0.0f, 0.0f, 0.0f};
     glm::vec4 position = {0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec4 color = {0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec4 uv = {0.0f, 0.0f, 0.0f, 0.0f};
 
     static vk::VertexInputBindingDescription getBindingDescription()
     {
@@ -185,11 +188,9 @@ struct Vertex
         return bindingDescription;
     }
 
-    static std::array<vk::VertexInputAttributeDescription, 3>
-    getAttributeDescriptions()
+    static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions()
     {
-        std::array<vk::VertexInputAttributeDescription, 3>
-            attributeDescriptions;
+        std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions;
 
         // position
         attributeDescriptions[0].binding = 0;
@@ -275,23 +276,22 @@ class Model
     // { {vertex offset, Texture vkDescriptorSet index}, { Index start,
     // Index count } } texture descriptor set is either a valid index to
     // textureDescriptors or -1
-    std::vector<
-        std::pair<std::pair<uint32_t, int>, std::pair<uint32_t, uint32_t>>>
-        bufferOffsets;
+    std::vector<std::pair<std::pair<uint32_t, int>, std::pair<uint32_t, uint32_t>>> bufferOffsets;
     std::unique_ptr<std::vector<struct Mesh>> loadedMeshes;
     std::unique_ptr<std::vector<Texture>> loadedTextures;
 
-    void load(Engine *p_Engine, Allocator &p_DescriptorAllocator,
-              const char *p_Filename, bool p_OutputDebug = true);
+    void load(Engine *p_Engine, Allocator &p_DescriptorAllocator, const char *p_Filename,
+              bool p_OutputDebug = true);
 
     void processNode(Engine *p_Engine, aiNode *p_Node, const aiScene *p_Scene);
 
     Mesh processMesh(Engine *p_Engine, aiMesh *p_Mesh, const aiScene *p_Scene);
 
-    std::vector<Texture> loadMaterialTextures(
-        Engine *p_Engine, aiMaterial *p_Material, aiTextureType p_Type,
-        [[maybe_unused]] std::string p_TypeName,
-        [[maybe_unused]] const aiScene *p_Scene, int &p_MtlIndex);
+    std::vector<Texture> loadMaterialTextures(Engine *p_Engine, aiMaterial *p_Material,
+                                              aiTextureType p_Type,
+                                              [[maybe_unused]] std::string p_TypeName,
+                                              [[maybe_unused]] const aiScene *p_Scene,
+                                              int &p_MtlIndex);
 
     void bindBuffers(vk::CommandBuffer &p_CommandBuffer);
     void cleanup(Engine *p_Engine);

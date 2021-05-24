@@ -133,7 +133,9 @@ struct Camera
     void rotate(glm::vec3 p_Delta, float p_FrameDelta);
 
     void moveUp(void);
+    void moveUp(bool p_IsGoFast);
     void moveDown(void);
+    void moveDown(bool p_IsGoFast);
     void moveLeft(void);
     void moveRight(void);
     void moveForward(void);

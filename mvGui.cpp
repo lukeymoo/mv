@@ -7,7 +7,7 @@ GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, Camera *p_CameraHandler,
                        const vk::Instance &p_Instance, const vk::PhysicalDevice &p_PhysicalDevice,
                        const vk::Device &p_LogicalDevice, const Swap &p_MvSwap,
                        const vk::CommandPool &p_CommandPool, const vk::Queue &p_GraphicsQueue,
-                       std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+                       std::unordered_map<RenderPassType, vk::RenderPass> &p_RenderPassMap,
                        const vk::DescriptorPool &p_DescriptorPool)
 {
     this->ptrLogger = &logger;
@@ -25,39 +25,35 @@ GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, Camera *p_CameraHandler,
             }
         case eFreeLook:
             {
-                using enum MapModal::CameraItem::Type;
-                mapModal.cameraItem.selectedType = eFreeLook;
-                mapModal.cameraItem.select(eFreeLook);
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eFreeLook;
+                mapModal.cameraItem.select();
                 break;
             }
         case eThirdPerson:
             {
-                using enum MapModal::CameraItem::Type;
-                mapModal.cameraItem.selectedType = eThirdPerson;
-                mapModal.cameraItem.select(eThirdPerson);
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eThirdPerson;
+                mapModal.cameraItem.select();
                 break;
             }
         case eFirstPerson:
             {
-                using enum MapModal::CameraItem::Type;
-                mapModal.cameraItem.selectedType = eFirstPerson;
-                mapModal.cameraItem.select(eFirstPerson);
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eFirstPerson;
+                mapModal.cameraItem.select();
                 break;
             }
         case eIsometric:
             {
-                using enum MapModal::CameraItem::Type;
-                mapModal.cameraItem.selectedType = eIsometric;
-                mapModal.cameraItem.select(eIsometric);
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eIsometric;
+                mapModal.cameraItem.select();
                 break;
             }
     }
     if (!p_GLFWwindow)
         throw std::runtime_error("Invalid GLFW window handle passed to Gui handler");
-    else
-        window = p_GLFWwindow;
+
+    window = p_GLFWwindow;
     // Ensure gui not already in render pass map
-    if (p_RenderPassMap.find("gui") != p_RenderPassMap.end())
+    if (p_RenderPassMap.find(eImGui) != p_RenderPassMap.end())
     {
         logger.logMessage(LogHandler::MessagePriority::eWarning,
                           "ImGui already initialized, skipping...");
@@ -89,7 +85,7 @@ GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, Camera *p_CameraHandler,
     initInfo.MSAASamples = static_cast<VkSampleCountFlagBits>(vk::SampleCountFlagBits::e1);
 
     ImGui_ImplGlfw_InitForVulkan(p_GLFWwindow, true);
-    ImGui_ImplVulkan_Init(&initInfo, p_RenderPassMap.at("gui"));
+    ImGui_ImplVulkan_Init(&initInfo, p_RenderPassMap.at(eImGui));
 
     /*
       Upload ImGui render fonts
@@ -109,7 +105,7 @@ GuiHandler::~GuiHandler()
     return;
 }
 
-void GuiHandler::createRenderPass(std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+void GuiHandler::createRenderPass(std::unordered_map<RenderPassType, vk::RenderPass> &p_RenderPassMap,
                                   const vk::Device &p_LogicalDevice,
                                   const vk::Format &p_AttachmentColorFormat)
 {
@@ -159,7 +155,7 @@ void GuiHandler::createRenderPass(std::unordered_map<std::string, vk::RenderPass
     vk::RenderPass newPass = p_LogicalDevice.createRenderPass(guiRenderPassInfo);
 
     p_RenderPassMap.insert({
-        "gui",
+        eImGui,
         std::move(newPass),
     });
 
@@ -238,9 +234,9 @@ void GuiHandler::doRenderPass(const vk::RenderPass &p_RenderPass,
     return;
 }
 
-void GuiHandler::update([[maybe_unused]] GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent,
-                        float p_RenderDelta, float p_FrameDelta, uint32_t p_ModelCount,
-                        uint32_t p_ObjectCount, uint32_t p_VertexCount, uint32_t p_TriangleCount)
+void GuiHandler::update(const vk::Extent2D &p_SwapExtent, float p_RenderDelta, float p_FrameDelta,
+                        uint32_t p_ModelCount, uint32_t p_ObjectCount, uint32_t p_VertexCount,
+                        uint32_t p_TriangleCount)
 {
     /*
         Determine if should update engine status deltas

@@ -24,6 +24,7 @@ class Swap
   public:
     Swap(void);
     ~Swap();
+
     // creates vulkan surface & retreives basic info such as graphics queue
     // index
     void init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,

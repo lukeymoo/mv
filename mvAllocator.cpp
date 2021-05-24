@@ -138,39 +138,48 @@ void Allocator::allocateSet(vk::DescriptorSetLayout &p_DescriptorLayout,
 
     vk::Result result = engine->logicalDevice.allocateDescriptorSets(&allocInfo, &p_DestinationSet);
 
-    if (result == vk::Result::eSuccess)
+    switch (result)
     {
-        // ensure allocator index is up to date
-        currentPool = poolContainer->index;
-    }
-    else if (result == vk::Result::eErrorOutOfPoolMemory ||
-             result == vk::Result::eErrorFragmentedPool)
-    {
-        if (result == vk::Result::eErrorOutOfPoolMemory)
-        {
-            poolContainer->status = Container::Status::Full;
-        }
-        else
-        {
-            poolContainer->status = Container::Status::Fragmented;
-        }
-        // allocate new pool
-        auto newPool = allocatePool(poolContainer->count);
-        // use new pool to allocate set
-        allocateSet(newPool, p_DescriptorLayout, p_DestinationSet);
-        // change passed container to new one
-        poolContainer = newPool;
-    }
-    else
-    {
-        throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
-    }
+        using enum vk::Result;
+        case eSuccess:
+            {
+                // ensure allocator index is up to date
+                currentPool = poolContainer->index;
+                break;
+            }
+        case eErrorOutOfPoolMemory:
+            {
+                poolContainer->status = Container::Status::Full;
+                // allocate new pool
+                // use new pool to allocate set
+                // change passed container to new one
+                poolContainer =
+                    retryAllocateSet(p_DescriptorLayout, p_DestinationSet, poolContainer->count);
+                break;
+            }
+        case eErrorFragmentedPool:
+            {
+                poolContainer->status = Container::Status::Fragmented;
+                // allocate new pool
+                // use new pool to allocate set
+                // change passed container to new one
+                poolContainer =
+                    retryAllocateSet(p_DescriptorLayout, p_DestinationSet, poolContainer->count);
+                break;
+            }
+        default:
+            {
+                throw std::runtime_error(
+                    "Allocator failed to allocate descriptor set, fatal error");
+            }
+    };
     return;
 }
 
 void Allocator::allocateSet(Container *p_PoolContainer, vk::DescriptorSetLayout &p_DescriptorLayout,
                             vk::DescriptorSet &p_DestinationSet)
 {
+    // sanity check container object
     if (!p_PoolContainer)
         throw std::runtime_error("Invalid container passed to allocate set :: descriptor handler");
 
@@ -178,7 +187,6 @@ void Allocator::allocateSet(Container *p_PoolContainer, vk::DescriptorSetLayout 
     if (!p_PoolContainer->pool)
         throw std::runtime_error("No pool ever allocated, attempting to allocate descriptor set");
 
-    logger.logMessage("Allocating descriptor set");
     if (!p_DescriptorLayout)
     {
         std::ostringstream oss;
@@ -189,39 +197,58 @@ void Allocator::allocateSet(Container *p_PoolContainer, vk::DescriptorSetLayout 
         throw std::runtime_error(oss.str().c_str());
     }
 
+    logger.logMessage("Allocating descriptor set");
+
     vk::DescriptorSetAllocateInfo allocInfo;
     allocInfo.descriptorPool = p_PoolContainer->pool;
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &p_DescriptorLayout;
 
     vk::Result result = engine->logicalDevice.allocateDescriptorSets(&allocInfo, &p_DestinationSet);
-    if (result == vk::Result::eSuccess)
+    switch (result)
     {
-        // ensure allocator index is up to date
-        currentPool = p_PoolContainer->index;
-    }
-    else if (result == vk::Result::eErrorOutOfPoolMemory ||
-             result == vk::Result::eErrorFragmentedPool)
-    {
-        if (result == vk::Result::eErrorOutOfPoolMemory)
-        {
-            p_PoolContainer->status = Container::Status::Full;
-        }
-        else
-        {
-            p_PoolContainer->status = Container::Status::Fragmented;
-        }
-        // allocate new pool
-        auto newPool = allocatePool(p_PoolContainer->count);
-        // use new pool to allocate set
-        allocateSet(newPool, p_DescriptorLayout, p_DestinationSet);
-        // change passed container to new one
-        p_PoolContainer = newPool;
-    }
-    else
-    {
-        throw std::runtime_error("Allocator failed to allocate descriptor set, fatal error");
-    }
+        using enum vk::Result;
+        case eSuccess:
+            {
+                // ensure allocator index is up to date
+                currentPool = p_PoolContainer->index;
+                break;
+            }
+        case eErrorOutOfPoolMemory:
+            {
+                p_PoolContainer->status = Container::Status::Full;
+                // allocate new pool
+                // use new pool to allocate set
+                // change passed container to new one
+                p_PoolContainer =
+                    retryAllocateSet(p_DescriptorLayout, p_DestinationSet, p_PoolContainer->count);
+                break;
+            }
+        case eErrorFragmentedPool:
+            {
+                p_PoolContainer->status = Container::Status::Fragmented;
+                // allocate new pool
+                // use new pool to allocate set
+                // change passed container to new one
+                p_PoolContainer =
+                    retryAllocateSet(p_DescriptorLayout, p_DestinationSet, p_PoolContainer->count);
+                break;
+            }
+        default:
+            {
+                throw std::runtime_error(
+                    "Allocator failed to allocate descriptor set, fatal error");
+            }
+    };
+}
+
+Allocator::Container *Allocator::retryAllocateSet(vk::DescriptorSetLayout p_DescriptorLayout,
+                                                  vk::DescriptorSet p_DestinationDescriptorSet,
+                                                  uint32_t p_PoolMaxDescriptorSets)
+{
+    auto newPool = allocatePool(p_PoolMaxDescriptorSets);
+    allocateSet(newPool, p_DescriptorLayout, p_DestinationDescriptorSet);
+    return newPool;
 }
 
 void Allocator::updateSet(vk::DescriptorBufferInfo &p_BufferDescriptor,

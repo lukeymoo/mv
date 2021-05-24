@@ -10,6 +10,7 @@
 #include <iostream>
 #include <memory>
 
+#include "mvMisc.h"
 #include "mvInput.h"
 #include "mvSwap.h"
 
@@ -137,7 +138,7 @@ class Window
     vk::Device logicalDevice;
     vk::Queue graphicsQueue;
     vk::CommandPool commandPool;
-    std::unordered_map<std::string, vk::RenderPass> renderPasses;
+    std::unordered_map<RenderPassType, vk::RenderPass> renderPasses;
 
     Swap swapchain;
 

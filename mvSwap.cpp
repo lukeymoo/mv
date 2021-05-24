@@ -226,7 +226,6 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
     }
 
     // create swap chain
-    std::cout << "Logical Device => " << p_LogicalDevice << "\n";
     swapchain = p_LogicalDevice.createSwapchainKHR(swapInfo);
     if (!swapchain)
         throw std::runtime_error("Failed to create swapchain");
@@ -260,7 +259,6 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
         viewInfo.viewType = vk::ImageViewType::e2D;
 
         buffer.view = p_LogicalDevice.createImageView(viewInfo);
-        std::cout << "Creating swap image view => " << buffer.view << "\n";
     }
     return;
 }

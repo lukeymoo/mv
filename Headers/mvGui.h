@@ -15,8 +15,11 @@
 
 #include "mvHelper.h"
 #include "mvSwap.h"
+#include "mvMisc.h"
+
 
 struct Camera;
+
 class GuiHandler
 {
   public:
@@ -24,7 +27,7 @@ class GuiHandler
                const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
                const Swap &p_MvSwap, const vk::CommandPool &p_CommandPool,
                const vk::Queue &p_GraphicsQueue,
-               std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+               std::unordered_map<RenderPassType, vk::RenderPass> &p_RenderPassMap,
                const vk::DescriptorPool &p_DescriptorPool);
     ~GuiHandler();
 
@@ -117,6 +120,16 @@ class GuiHandler
                 }
                 return;
             }
+            inline void select(void)
+            {
+                deselectAllBut(selectedType);
+                for (auto &pair : typeMap)
+                {
+                    if (pair.first == selectedType)
+                        pair.second.second = true;
+                }
+                return;
+            }
             inline void deselectAll(void)
             {
                 for (auto &pair : typeMap)
@@ -198,9 +211,9 @@ class GuiHandler
 
   public:
     ImGuiIO &getIO(void);
-    void update(GLFWwindow *p_GLFWwindow, const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
-                float p_FrameDelta, uint32_t p_ModelCount, uint32_t p_ObjectCount,
-                uint32_t p_VertexCount, uint32_t p_TriangleCount);
+    void update(const vk::Extent2D &p_SwapExtent, float p_RenderDelta, float p_FrameDelta,
+                uint32_t p_ModelCount, uint32_t p_ObjectCount, uint32_t p_VertexCount,
+                uint32_t p_TriangleCount);
 
     std::vector<vk::Framebuffer> createFramebuffers(
         const vk::Device &p_LogicalDevice, const vk::RenderPass &p_GuiRenderPass,
@@ -215,7 +228,7 @@ class GuiHandler
     void cleanup(const vk::Device &p_LogicalDevice);
 
   private:
-    void createRenderPass(std::unordered_map<std::string, vk::RenderPass> &p_RenderPassMap,
+    void createRenderPass(std::unordered_map<RenderPassType, vk::RenderPass> &p_RenderPassMap,
                           const vk::Device &p_LogicalDevice,
                           const vk::Format &p_AttachmentColorFormat);
 

@@ -1,6 +1,14 @@
 #pragma once
 
+#include <vulkan/vulkan.hpp>
+
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <string>
 #include <vector>
+
+struct Vertex;
 
 class MapHandler
 {
@@ -14,12 +22,21 @@ class MapHandler
         eOpenSimplex,
     };
 
-    struct Coordinate
-    {
-        float x;
-        float y;
-        float z;
-    };
+    vk::Buffer vertexBuffer;
+    vk::DeviceMemory vertexMemory;
 
-    std::vector<Coordinate> generateNoise(NoiseType noiseType);
+    vk::Buffer indexBuffer;
+    vk::DeviceMemory indexMemory;
+
+    size_t vertexCount = 0;
+    size_t indexCount = 0;
+
+    void optimize(std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices);
+
+    // Returns vertex array & indices array
+    std::pair<std::vector<Vertex>, std::vector<uint32_t>> readHeightMap(std::string p_Filename);
+
+    void bindBuffer(vk::CommandBuffer& p_CommandBuffer);
+
+    void cleanup(const vk::Device& p_LogicalDevice);
 };

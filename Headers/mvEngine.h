@@ -33,15 +33,14 @@ class Engine : public Window
     Timer timer;
     Timer fps;
 
-    MapHandler mapHandler;
-    std::unique_ptr<Allocator> allocator; // descriptor pool/set manager
+    Camera camera;                                 // camera manager(view/proj matrix handler)
+    MapHandler mapHandler;                         // Map related methods
+    std::unique_ptr<Allocator> allocator;          // descriptor pool/set manager
     std::unique_ptr<Collection> collectionHandler; // model/obj manager
-    Camera camera;                   // camera manager(view/proj matrix handler)
-    std::unique_ptr<GuiHandler> gui; // ImGui manager
+    std::unique_ptr<GuiHandler> gui;               // ImGui manager
 
-    // Containers for pipelines
-    std::unordered_map<std::string, vk::Pipeline> pipelines;
-    std::unordered_map<std::string, vk::PipelineLayout> pipelineLayouts;
+    std::unordered_map<PipelineTypes, vk::Pipeline> pipelines;
+    std::unordered_map<PipelineTypes, vk::PipelineLayout> pipelineLayouts;
 
     void addNewModel(Container *pool, const char *filename);
 
@@ -55,16 +54,14 @@ class Engine : public Window
 
     // create buffer with Vulkan objects
     void createBuffer(vk::BufferUsageFlags p_BufferUsageFlags,
-                      vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                      vk::DeviceSize p_DeviceSize, vk::Buffer *p_VkBuffer,
-                      vk::DeviceMemory *p_DeviceMemory,
+                      vk::MemoryPropertyFlags p_MemoryPropertyFlags, vk::DeviceSize p_DeviceSize,
+                      vk::Buffer *p_VkBuffer, vk::DeviceMemory *p_DeviceMemory,
                       void *p_InitialData = nullptr) const;
 
     // create buffer with custom Buffer interface
     void createBuffer(vk::BufferUsageFlags p_BufferUsageFlags,
-                      vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                      MvBuffer *p_MvBuffer, vk::DeviceSize p_DeviceSize,
-                      void *p_InitialData = nullptr) const;
+                      vk::MemoryPropertyFlags p_MemoryPropertyFlags, MvBuffer *p_MvBuffer,
+                      vk::DeviceSize p_DeviceSize, void *p_InitialData = nullptr) const;
 
   protected:
     void prepareUniforms(void);

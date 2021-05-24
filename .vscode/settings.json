@@ -1,6 +1,6 @@
 {
-    "editor.formatOnSave": true,
-    "C_Cpp.clang_format_style": "file",
+    "editor.formatOnSave": false,
+    "C_Cpp.clang_format_style": "None",
     "files.associations": {
         "array": "cpp",
         "atomic": "cpp",
@@ -64,6 +64,7 @@
         "shared_mutex": "cpp",
         "stop_token": "cpp",
         "thread": "cpp",
-        "codecvt": "cpp"
+        "codecvt": "cpp",
+        "numbers": "cpp"
     }
 }

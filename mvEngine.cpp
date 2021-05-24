@@ -32,6 +32,9 @@ Engine::~Engine()
         }
     }
 
+    // cleanup map handler
+    mapHandler.cleanup(logicalDevice);
+
     // collection struct will handle cleanup of models & objs
     collectionHandler->cleanup();
     allocator->cleanup();
@@ -172,13 +175,51 @@ void Engine::go(void)
         Create and initialize ImGui handler
         Will create render pass & perform pre game loop ImGui initialization
     */
-    gui = std::make_unique<GuiHandler>(window, &camera, instance, physicalDevice, logicalDevice,
-                                       swapchain, commandPool, graphicsQueue, renderPasses,
+    gui = std::make_unique<GuiHandler>(window,
+                                       &camera,
+                                       instance,
+                                       physicalDevice,
+                                       logicalDevice,
+                                       swapchain,
+                                       commandPool,
+                                       graphicsQueue,
+                                       renderPasses,
                                        allocator->get()->pool);
 
-    guiFramebuffers =
-        gui->createFramebuffers(logicalDevice, renderPasses.at("gui"), swapchain.buffers,
-                                swapchain.swapExtent.width, swapchain.swapExtent.height);
+    guiFramebuffers = gui->createFramebuffers(logicalDevice,
+                                              renderPasses.at(eImGui),
+                                              swapchain.buffers,
+                                              swapchain.swapExtent.width,
+                                              swapchain.swapExtent.height);
+
+    try
+    {
+        auto [vertices, indices] = mapHandler.readHeightMap("heightmaps/test.png");
+        std::cout << "Vertices returned => " << std::to_string(vertices.size()) << "\n";
+
+        
+        using enum vk::MemoryPropertyFlagBits;
+
+        // Create vertex buffer
+        createBuffer(vk::BufferUsageFlagBits::eVertexBuffer,
+                    eHostCoherent | eHostVisible,
+                    vertices.size() * sizeof(Vertex),
+                    &mapHandler.vertexBuffer,
+                    &mapHandler.vertexMemory,
+                    vertices.data());
+        // Create index buffer
+        createBuffer(vk::BufferUsageFlagBits::eIndexBuffer,
+                    eHostCoherent | eHostVisible,
+                    indices.size() * sizeof(uint32_t),
+                    &mapHandler.indexBuffer,
+                    &mapHandler.indexMemory,
+                    indices.data());
+    }
+    catch (std::exception &e)
+    {
+        std::cout << ":: Fatal error reading heightmap :: \n" << e.what() << "\n";
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
 
     auto renderStart = chrono::now();
     auto renderStop = chrono::now();
@@ -231,26 +272,6 @@ void Engine::go(void)
                 // if drag enabled check for release
                 if (mouse.isDragging)
                 {
-                    // camera orbit
-                    // if (mouse.dragDeltaX > 0)
-                    // {
-                    //     camera.lerpOrbit(abs(mouse.dragDeltaX));
-                    // }
-                    // else if (mouse.dragDeltaX < 0)
-                    // {
-                    //     camera.lerpOrbit(-abs(mouse.dragDeltaX));
-                    // }
-
-                    // // camera pitch
-                    // if (mouse.dragDeltaY > 0)
-                    // {
-                    //     camera.lerpPitch(-abs(mouse.dragDeltaY));
-                    // }
-                    // else if (mouse.dragDeltaY < 0)
-                    // {
-                    //     camera.lerpPitch(abs(mouse.dragDeltaY));
-                    // }
-
                     camera.rotate({mouse.dragDeltaY, -mouse.dragDeltaX, 0.0f}, 1.0f);
 
                     mouse.storedOrbit = camera.orbitAngle;
@@ -259,24 +280,28 @@ void Engine::go(void)
                 }
 
                 // WASD
-                if (keyboard.isKeyState(GLFW_KEY_W))
-                    camera.move(camera.rotation.y, {0.0f, 0.0f, -1.0f},
-                                (keyboard.isKeyState(GLFW_KEY_LEFT_SHIFT)));
-                if (keyboard.isKeyState(GLFW_KEY_A))
-                    camera.move(camera.rotation.y, {-1.0f, 0.0f, 0.0f},
-                                (keyboard.isKeyState(GLFW_KEY_LEFT_SHIFT)));
-                if (keyboard.isKeyState(GLFW_KEY_S))
-                    camera.move(camera.rotation.y, {0.0f, 0.0f, 1.0f},
-                                (keyboard.isKeyState(GLFW_KEY_LEFT_SHIFT)));
-                if (keyboard.isKeyState(GLFW_KEY_D))
-                    camera.move(camera.rotation.y, {1.0f, 0.0f, 0.0f},
-                                (keyboard.isKeyState(GLFW_KEY_LEFT_SHIFT)));
+                if (keyboard.isKey(window, GLFW_KEY_W))
+                    camera.move(camera.rotation.y,
+                                {0.0f, 0.0f, -1.0f},
+                                (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
+                if (keyboard.isKey(window, GLFW_KEY_A))
+                    camera.move(camera.rotation.y,
+                                {-1.0f, 0.0f, 0.0f},
+                                (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
+                if (keyboard.isKey(window, GLFW_KEY_S))
+                    camera.move(camera.rotation.y,
+                                {0.0f, 0.0f, 1.0f},
+                                (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
+                if (keyboard.isKey(window, GLFW_KEY_D))
+                    camera.move(camera.rotation.y,
+                                {1.0f, 0.0f, 0.0f},
+                                (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
 
                 // space + alt
-                if (keyboard.isKeyState(GLFW_KEY_SPACE))
-                    camera.moveUp();
-                if (keyboard.isKeyState(GLFW_KEY_LEFT_ALT))
-                    camera.moveDown();
+                if (keyboard.isKey(window, GLFW_KEY_SPACE))
+                    camera.moveUp(keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT));
+                if (keyboard.isKey(window, GLFW_KEY_LEFT_ALT))
+                    camera.moveDown(keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT));
             }
 
             /*
@@ -480,12 +505,13 @@ void Engine::go(void)
             gui->newFrame();
 
             gui->update(
-                window, swapchain.swapExtent,
+                swapchain.swapExtent,
                 std::chrono::duration<float, std::ratio<1L, 1000L>>(renderStop - renderStart)
                     .count(),
                 std::chrono::duration<float, std::chrono::milliseconds::period>(deltaTime).count(),
                 static_cast<uint32_t>(collectionHandler->modelNames.size()),
-                collectionHandler->getObjectCount(), collectionHandler->getVertexCount(),
+                collectionHandler->getObjectCount(),
+                collectionHandler->getVertexCount(),
                 collectionHandler->getTriangleCount());
 
             gui->renderFrame();
@@ -516,19 +542,29 @@ void Engine::go(void)
 */
 void Engine::preparePipeline(void)
 {
+    using enum PipelineTypes;
     vk::DescriptorSetLayout uniformLayout = allocator->getLayout("uniform_layout");
     vk::DescriptorSetLayout samplerLayout = allocator->getLayout("sampler_layout");
 
     std::vector<vk::DescriptorSetLayout> layoutWSampler = {
-        uniformLayout,
-        uniformLayout,
-        uniformLayout,
-        samplerLayout,
+        uniformLayout, // Object uniform
+        uniformLayout, // View uniform
+        uniformLayout, // Projection uniform
+        samplerLayout, // Object texture sampler
     };
     std::vector<vk::DescriptorSetLayout> layoutNoSampler = {
-        uniformLayout,
-        uniformLayout,
-        uniformLayout,
+        uniformLayout, // Object uniform
+        uniformLayout, // View uniform
+        uniformLayout, // Projection uniform
+    };
+    std::vector<vk::DescriptorSetLayout> layoutTerrainMeshWSampler = {
+        uniformLayout, // View uniform
+        uniformLayout, // Projection uniform
+        samplerLayout, // Terrain Texture Sampler
+    };
+    std::vector<vk::DescriptorSetLayout> layoutTerrainMeshNoSampler = {
+        uniformLayout, // View uniform
+        uniformLayout, // Projection uniform
     };
 
     // Pipeline for models with textures
@@ -541,14 +577,41 @@ void Engine::preparePipeline(void)
     pLineNoSamplerInfo.setLayoutCount = static_cast<uint32_t>(layoutNoSampler.size());
     pLineNoSamplerInfo.pSetLayouts = layoutNoSampler.data();
 
+    // Pipeline for terrain vertices
+    vk::PipelineLayoutCreateInfo pLineTerrainMeshNoSamplerInfo;
+    pLineTerrainMeshNoSamplerInfo.setLayoutCount = static_cast<uint32_t>(layoutTerrainMeshNoSampler.size());
+    pLineTerrainMeshNoSamplerInfo.pSetLayouts = layoutTerrainMeshNoSampler.data();
+
+    vk::PipelineLayoutCreateInfo pLineTerrainMeshWSamplerInfo;
+    pLineTerrainMeshWSamplerInfo.setLayoutCount = static_cast<uint32_t>(layoutTerrainMeshWSampler.size());
+    pLineTerrainMeshWSamplerInfo.pSetLayouts = layoutTerrainMeshWSampler.data();
+
+    // Model, View, Projection
+    // Color, UV, Sampler
     pipelineLayouts.insert({
-        "sampler",
+        eMVPWSampler,
         logicalDevice.createPipelineLayout(pLineWithSamplerInfo),
     });
 
+    // Model, View, Projection
+    // Color, UV
     pipelineLayouts.insert({
-        "no_sampler",
+        eMVPNoSampler,
         logicalDevice.createPipelineLayout(pLineNoSamplerInfo),
+    });
+
+    // View, Projection
+    // Color, UV, Sampler
+    pipelineLayouts.insert({
+        eVPWSampler,
+        logicalDevice.createPipelineLayout(pLineTerrainMeshWSamplerInfo)
+    });
+
+    // View, Projection
+    // Color, UV
+    pipelineLayouts.insert({
+        eVPNoSampler,
+        logicalDevice.createPipelineLayout(pLineTerrainMeshNoSamplerInfo)
     });
 
     auto bindingDescription = Vertex::getBindingDescription();
@@ -564,12 +627,12 @@ void Engine::preparePipeline(void)
     iaState.topology = vk::PrimitiveTopology::eTriangleList;
 
     vk::PipelineInputAssemblyStateCreateInfo debugIaState; // used for dynamic states
-    debugIaState.topology = vk::PrimitiveTopology::eLineList;
+    debugIaState.topology = vk::PrimitiveTopology::ePointList;
 
     vk::PipelineRasterizationStateCreateInfo rsState;
     rsState.depthClampEnable = VK_FALSE;
     rsState.rasterizerDiscardEnable = VK_FALSE;
-    rsState.polygonMode = vk::PolygonMode::eFill;
+    rsState.polygonMode = vk::PolygonMode::ePoint;
     rsState.cullMode = vk::CullModeFlagBits::eNone;
     rsState.frontFace = vk::FrontFace::eClockwise;
     rsState.depthBiasEnable = VK_FALSE;
@@ -615,49 +678,170 @@ void Engine::preparePipeline(void)
     msState.rasterizationSamples = vk::SampleCountFlagBits::e1;
 
     // Load shaders
-    auto vertexShader = readFile("shaders/vertex.spv");
-    auto fragmentShader = readFile("shaders/fragment.spv");
-    auto fragmentShaderNoSampler = readFile("shaders/fragment_no_sampler.spv");
+    auto vsMVP = readFile("shaders/vsMVP.spv");
+    auto vsVP = readFile("shaders/vsVP.spv");
+
+    auto fsMVPSampler = readFile("shaders/fsMVPSampler.spv");
+    auto fsMVPNoSampler = readFile("shaders/fsMVPNoSampler.spv");
+
+    auto fsVPSampler = readFile("shaders/fsVPSampler.spv");
+    auto fsVPNoSampler = readFile("shaders/fsVPNoSampler.spv");
 
     // Ensure we have files
-    if (vertexShader.empty() || fragmentShader.empty() || fragmentShaderNoSampler.empty())
-    {
+    if (vsMVP.empty()           ||
+        vsVP.empty()            ||
+        fsMVPSampler.empty()    ||
+        fsMVPNoSampler.empty()  ||
+        fsVPSampler.empty()     ||
+        fsVPNoSampler.empty())
         throw std::runtime_error("Failed to load fragment or vertex shader spv files");
+
+    vk::ShaderModule vsModuleMVP = createShaderModule(vsMVP);
+    vk::ShaderModule vsModuleVP = createShaderModule(vsVP);
+
+    vk::ShaderModule fsModuleMVPSampler = createShaderModule(fsMVPSampler);
+    vk::ShaderModule fsModuleMVPNoSampler = createShaderModule(fsMVPNoSampler);
+
+    vk::ShaderModule fsModuleVPSampler = createShaderModule(fsVPSampler);
+    vk::ShaderModule fsModuleVPNoSampler = createShaderModule(fsVPNoSampler);
+
+    /*
+        VERTEX SHADER
+        MODEL VIEW PROJECTION MATRIX
+    */
+    vk::PipelineShaderStageCreateInfo vsStageInfoMVP;
+    vsStageInfoMVP.stage = vk::ShaderStageFlagBits::eVertex;
+    vsStageInfoMVP.module = vsModuleMVP;
+    vsStageInfoMVP.pName = "main";
+    vsStageInfoMVP.pSpecializationInfo = nullptr;
+
+    /*
+        VERTEX SHADER
+        VIEW PROJECTION MATRIX
+    */
+    vk::PipelineShaderStageCreateInfo vsStageInfoVP;
+    vsStageInfoVP.stage = vk::ShaderStageFlagBits::eVertex;
+    vsStageInfoVP.module = vsModuleVP;
+    vsStageInfoVP.pName = "main";
+    vsStageInfoVP.pSpecializationInfo = nullptr;
+
+    /*
+        FRAGMENT SHADER
+        COLOR, UV, SAMPLER -- USE MVP VERTEX SHADER
+    */
+    vk::PipelineShaderStageCreateInfo fsStageInfoMVPSampler;
+    fsStageInfoMVPSampler.stage = vk::ShaderStageFlagBits::eFragment;
+    fsStageInfoMVPSampler.module = fsModuleMVPSampler;
+    fsStageInfoMVPSampler.pName = "main";
+    fsStageInfoMVPSampler.pSpecializationInfo = nullptr;
+
+    /*
+        FRAGMENT SHADER
+        COLOR, UV -- USE MVP VERTEX SHADER
+    */
+    vk::PipelineShaderStageCreateInfo fsStageInfoMVPNoSampler;
+    fsStageInfoMVPNoSampler.stage = vk::ShaderStageFlagBits::eFragment;
+    fsStageInfoMVPNoSampler.module = fsModuleMVPNoSampler;
+    fsStageInfoMVPNoSampler.pName = "main";
+    fsStageInfoMVPNoSampler.pSpecializationInfo = nullptr;
+
+    /*
+        FRAGMENT SHADER
+        COLOR, UV, SAMPLER -- USE VP VERTEX SHADER
+    */
+   vk::PipelineShaderStageCreateInfo fsStageInfoVPSampler;
+   fsStageInfoVPSampler.stage = vk::ShaderStageFlagBits::eFragment;
+   fsStageInfoVPSampler.module = fsModuleVPSampler;
+   fsStageInfoVPSampler.pName = "main";
+   fsStageInfoVPSampler.pSpecializationInfo = nullptr;
+
+   /*
+        FRAGMENT SHADER
+        COLOR, UV -- USE VP VERTEX SHADER
+   */
+  vk::PipelineShaderStageCreateInfo fsStageInfoVPNoSampler;
+  fsStageInfoVPNoSampler.stage = vk::ShaderStageFlagBits::eFragment;
+  fsStageInfoVPNoSampler.module = fsModuleVPNoSampler;
+  fsStageInfoVPNoSampler.pName = "main";
+  fsStageInfoVPNoSampler.pSpecializationInfo = nullptr;
+
+    // Vertex | Fragment
+    // M/V/P uniforms | Color, UV, Sampler
+    std::vector<vk::PipelineShaderStageCreateInfo> ssMVPWSampler = {
+        vsStageInfoMVP,
+        fsStageInfoMVPSampler
+    };
+    std::vector<vk::PipelineShaderStageCreateInfo> ssMVPNoSampler = {
+        vsStageInfoMVP,
+        fsStageInfoMVPNoSampler
+    };
+    // Vertex | Fragment
+    // V/P uniforms | Color, UV, Sampler
+    std::vector<vk::PipelineShaderStageCreateInfo> ssVPWSampler = {
+        vsStageInfoVP,
+        fsStageInfoVPSampler
+    };
+    // Vertex | Fragment
+    // V/P uniforms | Color, UV
+    std::vector<vk::PipelineShaderStageCreateInfo> ssVPNoSampler = {
+        vsStageInfoVP,
+        fsStageInfoVPNoSampler
+    };
+
+    // Create pipeline for terrain mesh W Sampler
+    // V/P uniforms + color, uv, sampler
+    vk::GraphicsPipelineCreateInfo plVPSamplerInfo;
+    plVPSamplerInfo.renderPass = renderPasses.at(eCore);
+    plVPSamplerInfo.layout = pipelineLayouts.at(eVPWSampler);
+    plVPSamplerInfo.pInputAssemblyState = &iaState;
+    plVPSamplerInfo.pRasterizationState = &rsState;
+    plVPSamplerInfo.pColorBlendState = &cbState;
+    plVPSamplerInfo.pDepthStencilState = &dsState;
+    plVPSamplerInfo.pViewportState = &vpState;
+    plVPSamplerInfo.pMultisampleState = &msState;
+    plVPSamplerInfo.stageCount = static_cast<uint32_t>(ssVPWSampler.size());
+    plVPSamplerInfo.pStages = ssVPWSampler.data();
+    plVPSamplerInfo.pVertexInputState = &viState;
+    plVPSamplerInfo.pDynamicState = nullptr;
+
+    {
+        vk::ResultValue result = logicalDevice.createGraphicsPipeline(nullptr, plVPSamplerInfo);
+        if(result.result != vk::Result::eSuccess)
+            throw std::runtime_error("Failed to create graphics pipeline for terrain mesh w/sampler");
+        
+        pipelines.insert({
+            eVPWSampler,
+            result.value
+        });
     }
 
-    vk::ShaderModule vertexShaderModule = createShaderModule(vertexShader);
-    vk::ShaderModule fragmentShaderModule = createShaderModule(fragmentShader);
-    vk::ShaderModule fragmentShaderNoSamplerModule = createShaderModule(fragmentShaderNoSampler);
+    // Create pipeline for terrain mesh NO sampler
+    // V/P uniforms + color, uv
+    vk::GraphicsPipelineCreateInfo plVPNoSamplerInfo;
+    plVPNoSamplerInfo.renderPass = renderPasses.at(eCore);
+    plVPNoSamplerInfo.layout = pipelineLayouts.at(eVPNoSampler);
+    plVPNoSamplerInfo.pInputAssemblyState = &iaState;
+    // plVPNoSamplerInfo.pInputAssemblyState = &debugIaState;
+    plVPNoSamplerInfo.pRasterizationState = &rsState;
+    plVPNoSamplerInfo.pColorBlendState = &cbState;
+    plVPNoSamplerInfo.pDepthStencilState = &dsState;
+    plVPNoSamplerInfo.pViewportState = &vpState;
+    plVPNoSamplerInfo.pMultisampleState = &msState;
+    plVPNoSamplerInfo.stageCount = static_cast<uint32_t>(ssVPNoSampler.size());
+    plVPNoSamplerInfo.pStages = ssVPNoSampler.data();
+    plVPNoSamplerInfo.pVertexInputState = &viState;
+    plVPNoSamplerInfo.pDynamicState = nullptr;
 
-    // describe vertex shader stage
-    vk::PipelineShaderStageCreateInfo vertexShaderStageInfo;
-    vertexShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
-    vertexShaderStageInfo.module = vertexShaderModule;
-    vertexShaderStageInfo.pName = "main";
-    vertexShaderStageInfo.pSpecializationInfo = nullptr;
+    {
+        vk::ResultValue result = logicalDevice.createGraphicsPipeline(nullptr, plVPNoSamplerInfo);
+        if(result.result != vk::Result::eSuccess)
+            throw std::runtime_error("Failed to create graphics pipeline for terrain mesh NO sampler");
 
-    // describe fragment shader stage WITH sampler
-    vk::PipelineShaderStageCreateInfo fragmentShaderStageInfo;
-    fragmentShaderStageInfo.stage = vk::ShaderStageFlagBits::eFragment;
-    fragmentShaderStageInfo.module = fragmentShaderModule;
-    fragmentShaderStageInfo.pName = "main";
-    fragmentShaderStageInfo.pSpecializationInfo = nullptr;
-
-    // fragment shader stage NO sampler
-    vk::PipelineShaderStageCreateInfo fragmentShaderStageNoSamplerInfo;
-    fragmentShaderStageNoSamplerInfo.stage = vk::ShaderStageFlagBits::eFragment;
-    fragmentShaderStageNoSamplerInfo.module = fragmentShaderNoSamplerModule;
-    fragmentShaderStageNoSamplerInfo.pName = "main";
-    fragmentShaderStageNoSamplerInfo.pSpecializationInfo = nullptr;
-
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = {
-        vertexShaderStageInfo,
-        fragmentShaderStageInfo,
-    };
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStagesNoSampler = {
-        vertexShaderStageInfo,
-        fragmentShaderStageNoSamplerInfo,
-    };
+        pipelines.insert({
+            eVPNoSampler,
+            result.value
+        });
+    }
 
     /*
       Dynamic state extension
@@ -670,87 +854,101 @@ void Engine::preparePipeline(void)
     dynamicInfo.pDynamicStates = dynStates.data();
 
     // create pipeline WITH sampler
-    vk::GraphicsPipelineCreateInfo pipelineWSamplerInfo;
-    pipelineWSamplerInfo.renderPass = renderPasses.at("core");
-    pipelineWSamplerInfo.layout = pipelineLayouts.at("sampler");
-    pipelineWSamplerInfo.pInputAssemblyState = &iaState;
-    pipelineWSamplerInfo.pRasterizationState = &rsState;
-    pipelineWSamplerInfo.pColorBlendState = &cbState;
-    pipelineWSamplerInfo.pDepthStencilState = &dsState;
-    pipelineWSamplerInfo.pViewportState = &vpState;
-    pipelineWSamplerInfo.pMultisampleState = &msState;
-    pipelineWSamplerInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-    pipelineWSamplerInfo.pStages = shaderStages.data();
-    pipelineWSamplerInfo.pVertexInputState = &viState;
-    pipelineWSamplerInfo.pDynamicState = nullptr;
+    // M/V/P uniforms + color, uv, sampler
+    vk::GraphicsPipelineCreateInfo plMVPSamplerInfo;
+    plMVPSamplerInfo.renderPass = renderPasses.at(eCore);
+    plMVPSamplerInfo.layout = pipelineLayouts.at(eMVPWSampler);
+    plMVPSamplerInfo.pInputAssemblyState = &iaState;
+    plMVPSamplerInfo.pRasterizationState = &rsState;
+    plMVPSamplerInfo.pColorBlendState = &cbState;
+    plMVPSamplerInfo.pDepthStencilState = &dsState;
+    plMVPSamplerInfo.pViewportState = &vpState;
+    plMVPSamplerInfo.pMultisampleState = &msState;
+    plMVPSamplerInfo.stageCount = static_cast<uint32_t>(ssMVPWSampler.size());
+    plMVPSamplerInfo.pStages = ssMVPWSampler.data();
+    plMVPSamplerInfo.pVertexInputState = &viState;
+    plMVPSamplerInfo.pDynamicState = nullptr;
 
     /* Graphics pipeline with sampler -- NO dynamic states */
-    vk::ResultValue result = logicalDevice.createGraphicsPipeline(nullptr, pipelineWSamplerInfo);
-    if (result.result != vk::Result::eSuccess)
-        throw std::runtime_error("Failed to create graphics pipeline with sampler");
+    {
+        vk::ResultValue result = logicalDevice.createGraphicsPipeline(nullptr, plMVPSamplerInfo);
+        if (result.result != vk::Result::eSuccess)
+            throw std::runtime_error("Failed to create graphics pipeline with sampler");
 
-    pipelines.insert({
-        "sampler",
-        result.value,
-    });
+        pipelines.insert({
+            eMVPWSampler,
+            result.value,
+        });
+    }
 
-    pipelineWSamplerInfo.pInputAssemblyState = &debugIaState;
-    pipelineWSamplerInfo.pDynamicState = &dynamicInfo;
+    plMVPSamplerInfo.pInputAssemblyState = &debugIaState;
+    plMVPSamplerInfo.pDynamicState = &dynamicInfo;
 
     /* Graphics pipeline with sampler -- WITH dynamic states */
-    result = logicalDevice.createGraphicsPipeline(nullptr, pipelineWSamplerInfo);
-    if (result.result != vk::Result::eSuccess)
-        throw std::runtime_error(
-            "Failed to create graphics pipeline with sampler & dynamic states");
+    {
+        vk::ResultValue result = logicalDevice.createGraphicsPipeline(nullptr, plMVPSamplerInfo);
+        if (result.result != vk::Result::eSuccess)
+            throw std::runtime_error(
+                "Failed to create graphics pipeline with sampler & dynamic states");
 
-    pipelines.insert({
-        "sampler_dynamic",
-        result.value,
-    });
+        pipelines.insert({
+            eMVPWSamplerDynamic,
+            result.value,
+        });
+    }
 
     // Create pipeline with NO sampler
-    vk::GraphicsPipelineCreateInfo pipelineNoSamplerInfo;
-    pipelineNoSamplerInfo.renderPass = renderPasses.at("core");
-    pipelineNoSamplerInfo.layout = pipelineLayouts.at("no_sampler");
-    pipelineNoSamplerInfo.pInputAssemblyState = &iaState;
-    pipelineNoSamplerInfo.pRasterizationState = &rsState;
-    pipelineNoSamplerInfo.pColorBlendState = &cbState;
-    pipelineNoSamplerInfo.pDepthStencilState = &dsState;
-    pipelineNoSamplerInfo.pViewportState = &vpState;
-    pipelineNoSamplerInfo.pMultisampleState = &msState;
-    pipelineNoSamplerInfo.stageCount = static_cast<uint32_t>(shaderStagesNoSampler.size());
-    pipelineNoSamplerInfo.pStages = shaderStagesNoSampler.data();
-    pipelineNoSamplerInfo.pVertexInputState = &viState;
-    pipelineNoSamplerInfo.pDynamicState = nullptr;
+    // M/V/P uniforms + color, uv
+    vk::GraphicsPipelineCreateInfo plMVPNoSamplerInfo;
+    plMVPNoSamplerInfo.renderPass = renderPasses.at(eCore);
+    plMVPNoSamplerInfo.layout = pipelineLayouts.at(eMVPNoSampler);
+    plMVPNoSamplerInfo.pInputAssemblyState = &iaState;
+    plMVPNoSamplerInfo.pRasterizationState = &rsState;
+    plMVPNoSamplerInfo.pColorBlendState = &cbState;
+    plMVPNoSamplerInfo.pDepthStencilState = &dsState;
+    plMVPNoSamplerInfo.pViewportState = &vpState;
+    plMVPNoSamplerInfo.pMultisampleState = &msState;
+    plMVPNoSamplerInfo.stageCount = static_cast<uint32_t>(ssMVPNoSampler.size());
+    plMVPNoSamplerInfo.pStages = ssMVPNoSampler.data();
+    plMVPNoSamplerInfo.pVertexInputState = &viState;
+    plMVPNoSamplerInfo.pDynamicState = nullptr;
 
     // Create graphics pipeline NO sampler
-    result = logicalDevice.createGraphicsPipeline(nullptr, pipelineNoSamplerInfo);
-    if (result.result != vk::Result::eSuccess)
-        throw std::runtime_error("Failed to create graphics pipeline with no sampler");
+    {
+        vk::ResultValue result = logicalDevice.createGraphicsPipeline(nullptr, plMVPNoSamplerInfo);
+        if (result.result != vk::Result::eSuccess)
+            throw std::runtime_error("Failed to create graphics pipeline with no sampler");
 
-    pipelines.insert({
-        "no_sampler",
-        result.value,
-    });
+        pipelines.insert({
+            eMVPNoSampler,
+            result.value,
+        });
+    }
 
     // create pipeline no sampler | dynamic state
-    pipelineNoSamplerInfo.pInputAssemblyState = &debugIaState;
-    pipelineNoSamplerInfo.pDynamicState = &dynamicInfo;
+    plMVPNoSamplerInfo.pInputAssemblyState = &debugIaState;
+    plMVPNoSamplerInfo.pDynamicState = &dynamicInfo;
 
-    result = logicalDevice.createGraphicsPipeline(nullptr, pipelineNoSamplerInfo);
-    if (result.result != vk::Result::eSuccess)
-        throw std::runtime_error("Failed to create graphics pipeline with no "
-                                 "sampler & dynamic states");
+    {
+        vk::ResultValue result = logicalDevice.createGraphicsPipeline(nullptr, plMVPNoSamplerInfo);
+        if (result.result != vk::Result::eSuccess)
+            throw std::runtime_error("Failed to create graphics pipeline with no "
+                                    "sampler & dynamic states");
+                                    
+        pipelines.insert({
+            eMVPNoSamplerDynamic,
+            result.value
+        });
+    }
 
-    pipelines.insert({
-        "no_sampler_dynamic",
-        result.value,
+    logicalDevice.destroyShaderModule(vsModuleMVP);
+    logicalDevice.destroyShaderModule(vsModuleVP);
 
-    });
+    logicalDevice.destroyShaderModule(fsModuleMVPSampler);
+    logicalDevice.destroyShaderModule(fsModuleMVPNoSampler);
 
-    logicalDevice.destroyShaderModule(vertexShaderModule);
-    logicalDevice.destroyShaderModule(fragmentShaderModule);
-    logicalDevice.destroyShaderModule(fragmentShaderNoSamplerModule);
+    logicalDevice.destroyShaderModule(fsModuleVPSampler);
+    logicalDevice.destroyShaderModule(fsModuleVPNoSampler);
     return;
 }
 
@@ -765,7 +963,7 @@ void Engine::recordCommandBuffer(uint32_t p_ImageIndex)
     cls[1].depthStencil = vk::ClearDepthStencilValue{1.0f, 0};
 
     vk::RenderPassBeginInfo passInfo;
-    passInfo.renderPass = renderPasses.at("core");
+    passInfo.renderPass = renderPasses.at(eCore);
     passInfo.framebuffer = coreFramebuffers.at(p_ImageIndex);
     passInfo.renderArea.offset.x = 0;
     passInfo.renderArea.offset.y = 0;
@@ -780,18 +978,36 @@ void Engine::recordCommandBuffer(uint32_t p_ImageIndex)
     // start render pass
     commandBuffers.at(p_ImageIndex).beginRenderPass(passInfo, vk::SubpassContents::eInline);
 
+    // Render heightmap
+    if(mapHandler.vertexBuffer)
+    {
+        mapHandler.bindBuffer(commandBuffers.at(p_ImageIndex));
+
+        commandBuffers.at(p_ImageIndex).bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines.at(eVPNoSampler));
+
+        std::vector<vk::DescriptorSet> toBind = {
+            collectionHandler->viewUniform->descriptor,
+            collectionHandler->projectionUniform->descriptor
+        };
+        commandBuffers.at(p_ImageIndex).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                                            pipelineLayouts.at(eVPNoSampler),
+                                                            0, toBind, nullptr);
+        commandBuffers.at(p_ImageIndex).drawIndexed(mapHandler.indexCount, 1, 0, 0, 0);
+        // commandBuffers.at(p_ImageIndex).draw(mapHandler.vertexCount, 1, 0, 0);
+    }
+
     for (auto &model : *collectionHandler->models)
     {
         // for each model select the appropriate pipeline
         if (model.hasTexture)
         {
             commandBuffers.at(p_ImageIndex)
-                .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines.at("sampler"));
+                .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines.at(eMVPWSampler));
         }
         else
         {
             commandBuffers.at(p_ImageIndex)
-                .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines.at("no_sampler"));
+                .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines.at(eMVPNoSampler));
         }
 
         // Bind vertex & index buffer for model
@@ -805,28 +1021,33 @@ void Engine::recordCommandBuffer(uint32_t p_ImageIndex)
             {
                 // { vk::DescriptorSet, Buffer }
                 std::vector<vk::DescriptorSet> toBind = {
-                    object.uniform.first, collectionHandler->viewUniform->descriptor,
+                    object.uniform.first,
+                    collectionHandler->viewUniform->descriptor,
                     collectionHandler->projectionUniform->descriptor};
                 if (offset.first.second >= 0)
                 {
                     toBind.push_back(model.textureDescriptors.at(offset.first.second).first);
-                    commandBuffers.at(p_ImageIndex)
-                        .bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                            pipelineLayouts.at("sampler"), 0, toBind, nullptr);
+                    commandBuffers.at(p_ImageIndex).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                                                        pipelineLayouts.at(eMVPWSampler),
+                                                                        0,
+                                                                        toBind,
+                                                                        nullptr);
                 }
                 else
                 {
-                    commandBuffers.at(p_ImageIndex)
-                        .bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                            pipelineLayouts.at("no_sampler"), 0, toBind, nullptr);
+                    commandBuffers.at(p_ImageIndex).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                                                        pipelineLayouts.at(eMVPNoSampler),
+                                                                        0,
+                                                                        toBind,
+                                                                        nullptr);
                 }
 
-                // clang-format off
                 // { { vertex offset, Texture index }, { Index start, Index count } }
-                // clang-format on
-                commandBuffers.at(p_ImageIndex)
-                    .drawIndexed(offset.second.second, 1, offset.second.first, offset.first.first,
-                                 0);
+                commandBuffers.at(p_ImageIndex).drawIndexed(offset.second.second,
+                                                            1,
+                                                            offset.second.first,
+                                                            offset.first.first,
+                                                            0);
             }
         }
     }
@@ -836,8 +1057,10 @@ void Engine::recordCommandBuffer(uint32_t p_ImageIndex)
     /*
      IMGUI RENDER
     */
-    gui->doRenderPass(renderPasses.at("gui"), guiFramebuffers.at(p_ImageIndex),
-                      commandBuffers.at(p_ImageIndex), swapchain.swapExtent);
+    gui->doRenderPass(renderPasses.at(eImGui),
+                      guiFramebuffers.at(p_ImageIndex),
+                      commandBuffers.at(p_ImageIndex),
+                      swapchain.swapExtent);
     /*
       END IMGUI RENDER
     */
@@ -861,19 +1084,26 @@ void Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
     {
         using enum vk::Result;
         case eErrorOutOfDateKHR:
-            recreateSwapchain();
-            return;
-            break;
+            {
+                recreateSwapchain();
+                return;
+            }
         case eSuboptimalKHR:
-            using enum LogHandler::MessagePriority;
-            logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
-            break;
+            {
+                using enum LogHandler::MessagePriority;
+                logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
+                break;
+            }
         case eSuccess:
-            break;
+            {
+                break;
+            }
         default: // unhandled error occurred
-            throw std::runtime_error("Unhandled error case while acquiring a swapchain image for "
-                                     "rendering");
-            break;
+            {
+                throw std::runtime_error(
+                    "Unhandled error case while acquiring a swapchain image for "
+                    "rendering");
+            }
     }
 
     if (waitFences.at(p_CurrentImageIndex))
@@ -981,14 +1211,20 @@ inline void Engine::goSetup(void)
     /*
       MAT4 UNIFORM LAYOUT
     */
-    allocator->createLayout("uniform_layout", vk::DescriptorType::eUniformBuffer, 1,
-                            vk::ShaderStageFlagBits::eVertex, 0);
+    allocator->createLayout("uniform_layout",
+                            vk::DescriptorType::eUniformBuffer,
+                            1,
+                            vk::ShaderStageFlagBits::eVertex,
+                            0);
 
     /*
       TEXTURE SAMPLER LAYOUT
     */
-    allocator->createLayout("sampler_layout", vk::DescriptorType::eCombinedImageSampler, 1,
-                            vk::ShaderStageFlagBits::eFragment, 0);
+    allocator->createLayout("sampler_layout",
+                            vk::DescriptorType::eCombinedImageSampler,
+                            1,
+                            vk::ShaderStageFlagBits::eFragment,
+                            0);
 
     /*
       INITIALIZE MODEL/OBJECT HANDLER
@@ -1001,20 +1237,22 @@ inline void Engine::goSetup(void)
     */
     allocator->allocateSet(uniformLayout, collectionHandler->viewUniform->descriptor);
     allocator->updateSet(collectionHandler->viewUniform->mvBuffer.bufferInfo,
-                         collectionHandler->viewUniform->descriptor, 0);
+                         collectionHandler->viewUniform->descriptor,
+                         0);
 
     /*
       PROJECTION MATRIX UNIFORM OBJECT
     */
     allocator->allocateSet(uniformLayout, collectionHandler->projectionUniform->descriptor);
     allocator->updateSet(collectionHandler->projectionUniform->mvBuffer.bufferInfo,
-                         collectionHandler->projectionUniform->descriptor, 0);
+                         collectionHandler->projectionUniform->descriptor,
+                         0);
 
     /*
       LOAD MODELS
     */
-    allocator->loadModel(collectionHandler->models.get(), &collectionHandler->modelNames,
-                         "models/Male.obj");
+    allocator->loadModel(
+        collectionHandler->models.get(), &collectionHandler->modelNames, "models/Male.obj");
     /*
       CREATE OBJECTS
     */
@@ -1057,7 +1295,8 @@ void mouseMotionCallback(GLFWwindow *p_GLFWwindow, double p_XPosition, double p_
     return;
 }
 
-void mouseScrollCallback(GLFWwindow *p_GLFWwindow, [[maybe_unused]] double p_XOffset,
+void mouseScrollCallback(GLFWwindow *p_GLFWwindow,
+                         [[maybe_unused]] double p_XOffset,
                          double p_YOffset)
 {
     auto engine = reinterpret_cast<Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
@@ -1070,7 +1309,9 @@ void mouseScrollCallback(GLFWwindow *p_GLFWwindow, [[maybe_unused]] double p_XOf
     return;
 }
 
-void mouseButtonCallback(GLFWwindow *p_GLFWwindow, int p_Button, int p_Action,
+void mouseButtonCallback(GLFWwindow *p_GLFWwindow,
+                         int p_Button,
+                         int p_Action,
                          [[maybe_unused]] int p_Modifiers)
 {
     auto engine = reinterpret_cast<Engine *>(glfwGetWindowUserPointer(p_GLFWwindow));
@@ -1117,7 +1358,10 @@ void mouseButtonCallback(GLFWwindow *p_GLFWwindow, int p_Button, int p_Action,
     return;
 }
 
-void keyCallback(GLFWwindow *p_GLFWwindow, int p_Key, [[maybe_unused]] int p_ScanCode, int p_Action,
+void keyCallback(GLFWwindow *p_GLFWwindow,
+                 int p_Key,
+                 [[maybe_unused]] int p_ScanCode,
+                 int p_Action,
                  [[maybe_unused]] int p_Modifier)
 {
     // get get pointer
@@ -1152,8 +1396,10 @@ void glfwErrCallback(int p_Error, const char *p_Description)
 // Create buffer with Vulkan buffer/memory objects
 void Engine::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags,
                           vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                          vk::DeviceSize p_DeviceSize, vk::Buffer *p_VkBuffer,
-                          vk::DeviceMemory *p_DeviceMemory, void *p_InitialData) const
+                          vk::DeviceSize p_DeviceSize,
+                          vk::Buffer *p_VkBuffer,
+                          vk::DeviceMemory *p_DeviceMemory,
+                          void *p_InitialData) const
 {
     logger.logMessage("Allocating buffer of size => " +
                       std::to_string(static_cast<uint32_t>(p_DeviceSize)));
@@ -1197,8 +1443,10 @@ void Engine::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags,
 
 // create buffer with custom Buffer interface
 void Engine::createBuffer(vk::BufferUsageFlags p_BufferUsageFlags,
-                          vk::MemoryPropertyFlags p_MemoryPropertyFlags, MvBuffer *p_MvBuffer,
-                          vk::DeviceSize p_DeviceSize, void *p_InitialData) const
+                          vk::MemoryPropertyFlags p_MemoryPropertyFlags,
+                          MvBuffer *p_MvBuffer,
+                          vk::DeviceSize p_DeviceSize,
+                          void *p_InitialData) const
 {
     logger.logMessage("Allocating buffer of size => " +
                       std::to_string(static_cast<uint32_t>(p_DeviceSize)));
