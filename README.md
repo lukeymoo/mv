@@ -25,3 +25,6 @@ instead of the appropriate `swapchain.width/swapchain.height`
 Making some progress with debug tools; Going to research some methods of map generation before continuing
 
 ![Dev Tools](https://raw.githubusercontent.com/lukeymoo/mv/development/snapshots/Screenshot%20from%202021-05-17%2003-56-49.png)
+
+After a small break due to broken A/C in house, finally got some basic heightmap functions done
+![Terrain Loading](https://raw.githubusercontent.com/lukeymoo/mv/development/snapshots/Screenshot%20from%202021-05-24%2008-53-56.png)
