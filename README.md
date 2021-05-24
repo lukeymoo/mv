@@ -26,5 +26,9 @@ Making some progress with debug tools; Going to research some methods of map gen
 
 ![Dev Tools](https://raw.githubusercontent.com/lukeymoo/mv/development/snapshots/Screenshot%20from%202021-05-17%2003-56-49.png)
 
-After a small break due to broken A/C in house, finally got some basic heightmap functions done
+After a small break due to broken A/C in house, finally got some basic heightmap functions done;
+Vertex count is based on models so it's not accurate. This mesh is originally loaded from a 2180^2 image & has 28+ million vertices & no indices array.
+
+After an optimization function it is shrunk down to ~8.4 million vertices & 28.5 million indices.
+ZERO frustum culling; ZERO occlusion culling; With some basic optimizations I am hoping to get frame time back ~1-2 ms for raw terrain data.
 ![Terrain Loading](https://raw.githubusercontent.com/lukeymoo/mv/development/snapshots/Screenshot%20from%202021-05-24%2008-53-56.png)
