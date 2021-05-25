@@ -1,7 +1,11 @@
 #pragma once
 
 #include <iostream>
+#include <string>
+#include <regex>
 #include <queue>
+#include <vector>
+
 #include <vulkan/vulkan.hpp>
 
 // Global static instance declared in main
@@ -54,4 +58,7 @@ namespace Helper
                           const vk::CommandPool &p_CommandPool,
                           const vk::CommandBuffer &p_CommandBuffer,
                           const vk::Queue &p_GraphicsQueue);
+
+    std::vector<std::string> tokenize(const std::string p_ToSplit,
+                                        const std::regex p_Regex);
 }; // namespace Helper

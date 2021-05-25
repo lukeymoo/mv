@@ -10,12 +10,6 @@ enum RenderPassType
 // Containers for pipelines
 enum PipelineTypes
 {
-    // eNoTextureSampler = 0,
-    // eTextureSamplerDynamic,
-    // eNoTextureSamplerDynamic,
-    // eTextureSampler,
-    // eTerrainMeshNoSampler,
-    // eTerrainMeshWSampler,
     eMVPWSampler = 0,       // M/V/P uniforms + color, uv, sampler
     eMVPNoSampler,          // M/V/P uniforms + color, uv
 

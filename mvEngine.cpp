@@ -56,6 +56,18 @@ void Engine::cleanupSwapchain(void)
             if (buffer)
                 logicalDevice.destroyFramebuffer(buffer, nullptr);
         }
+        coreFramebuffers.clear();
+    }
+
+    // destroy gui framebuffers
+    if(!guiFramebuffers.empty())
+    {
+        for(auto& buffer : guiFramebuffers)
+        {
+            if(buffer)
+                logicalDevice.destroyFramebuffer(buffer, nullptr);
+        }
+        guiFramebuffers.clear();
     }
 
     if (depthStencil.image)
@@ -79,6 +91,7 @@ void Engine::cleanupSwapchain(void)
             if (pipeline.second)
                 logicalDevice.destroyPipeline(pipeline.second);
         }
+        pipelines.clear();
     }
 
     // destroy pipeline layouts
@@ -89,6 +102,7 @@ void Engine::cleanupSwapchain(void)
             if (layout.second)
                 logicalDevice.destroyPipelineLayout(layout.second);
         }
+        pipelineLayouts.clear();
     }
 
     // destroy render pass
@@ -99,6 +113,7 @@ void Engine::cleanupSwapchain(void)
             if (pass.second)
                 logicalDevice.destroyRenderPass(pass.second, nullptr);
         }
+        renderPasses.clear();
     }
 
     // cleanup command pool
@@ -108,7 +123,7 @@ void Engine::cleanupSwapchain(void)
     }
 
     // cleanup swapchain
-    swapchain.cleanup(instance, logicalDevice);
+    swapchain.cleanup(instance, logicalDevice, false);
 
     return;
 }
@@ -128,8 +143,42 @@ void Engine::recreateSwapchain(void)
     // create swapchain
     swapchain.create(physicalDevice, logicalDevice, windowWidth, windowHeight);
 
-    // create render pass
+    // Create layouts for render passes
+    prepareLayouts();
+
+    // create render pass : core
     setupRenderPass();
+
+    // If ImGui enabled, recreate it's resources
+    if(gui)
+    {
+        gui->cleanup(logicalDevice);
+        // Reinstall glfw callbacks to avoid ImGui creating
+        // an infinite callback circle
+        glfwSetKeyCallback(window, keyCallback);
+        glfwSetCursorPosCallback(window, mouseMotionCallback);
+        glfwSetMouseButtonCallback(window, mouseButtonCallback);
+        glfwSetScrollCallback(window, mouseScrollCallback);
+        glfwSetCharCallback(window, NULL);
+        // Add our base app class to glfw window for callbacks
+        glfwSetWindowUserPointer(window, this);
+        gui = std::make_unique<GuiHandler>(window,
+                                            &camera,
+                                            instance,
+                                            physicalDevice,
+                                            logicalDevice,
+                                            swapchain,
+                                            commandPool,
+                                            graphicsQueue,
+                                            renderPasses,
+                                            allocator->get()->pool);
+
+    guiFramebuffers = gui->createFramebuffers(logicalDevice,
+                                              renderPasses.at(eImGui),
+                                              swapchain.buffers,
+                                              swapchain.swapExtent.width,
+                                              swapchain.swapExtent.height);
+    }
 
     setupDepthStencil();
 
@@ -155,6 +204,7 @@ void Engine::go(void)
     // load models & create objects here
     goSetup();
 
+    prepareLayouts();
     preparePipeline();
 
     uint32_t imageIndex = 0;
@@ -225,6 +275,9 @@ void Engine::go(void)
     auto renderStop = chrono::now();
 
     logger.logMessage("Entering game loop\n");
+
+    // force test
+    recreateSwapchain();
 
     while (!glfwWindowShouldClose(window))
     {
@@ -537,10 +590,7 @@ void Engine::go(void)
     return;
 }
 
-/*
-  Creation of all the graphics pipelines
-*/
-void Engine::preparePipeline(void)
+void Engine::prepareLayouts(void)
 {
     using enum PipelineTypes;
     vk::DescriptorSetLayout uniformLayout = allocator->getLayout("uniform_layout");
@@ -613,7 +663,14 @@ void Engine::preparePipeline(void)
         eVPNoSampler,
         logicalDevice.createPipelineLayout(pLineTerrainMeshNoSamplerInfo)
     });
+    return;
+}
 
+/*
+  Creation of all the graphics pipelines
+*/
+void Engine::preparePipeline(void)
+{
     auto bindingDescription = Vertex::getBindingDescription();
     auto attributeDescriptions = Vertex::getAttributeDescriptions();
 
@@ -633,8 +690,8 @@ void Engine::preparePipeline(void)
     rsState.depthClampEnable = VK_FALSE;
     rsState.rasterizerDiscardEnable = VK_FALSE;
     rsState.polygonMode = vk::PolygonMode::ePoint;
-    rsState.cullMode = vk::CullModeFlagBits::eNone;
-    rsState.frontFace = vk::FrontFace::eClockwise;
+    rsState.cullMode = vk::CullModeFlagBits::eBack;
+    rsState.frontFace = vk::FrontFace::eCounterClockwise;
     rsState.depthBiasEnable = VK_FALSE;
     rsState.depthBiasConstantFactor = 0.0f;
     rsState.depthBiasClamp = 0.0f;
@@ -813,6 +870,8 @@ void Engine::preparePipeline(void)
             eVPWSampler,
             result.value
         });
+        if(!pipelines.at(eVPWSampler))
+            throw std::runtime_error("Failed to create pipeline for terrain mesh with sampler");
     }
 
     // Create pipeline for terrain mesh NO sampler
@@ -841,6 +900,8 @@ void Engine::preparePipeline(void)
             eVPNoSampler,
             result.value
         });
+        if(!pipelines.at(eVPNoSampler))
+            throw std::runtime_error("Failed to create pipeline for terrain mesh with no sampler");
     }
 
     /*
@@ -879,6 +940,8 @@ void Engine::preparePipeline(void)
             eMVPWSampler,
             result.value,
         });
+        if(!pipelines.at(eMVPWSampler))
+            throw std::runtime_error("Failed to create generic object pipeline with sampler");
     }
 
     plMVPSamplerInfo.pInputAssemblyState = &debugIaState;
@@ -895,6 +958,8 @@ void Engine::preparePipeline(void)
             eMVPWSamplerDynamic,
             result.value,
         });
+        if(!pipelines.at(eMVPWSamplerDynamic))
+            throw std::runtime_error("Failed to create generic object pipeline with sampler & dynamic states");
     }
 
     // Create pipeline with NO sampler
@@ -923,6 +988,8 @@ void Engine::preparePipeline(void)
             eMVPNoSampler,
             result.value,
         });
+        if(!pipelines.at(eMVPNoSampler))
+            throw std::runtime_error("Failed to create generic object pipeline with no sampler");
     }
 
     // create pipeline no sampler | dynamic state
@@ -939,6 +1006,8 @@ void Engine::preparePipeline(void)
             eMVPNoSamplerDynamic,
             result.value
         });
+        if(!pipelines.at(eMVPNoSamplerDynamic))
+            throw std::runtime_error("Failed to create generic object pipeline with no sampler & dynamic states");
     }
 
     logicalDevice.destroyShaderModule(vsModuleMVP);
@@ -999,15 +1068,17 @@ void Engine::recordCommandBuffer(uint32_t p_ImageIndex)
     for (auto &model : *collectionHandler->models)
     {
         // for each model select the appropriate pipeline
-        if (model.hasTexture)
+        if (model.hasTexture && currentlyBound != eMVPWSampler)
         {
-            commandBuffers.at(p_ImageIndex)
-                .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines.at(eMVPWSampler));
+            commandBuffers.at(p_ImageIndex).bindPipeline(vk::PipelineBindPoint::eGraphics,
+                                                        pipelines.at(eMVPWSampler));
+            currentlyBound = eMVPWSampler;
         }
-        else
+        else if(!model.hasTexture && currentlyBound != eMVPNoSampler)
         {
-            commandBuffers.at(p_ImageIndex)
-                .bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines.at(eMVPNoSampler));
+            commandBuffers.at(p_ImageIndex).bindPipeline(vk::PipelineBindPoint::eGraphics,
+                                                        pipelines.at(eMVPNoSampler));
+            currentlyBound = eMVPNoSampler;
         }
 
         // Bind vertex & index buffer for model
@@ -1265,8 +1336,8 @@ inline void Engine::goSetup(void)
     cameraParams.fov = 50.0f;
     cameraParams.aspect = (float)swapchain.swapExtent.width / (float)swapchain.swapExtent.height;
     cameraParams.nearz = 0.1f;
-    cameraParams.farz = 1000.0f;
-    cameraParams.position = glm::vec3(0.0f, -3.0f, 7.0f);
+    cameraParams.farz = 2000.0f;
+    cameraParams.position = glm::vec3(0.0f, 0.0f, 7.0f);
     cameraParams.viewUniformObject = collectionHandler->viewUniform.get();
     cameraParams.projectionUniformObject = collectionHandler->projectionUniform.get();
 

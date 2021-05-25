@@ -83,6 +83,9 @@ Window::Window(int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle)
     // Set mouse wheel callback
     glfwSetScrollCallback(window, mouseScrollCallback);
 
+    // For imgui circular callback when recreating swap
+    glfwSetCharCallback(window, NULL);
+
     // Add our base app class to glfw window for callbacks
     glfwSetWindowUserPointer(window, this);
     return;

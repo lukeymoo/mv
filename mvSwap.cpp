@@ -157,6 +157,10 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
 
     // get the surface width|height reported by vulkan
     // store in our interface member variables for future use
+    std::cout << "Current window width => " << std::to_string(p_WindowWidth) << "\n";
+    std::cout << "Current window height => " << std::to_string(p_WindowHeight) << "\n";
+    std::cout << "Reported width => " << std::to_string(capabilities.currentExtent.width) << "\n";
+    std::cout << "Report height => " << std::to_string(capabilities.currentExtent.height) << "\n";
     p_WindowWidth = capabilities.currentExtent.width;
     p_WindowHeight = capabilities.currentExtent.height;
     swapExtent.width = p_WindowWidth;
@@ -241,7 +245,7 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
     for (auto &buffer : buffers)
     {
         // move temp images into swapchain buffer<vector>
-        buffer.image = std::move(tempImages[&buffer - &buffers[0]]);
+        buffer.image = tempImages[&buffer - &buffers[0]];
         vk::ImageViewCreateInfo viewInfo;
         viewInfo.image = buffer.image;
         viewInfo.format = colorFormat;

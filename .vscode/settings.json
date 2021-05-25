@@ -65,6 +65,7 @@
         "stop_token": "cpp",
         "thread": "cpp",
         "codecvt": "cpp",
-        "numbers": "cpp"
+        "numbers": "cpp",
+        "regex": "cpp"
     }
 }

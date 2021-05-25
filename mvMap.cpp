@@ -7,6 +7,9 @@
 // Image loading/decoding methods
 #include "stb_image.h"
 
+// For string tokenizing
+#include "mvHelper.h"
+
 MapHandler::MapHandler()
 {
     return;
@@ -37,6 +40,170 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
 {
     try
     {
+        std::string name = p_Filename.substr(0, p_Filename.find(".")) + ".bin";
+        std::cout << "Optimized output filename => " << name << "\n";
+        if(std::filesystem::exists(name))
+        {
+            std::cout << "Found optimized filename\n";
+            std::ifstream file(name, std::ios::binary);
+            if(!file.is_open())
+                std::cout << "Failed to open optimized output file\n";
+            
+            file.seekg(0);
+
+            // Read vertex size
+            size_t vertexSize = 0;
+            size_t indexSize = 0;
+
+            std::string sizeStr;
+            std::getline(file, sizeStr, '\n');
+            // find :
+            size_t pos = sizeStr.find(':');
+            if(pos == std::string::npos)
+                throw std::runtime_error("Failed to read vertex & index data sizes :: corrupted file");
+
+            if(sizeStr.substr(0, pos).compare("v") == 0)
+            {
+                pos+=1; // skip :
+                vertexSize = static_cast<uint32_t>(std::stol(sizeStr.substr(pos)));
+            }
+            
+            if(sizeStr.substr(0, pos).compare("i") == 0)
+            {
+                pos+=1; // skip :
+                indexSize = static_cast<uint32_t>(std::stol(sizeStr.substr(pos)));
+            }
+            
+            sizeStr.clear();
+            std::getline(file, sizeStr, '\n');
+
+            pos = sizeStr.find(':');
+            if(pos == std::string::npos)
+                throw std::runtime_error("Failed to read vertex & index data sizes :: corrupted file");
+
+            if(sizeStr.substr(0, pos).compare("v") == 0)
+            {
+                pos+=1; // skip :
+                vertexSize = static_cast<uint32_t>(std::stol(sizeStr.substr(pos)));
+            }
+            
+            if(sizeStr.substr(0, pos).compare("i") == 0)
+            {
+                pos+=1; // skip :
+                indexSize = static_cast<uint32_t>(std::stol(sizeStr.substr(pos)));
+            }
+            
+            if(vertexSize <= 0 || indexSize <= 0)
+                throw std::runtime_error("Vertex or index size was specified as <= 0 in map file :: corrupted file");
+
+            std::vector<Vertex> inVertices(vertexSize);
+            std::vector<uint32_t> inIndices(indexSize);
+
+            std::cout << "Created buffer of size " << vertexSize << " for vertex data\n";
+            std::cout << "Created buffer of size " << indexSize << " for index data\n";
+
+            std::string head;
+            std::getline(file, head);
+            if(head.length() <= 0)
+                throw std::runtime_error("Failed to read data header from file");
+            
+            if(!head.compare(":start vertex"))
+            {
+                // Load vertices
+                std::string line;
+                std::regex re(R"([,\s]+)");
+                bool reading = true;
+                size_t index = 0;
+
+                do
+                {
+                    Vertex data;
+
+                    // Grab POSITION
+                    std::getline(file, line, '\n');
+
+                    if(!line.compare(":end"))
+                        break;
+                    
+                    line.erase(0, 1); // erase '{'
+                    line.erase(line.find('}'), 1); // erase '}'
+
+                    std::vector<std::string> tokenized = Helper::tokenize(line, re);
+
+                    data.position.x = std::stof(tokenized.at(0));
+                    data.position.y = std::stof(tokenized.at(1));
+                    data.position.z = std::stof(tokenized.at(2));
+                    data.position.w = 1.0f; // ignore cause it should be 1.0f otherwise we can't render lines
+
+                    // Grab COLOR
+                    std::getline(file, line, '\n');
+                    if(!line.compare(":end"))
+                        break;
+                    
+                    line.erase(0, 1); // erase '{'
+                    line.erase(line.find('}'), 1); // erase '}'
+
+                    tokenized = Helper::tokenize(line, re);
+
+                    data.color.r = std::stof(tokenized.at(0));
+                    data.color.g = std::stof(tokenized.at(1));
+                    data.color.b = std::stof(tokenized.at(2));
+                    data.color.a = std::stof(tokenized.at(3));
+
+                    // GRAB UV
+                    std::getline(file, line, '\n');
+                    if(!line.compare(":end"))
+                        break;
+                    
+                    line.erase(0, 1); // erase '{'
+                    line.erase(line.find('}'), 1); // erase '}'
+
+                    tokenized = Helper::tokenize(line, re);
+
+                    data.uv.x = std::stof(tokenized.at(0));
+                    data.uv.y = std::stof(tokenized.at(1));
+                    // data.uv.z = std::stof(tokenized.at(2))
+                    // data.uv.w = std::stof(tokenized.at(3))
+                    data.uv.z = 0.0f; // DONT CARE
+                    data.uv.w = 0.0f; // DONT CARE
+
+                    // Push to vector
+                    inVertices.at(index) = std::move(data);
+                    index++;
+
+                } while (reading);
+            }
+
+            // Get next header
+            std::getline(file, head);
+            if(head.length() <= 0)
+                throw std::runtime_error("Failed to read data header from file");
+            
+            if(!head.compare(":start index"))
+            {
+                std::string line;
+                std::regex re(R"([,\s]+)");
+                std::getline(file, line, '{'); line.clear(); // Read past '{'
+                std::getline(file, line, '\n');
+
+                std::vector<std::string> strIndices = Helper::tokenize(line, re);
+                // Convert to 32 bit integers
+                size_t index = 0;
+                for(const auto& str : strIndices)
+                {
+                    inIndices.at(index) = static_cast<uint32_t>(std::stoul(str));
+                    index++;
+                }
+                
+            }
+
+            if(inVertices.size() && inIndices.size())
+            {
+                vertexCount = inVertices.size();
+                indexCount = inIndices.size();
+                return {inVertices, inIndices};
+            }
+        }
         // Check if file exists
         if (!std::filesystem::exists(p_Filename))
             throw std::runtime_error("File " + p_Filename + " does not exist");
@@ -114,13 +281,13 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
                 vertices.push_back(bottomRight);
 
                 vertices.push_back(topLeft);
-                vertices.push_back(topRight);
                 vertices.push_back(bottomRight);
+                vertices.push_back(topRight);
             }
         }
 
         // Generate indices/Remove duplicate vertices
-        optimize(vertices, indices);
+        optimize(name, vertices, indices);
         vertexCount = vertices.size();
         indexCount = indices.size();
         return {vertices, indices};
@@ -135,12 +302,12 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
     }
 }
 
-void MapHandler::optimize(std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices)
+void MapHandler::optimize(const std::string p_OptimizedFilename, std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices)
 {
     std::vector<Vertex> uniques;
     std::vector<uint32_t> indices;
 
-    std::cout << "Preparing to optimize " << p_Vertices.size() << " vertices\n";
+    std::cout << "[+] Preparing to optimize " << p_Vertices.size() << " vertices\n";
 
     // Iterate unsorted vertices
     bool start = true;
@@ -184,6 +351,57 @@ void MapHandler::optimize(std::vector<Vertex>& p_Vertices, std::vector<uint32_t>
 
     p_Vertices = uniques;
     p_Indices = indices;
+
+    // Output to file
+    writeRaw(p_OptimizedFilename, p_Vertices, p_Indices);
+    return;
+}
+
+void MapHandler::writeRaw(const std::string p_OptimizedFilename, std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices)
+{
+    // Sanity check
+    if(p_Vertices.empty() || p_Indices.empty())
+        throw std::runtime_error("Vertex or index data containers are empty; No mesh data to output to file");
+
+    std::ofstream file(p_OptimizedFilename, std::ios::binary | std::ios::trunc);
+
+    if(!file.is_open())
+        throw std::runtime_error("Failed to open file to output optimized mesh data");
+    
+
+    // Output vertices vector
+    /*
+        Start symbol is :start [data type] || Ex: :start vertex or :start index
+
+        End symbol is :end || Ends last :start symbol; If another :start is
+        found before finding an :end the operation will be aborted
+
+        Specifying sizes avoids 28 million copies
+        as a copy occurs every time we pushback a new vertex element
+    */
+   file << "v:" << std::to_string(p_Vertices.size()) << "\n";
+   file << "i:" << std::to_string(p_Indices.size()) << "\n";
+   file << ":start vertex\n";
+   for(const auto& vertex : p_Vertices)
+   {
+       // Output position
+       file << "{" << vertex.position.x << ", " << vertex.position.y << ", " << vertex.position.z << ", " << vertex.position.w << "}\n";
+       // Output color
+       file << "{" << vertex.color.r << ", " << vertex.color.g << ", " << vertex.color.b << ", " << vertex.color.a << "}\n";
+       // Output uv
+       file << "{" << vertex.uv.r << ", " << vertex.uv.g << ", " << vertex.uv.b << ", " << vertex.uv.a << "}\n";
+   }
+   file << ":end\n";
+
+   file << ":start index\n";
+   file << "{";
+   for(const auto& index : p_Indices)
+   {
+       file << index << ", ";
+   }
+   file << "}\n";
+
+    file.close();
     return;
 }
 

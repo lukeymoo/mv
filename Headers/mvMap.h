@@ -31,7 +31,9 @@ class MapHandler
     size_t vertexCount = 0;
     size_t indexCount = 0;
 
-    void optimize(std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices);
+    void optimize(const std::string p_OptimizedFilename, std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices);
+
+    void writeRaw(const std::string p_OptimizedFilename, std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices);
 
     // Returns vertex array & indices array
     std::pair<std::vector<Vertex>, std::vector<uint32_t>> readHeightMap(std::string p_Filename);

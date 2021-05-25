@@ -42,6 +42,8 @@ class Engine : public Window
     std::unordered_map<PipelineTypes, vk::Pipeline> pipelines;
     std::unordered_map<PipelineTypes, vk::PipelineLayout> pipelineLayouts;
 
+    PipelineTypes currentlyBound;
+
     void addNewModel(Container *pool, const char *filename);
 
     void recreateSwapchain(void);
@@ -65,6 +67,8 @@ class Engine : public Window
 
   protected:
     void prepareUniforms(void);
+
+    void prepareLayouts(void);
 
     void preparePipeline(void);
 

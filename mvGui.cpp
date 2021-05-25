@@ -162,10 +162,10 @@ void GuiHandler::createRenderPass(std::unordered_map<RenderPassType, vk::RenderP
     return;
 }
 
-std::vector<vk::Framebuffer> GuiHandler::createFramebuffers(
-    const vk::Device &p_LogicalDevice, const vk::RenderPass &p_GuiRenderPass,
-    std::vector<struct SwapchainBuffer> &p_SwapchainBuffers, uint32_t p_SwapExtentWidth,
-    uint32_t p_SwapExtentHeight)
+std::vector<vk::Framebuffer> GuiHandler::createFramebuffers(const vk::Device &p_LogicalDevice,
+                                                            const vk::RenderPass &p_GuiRenderPass,
+                                                            std::vector<struct SwapchainBuffer> &p_SwapchainBuffers, uint32_t p_SwapExtentWidth,
+                                                            uint32_t p_SwapExtentHeight)
 {
     std::vector<vk::Framebuffer> framebuffers;
 

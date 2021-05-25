@@ -108,3 +108,37 @@ void Helper::endCommandBuffer(const vk::Device &p_LogicalDevice,
     p_LogicalDevice.freeCommandBuffers(p_CommandPool, p_CommandBuffer);
     return;
 }
+
+std::vector<std::string> Helper::tokenize(const std::string p_ToSplit, const std::regex p_Regex)
+{
+    std::sregex_token_iterator it { p_ToSplit.begin(), p_ToSplit.end(), p_Regex, -1 };
+    std::vector<std::string> tokenized { it, {} };
+
+    // Trim '{' and '}'
+    std::for_each(tokenized.begin(), tokenized.end(), [](std::string& token) {
+        
+        // {
+        auto pos = token.find('{');
+        while (pos != std::string::npos)
+        {
+            token.erase(pos, 1);
+            pos = token.find('{');
+        }
+
+        // }
+        pos = token.find('}');
+        while (pos != std::string::npos)
+        {
+            token.erase(pos, 1);
+            pos = token.find('}');
+        }
+    });
+
+    // Remove empty strings
+    tokenized.erase(std::remove_if(tokenized.begin(),
+                                    tokenized.end(),
+                                    [](const std::string& s) { return s.size() == 0; }),
+                                    tokenized.end());
+
+    return tokenized;
+}

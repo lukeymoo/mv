@@ -227,10 +227,14 @@ class GuiHandler
 
     void cleanup(const vk::Device &p_LogicalDevice);
 
-  private:
+    // Should only call if recreating swapchain
+    // Do not call outside of that special event as this function
+    // is automatically called by gui constructor
     void createRenderPass(std::unordered_map<RenderPassType, vk::RenderPass> &p_RenderPassMap,
                           const vk::Device &p_LogicalDevice,
                           const vk::Format &p_AttachmentColorFormat);
+
+  private:
 
     /*
       OPEN FILE DIALOG
