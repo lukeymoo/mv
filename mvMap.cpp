@@ -38,172 +38,29 @@ void MapHandler::cleanup(const vk::Device& p_LogicalDevice)
 
 std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(std::string p_Filename)
 {
+    // Look for already optimized filename
+    if(isAlreadyOptimized(p_Filename))
+    {
+        // Read vertex file
+        std::vector<Vertex> vertices;
+        readVertexFile(p_Filename, vertices);
+        std::cout << "Exited function, read => " << vertices.size() << " elements\n";
+
+        // Read indices file
+        std::vector<uint32_t> indices;
+        readIndexFile(p_Filename, indices);
+        std::cout << "Exited index function, read => " << indices.size() << " elements\n";
+
+        // Ensure we setup sizes
+        vertexCount = vertices.size();
+        indexCount = indices.size();
+        return {vertices, indices};
+    }
+
+    // Pre optimized file does not exist, load raw & generate optimizations
+
     try
     {
-        std::string name = p_Filename.substr(0, p_Filename.find(".")) + ".bin";
-        std::cout << "Optimized output filename => " << name << "\n";
-        if(std::filesystem::exists(name))
-        {
-            std::cout << "Found optimized filename\n";
-            std::ifstream file(name, std::ios::binary);
-            if(!file.is_open())
-                std::cout << "Failed to open optimized output file\n";
-            
-            file.seekg(0);
-
-            // Read vertex size
-            size_t vertexSize = 0;
-            size_t indexSize = 0;
-
-            std::string sizeStr;
-            std::getline(file, sizeStr, '\n');
-            // find :
-            size_t pos = sizeStr.find(':');
-            if(pos == std::string::npos)
-                throw std::runtime_error("Failed to read vertex & index data sizes :: corrupted file");
-
-            if(sizeStr.substr(0, pos).compare("v") == 0)
-            {
-                pos+=1; // skip :
-                vertexSize = static_cast<uint32_t>(std::stol(sizeStr.substr(pos)));
-            }
-            
-            if(sizeStr.substr(0, pos).compare("i") == 0)
-            {
-                pos+=1; // skip :
-                indexSize = static_cast<uint32_t>(std::stol(sizeStr.substr(pos)));
-            }
-            
-            sizeStr.clear();
-            std::getline(file, sizeStr, '\n');
-
-            pos = sizeStr.find(':');
-            if(pos == std::string::npos)
-                throw std::runtime_error("Failed to read vertex & index data sizes :: corrupted file");
-
-            if(sizeStr.substr(0, pos).compare("v") == 0)
-            {
-                pos+=1; // skip :
-                vertexSize = static_cast<uint32_t>(std::stol(sizeStr.substr(pos)));
-            }
-            
-            if(sizeStr.substr(0, pos).compare("i") == 0)
-            {
-                pos+=1; // skip :
-                indexSize = static_cast<uint32_t>(std::stol(sizeStr.substr(pos)));
-            }
-            
-            if(vertexSize <= 0 || indexSize <= 0)
-                throw std::runtime_error("Vertex or index size was specified as <= 0 in map file :: corrupted file");
-
-            std::vector<Vertex> inVertices(vertexSize);
-            std::vector<uint32_t> inIndices(indexSize);
-
-            std::cout << "Created buffer of size " << vertexSize << " for vertex data\n";
-            std::cout << "Created buffer of size " << indexSize << " for index data\n";
-
-            std::string head;
-            std::getline(file, head);
-            if(head.length() <= 0)
-                throw std::runtime_error("Failed to read data header from file");
-            
-            if(!head.compare(":start vertex"))
-            {
-                // Load vertices
-                std::string line;
-                std::regex re(R"([,\s]+)");
-                bool reading = true;
-                size_t index = 0;
-
-                do
-                {
-                    Vertex data;
-
-                    // Grab POSITION
-                    std::getline(file, line, '\n');
-
-                    if(!line.compare(":end"))
-                        break;
-                    
-                    line.erase(0, 1); // erase '{'
-                    line.erase(line.find('}'), 1); // erase '}'
-
-                    std::vector<std::string> tokenized = Helper::tokenize(line, re);
-
-                    data.position.x = std::stof(tokenized.at(0));
-                    data.position.y = std::stof(tokenized.at(1));
-                    data.position.z = std::stof(tokenized.at(2));
-                    data.position.w = 1.0f; // ignore cause it should be 1.0f otherwise we can't render lines
-
-                    // Grab COLOR
-                    std::getline(file, line, '\n');
-                    if(!line.compare(":end"))
-                        break;
-                    
-                    line.erase(0, 1); // erase '{'
-                    line.erase(line.find('}'), 1); // erase '}'
-
-                    tokenized = Helper::tokenize(line, re);
-
-                    data.color.r = std::stof(tokenized.at(0));
-                    data.color.g = std::stof(tokenized.at(1));
-                    data.color.b = std::stof(tokenized.at(2));
-                    data.color.a = std::stof(tokenized.at(3));
-
-                    // GRAB UV
-                    std::getline(file, line, '\n');
-                    if(!line.compare(":end"))
-                        break;
-                    
-                    line.erase(0, 1); // erase '{'
-                    line.erase(line.find('}'), 1); // erase '}'
-
-                    tokenized = Helper::tokenize(line, re);
-
-                    data.uv.x = std::stof(tokenized.at(0));
-                    data.uv.y = std::stof(tokenized.at(1));
-                    // data.uv.z = std::stof(tokenized.at(2))
-                    // data.uv.w = std::stof(tokenized.at(3))
-                    data.uv.z = 0.0f; // DONT CARE
-                    data.uv.w = 0.0f; // DONT CARE
-
-                    // Push to vector
-                    inVertices.at(index) = std::move(data);
-                    index++;
-
-                } while (reading);
-            }
-
-            // Get next header
-            std::getline(file, head);
-            if(head.length() <= 0)
-                throw std::runtime_error("Failed to read data header from file");
-            
-            if(!head.compare(":start index"))
-            {
-                std::string line;
-                std::regex re(R"([,\s]+)");
-                std::getline(file, line, '{'); line.clear(); // Read past '{'
-                std::getline(file, line, '\n');
-
-                std::vector<std::string> strIndices = Helper::tokenize(line, re);
-                // Convert to 32 bit integers
-                size_t index = 0;
-                for(const auto& str : strIndices)
-                {
-                    inIndices.at(index) = static_cast<uint32_t>(std::stoul(str));
-                    index++;
-                }
-                
-            }
-
-            if(inVertices.size() && inIndices.size())
-            {
-                vertexCount = inVertices.size();
-                indexCount = inIndices.size();
-                return {inVertices, inIndices};
-            }
-        }
         // Check if file exists
         if (!std::filesystem::exists(p_Filename))
             throw std::runtime_error("File " + p_Filename + " does not exist");
@@ -259,6 +116,7 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
 
+        // Generates terribly bloated & inefficient mesh data
         // Iterate image height
         for (size_t j = 0; j < (height - 1); j++)
         {
@@ -286,8 +144,11 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
             }
         }
 
-        // Generate indices/Remove duplicate vertices
-        optimize(name, vertices, indices);
+        // Cleans up the junk mesh we created
+        optimize(vertices, indices);
+        // Output to file
+        writeRaw(p_Filename, vertices, indices);
+
         vertexCount = vertices.size();
         indexCount = indices.size();
         return {vertices, indices};
@@ -302,7 +163,7 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
     }
 }
 
-void MapHandler::optimize(const std::string p_OptimizedFilename, std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices)
+void MapHandler::optimize(std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices)
 {
     std::vector<Vertex> uniques;
     std::vector<uint32_t> indices;
@@ -351,57 +212,6 @@ void MapHandler::optimize(const std::string p_OptimizedFilename, std::vector<Ver
 
     p_Vertices = uniques;
     p_Indices = indices;
-
-    // Output to file
-    writeRaw(p_OptimizedFilename, p_Vertices, p_Indices);
-    return;
-}
-
-void MapHandler::writeRaw(const std::string p_OptimizedFilename, std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices)
-{
-    // Sanity check
-    if(p_Vertices.empty() || p_Indices.empty())
-        throw std::runtime_error("Vertex or index data containers are empty; No mesh data to output to file");
-
-    std::ofstream file(p_OptimizedFilename, std::ios::binary | std::ios::trunc);
-
-    if(!file.is_open())
-        throw std::runtime_error("Failed to open file to output optimized mesh data");
-    
-
-    // Output vertices vector
-    /*
-        Start symbol is :start [data type] || Ex: :start vertex or :start index
-
-        End symbol is :end || Ends last :start symbol; If another :start is
-        found before finding an :end the operation will be aborted
-
-        Specifying sizes avoids 28 million copies
-        as a copy occurs every time we pushback a new vertex element
-    */
-   file << "v:" << std::to_string(p_Vertices.size()) << "\n";
-   file << "i:" << std::to_string(p_Indices.size()) << "\n";
-   file << ":start vertex\n";
-   for(const auto& vertex : p_Vertices)
-   {
-       // Output position
-       file << "{" << vertex.position.x << ", " << vertex.position.y << ", " << vertex.position.z << ", " << vertex.position.w << "}\n";
-       // Output color
-       file << "{" << vertex.color.r << ", " << vertex.color.g << ", " << vertex.color.b << ", " << vertex.color.a << "}\n";
-       // Output uv
-       file << "{" << vertex.uv.r << ", " << vertex.uv.g << ", " << vertex.uv.b << ", " << vertex.uv.a << "}\n";
-   }
-   file << ":end\n";
-
-   file << ":start index\n";
-   file << "{";
-   for(const auto& index : p_Indices)
-   {
-       file << index << ", ";
-   }
-   file << "}\n";
-
-    file.close();
     return;
 }
 
@@ -409,5 +219,173 @@ void MapHandler::bindBuffer(vk::CommandBuffer& p_CommandBuffer)
 {
     p_CommandBuffer.bindVertexBuffers(0, vertexBuffer, vk::DeviceSize{0});
     p_CommandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
+    return;
+}
+
+bool MapHandler::isAlreadyOptimized(std::string p_OriginalFilenameRequested)
+{
+    std::string nameV = filenameToBinV(p_OriginalFilenameRequested);
+    std::string nameI = filenameToBinI(p_OriginalFilenameRequested);
+    try
+    {
+        return (std::filesystem::exists(nameV) && std::filesystem::exists(nameI));
+    }
+    catch(std::filesystem::filesystem_error& e)
+    {
+        throw std::runtime_error("Filesystem error : " + std::string(e.what()));
+    }
+}
+
+std::string MapHandler::filenameToBinV(std::string& p_Filename)
+{
+    return p_Filename.substr(0, p_Filename.find(".")) + "_v.bin";
+}
+
+std::string MapHandler::filenameToBinI(std::string& p_Filename)
+{
+    return p_Filename.substr(0, p_Filename.find(".")) + "_i.bin";
+}
+
+void MapHandler::writeRaw(std::string p_OriginalFilenameRequested,
+                          std::vector<Vertex>& p_VertexContainer,
+                          std::vector<uint32_t>& p_IndexContainer)
+{
+    {
+        std::ofstream file(filenameToBinV(p_OriginalFilenameRequested), std::ios::trunc);
+        std::ostream_iterator<Vertex> vertexOutputIterator(file);
+
+        std::cout << "Outputting vertices to "
+            << filenameToBinV(p_OriginalFilenameRequested) << "\n";
+
+        file << "v " << p_VertexContainer.size() << "\n";
+        
+        std::copy(p_VertexContainer.begin(),
+                  p_VertexContainer.end(),
+                  vertexOutputIterator);
+        
+        std::cout << "Done\n";
+        
+        file.close();
+    }
+
+    // Output indices to file
+    {
+        std::ofstream file(filenameToBinI(p_OriginalFilenameRequested), std::ios::trunc);
+        std::ostream_iterator<uint32_t> indexOutputIterator(file, "\n");
+
+        std::cout << "Outputting indices to "
+            << filenameToBinI(p_OriginalFilenameRequested) << "\n";
+
+        file << "i " << p_IndexContainer.size() << "\n";
+        
+        std::copy(p_IndexContainer.begin(),
+                  p_IndexContainer.end(),
+                  indexOutputIterator);
+        
+        std::cout << "Done\n";
+
+        file.close();
+    }
+    return;
+}
+
+void MapHandler::readVertexFile(std::string p_OriginalFilenameRequested,
+                                std::vector<Vertex>& p_VertexContainer)
+{
+    std::cout << "Reading vertex bin file : "
+                << filenameToBinV(p_OriginalFilenameRequested) << "\n";
+    std::ifstream file(filenameToBinV(p_OriginalFilenameRequested));
+    if(!file.is_open())
+        throw std::runtime_error("Failed to open pre optimized file");
+
+    // Read vertices count
+    std::string strVertexCount;
+
+    std::getline(file, strVertexCount);
+    size_t vColon = strVertexCount.find(' ');
+    if(vColon == std::string::npos)
+        throw std::runtime_error("Could not determine vertex count from map file");
+
+    vColon++;
+    size_t vertexCount = 0;
+    try
+    {
+        vertexCount = std::stol(strVertexCount.substr(vColon));
+    }
+    catch (std::invalid_argument& e)
+    {
+        throw std::runtime_error(
+            "Invalid vertex count in map file, received => " + std::string(e.what())
+            );
+    }
+    if(!vertexCount)
+        throw std::runtime_error("Invalid vertex count in map file, = 0");
+
+
+    p_VertexContainer.reserve(vertexCount);
+
+    std::cout << "Beginning read of vertex data\n";
+
+    std::vector<Vertex>::iterator iterator = p_VertexContainer.begin();
+    std::insert_iterator<std::vector<Vertex>> vertexInserter(p_VertexContainer, iterator);
+
+    std::copy(std::istream_iterator<Vertex>(file),
+              std::istream_iterator<Vertex>(),
+              vertexInserter);
+
+    // std::copy(std::istream_iterator<Vertex>(file),
+    //           std::istream_iterator<Vertex>(),
+    //           std::back_inserter(p_VertexContainer));
+    
+    file.close();
+    return;
+}
+
+void MapHandler::readIndexFile(std::string p_OriginalFilenameRequested,
+                               std::vector<uint32_t>& p_IndexContainer)
+{
+    std::cout << "Reading index bin file : "
+                << filenameToBinI(p_OriginalFilenameRequested) << "\n";
+    std::ifstream file(filenameToBinI(p_OriginalFilenameRequested));
+    if(!file.is_open())
+        throw std::runtime_error("Failed to open pre optimized file");
+
+    std::string strIndexCount;
+    std::getline(file, strIndexCount);
+    size_t iColon = strIndexCount.find(' ');
+    if(iColon == std::string::npos)
+        throw std::runtime_error("Could not determine index count");
+
+    iColon++;
+    size_t indexCount = 0;
+    try
+    {
+        indexCount = std::stol(strIndexCount.substr(iColon));
+    }
+    catch (std::invalid_argument &e)
+    {
+        throw std::runtime_error(
+            "Invalid index count in map file, received => " + std::string(e.what())
+            );
+    }
+    if(!indexCount)
+        throw std::runtime_error("Invalid index count in map file, = 0");
+
+    p_IndexContainer.reserve(indexCount);
+
+    std::cout << "Beginning read of index data\n";
+
+    std::vector<uint32_t>::iterator iterator = p_IndexContainer.begin();
+    std::insert_iterator<std::vector<uint32_t>> indexInserter(p_IndexContainer, iterator);
+
+    std::copy(std::istream_iterator<uint32_t>(file),
+              std::istream_iterator<uint32_t>(),
+              indexInserter);
+
+    // std::copy(std::istream_iterator<uint32_t>(file),
+    //           std::istream_iterator<uint32_t>(),
+    //           std::back_inserter(p_IndexContainer));
+    
+    file.close();
     return;
 }

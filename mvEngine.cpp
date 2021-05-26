@@ -244,10 +244,8 @@ void Engine::go(void)
 
     try
     {
-        auto [vertices, indices] = mapHandler.readHeightMap("heightmaps/test.png");
-        std::cout << "Vertices returned => " << std::to_string(vertices.size()) << "\n";
+        auto [vertices, indices] = mapHandler.readHeightMap("heightmaps/scaled.png");
 
-        
         using enum vk::MemoryPropertyFlagBits;
 
         // Create vertex buffer
@@ -257,6 +255,7 @@ void Engine::go(void)
                     &mapHandler.vertexBuffer,
                     &mapHandler.vertexMemory,
                     vertices.data());
+
         // Create index buffer
         createBuffer(vk::BufferUsageFlagBits::eIndexBuffer,
                     eHostCoherent | eHostVisible,
@@ -276,8 +275,11 @@ void Engine::go(void)
 
     logger.logMessage("Entering game loop\n");
 
-    // force test
+#ifndef NDEBUG
+    // FORCE TESTING SWAPCHAIN RECREATION TO ENSURE
+    // WE AREN'T MISSING REINITIALIZATION METHODS
     recreateSwapchain();
+#endif
 
     while (!glfwWindowShouldClose(window))
     {
@@ -292,70 +294,70 @@ void Engine::go(void)
             accumulated -= timestep;
 
             // Get input events
-            Keyboard::Event kbdEvent = keyboard.read();
-            Mouse::Event mouseEvent = mouse.read();
+        Keyboard::Event kbdEvent = keyboard.read();
+        Mouse::Event mouseEvent = mouse.read();
 
-            if (camera.type == CameraType::eFreeLook && !gui->hasFocus)
+        if (camera.type == CameraType::eFreeLook && !gui->hasFocus)
+        {
+            /*
+                Start mouse drag
+            */
+            if (mouseEvent.type == Mouse::Event::Type::eRightDown)
             {
-                /*
-                  Start mouse drag
-                */
-                if (mouseEvent.type == Mouse::Event::Type::eRightDown)
-                {
 
-                    if (!mouse.isDragging)
-                    {
-                        // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION,
-                        // GLFW_TRUE); glfwSetInputMode(window, GLFW_CURSOR,
-                        // GLFW_CURSOR_DISABLED);
-                        mouse.startDrag(camera.orbitAngle, camera.pitch);
-                    }
-                }
-                if (mouseEvent.type == Mouse::Event::Type::eRightRelease)
+                if (!mouse.isDragging)
                 {
-                    if (mouse.isDragging)
-                    {
-                        // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION,
-                        // GLFW_FALSE); glfwSetInputMode(window, GLFW_CURSOR,
-                        // GLFW_CURSOR_NORMAL);
-                        mouse.endDrag();
-                    }
+                    // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION,
+                    // GLFW_TRUE); glfwSetInputMode(window, GLFW_CURSOR,
+                    // GLFW_CURSOR_DISABLED);
+                    mouse.startDrag(camera.orbitAngle, camera.pitch);
                 }
-
-                // if drag enabled check for release
+            }
+            if (mouseEvent.type == Mouse::Event::Type::eRightRelease)
+            {
                 if (mouse.isDragging)
                 {
-                    camera.rotate({mouse.dragDeltaY, -mouse.dragDeltaX, 0.0f}, 1.0f);
-
-                    mouse.storedOrbit = camera.orbitAngle;
-                    mouse.storedPitch = camera.pitch;
-                    mouse.clear();
+                    // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION,
+                    // GLFW_FALSE); glfwSetInputMode(window, GLFW_CURSOR,
+                    // GLFW_CURSOR_NORMAL);
+                    mouse.endDrag();
                 }
-
-                // WASD
-                if (keyboard.isKey(window, GLFW_KEY_W))
-                    camera.move(camera.rotation.y,
-                                {0.0f, 0.0f, -1.0f},
-                                (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
-                if (keyboard.isKey(window, GLFW_KEY_A))
-                    camera.move(camera.rotation.y,
-                                {-1.0f, 0.0f, 0.0f},
-                                (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
-                if (keyboard.isKey(window, GLFW_KEY_S))
-                    camera.move(camera.rotation.y,
-                                {0.0f, 0.0f, 1.0f},
-                                (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
-                if (keyboard.isKey(window, GLFW_KEY_D))
-                    camera.move(camera.rotation.y,
-                                {1.0f, 0.0f, 0.0f},
-                                (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
-
-                // space + alt
-                if (keyboard.isKey(window, GLFW_KEY_SPACE))
-                    camera.moveUp(keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT));
-                if (keyboard.isKey(window, GLFW_KEY_LEFT_ALT))
-                    camera.moveDown(keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT));
             }
+
+            // if drag enabled check for release
+            if (mouse.isDragging)
+            {
+                camera.rotate({mouse.dragDeltaY, -mouse.dragDeltaX, 0.0f}, 1.0f);
+
+                mouse.storedOrbit = camera.orbitAngle;
+                mouse.storedPitch = camera.pitch;
+                mouse.clear();
+            }
+
+            // WASD
+            if (keyboard.isKey(window, GLFW_KEY_W))
+                camera.move(camera.rotation.y,
+                            {0.0f, 0.0f, -1.0f},
+                            (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
+            if (keyboard.isKey(window, GLFW_KEY_A))
+                camera.move(camera.rotation.y,
+                            {-1.0f, 0.0f, 0.0f},
+                            (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
+            if (keyboard.isKey(window, GLFW_KEY_S))
+                camera.move(camera.rotation.y,
+                            {0.0f, 0.0f, 1.0f},
+                            (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
+            if (keyboard.isKey(window, GLFW_KEY_D))
+                camera.move(camera.rotation.y,
+                            {1.0f, 0.0f, 0.0f},
+                            (keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT)));
+
+            // space + alt
+            if (keyboard.isKey(window, GLFW_KEY_SPACE))
+                camera.moveUp(keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT));
+            if (keyboard.isKey(window, GLFW_KEY_LEFT_ALT))
+                camera.moveDown(keyboard.isKey(window, GLFW_KEY_LEFT_SHIFT));
+        }
 
             /*
                 THIRD PERSON CAMERA
@@ -689,7 +691,7 @@ void Engine::preparePipeline(void)
     vk::PipelineRasterizationStateCreateInfo rsState;
     rsState.depthClampEnable = VK_FALSE;
     rsState.rasterizerDiscardEnable = VK_FALSE;
-    rsState.polygonMode = vk::PolygonMode::ePoint;
+    rsState.polygonMode = vk::PolygonMode::eLine;
     rsState.cullMode = vk::CullModeFlagBits::eBack;
     rsState.frontFace = vk::FrontFace::eCounterClockwise;
     rsState.depthBiasEnable = VK_FALSE;

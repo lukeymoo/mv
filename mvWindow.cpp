@@ -172,6 +172,12 @@ Window::~Window()
     if (logicalDevice)
         logicalDevice.destroy();
 
+#ifndef NDEBUG
+    pfn_vkDestroyDebugUtilsMessengerEXT(instance,
+                                    static_cast<VkDebugUtilsMessengerEXT>(vulkanHandleDebugCallback),
+                                    nullptr);
+#endif
+
     if (instance)
         instance.destroy();
 
@@ -221,6 +227,8 @@ void Window::initVulkan(void)
 {
     // creates vulkan instance with specified instance extensions/layers
     createInstance();
+
+    // Load debug utility functions for persistent validation error reporting
 
     std::vector<vk::PhysicalDevice> physicalDevices = instance.enumeratePhysicalDevices();
 
@@ -369,6 +377,37 @@ void Window::createInstance(void)
     // double check instance(prob a triple check at this point)
     if (!instance)
         throw std::runtime_error("Failed to create vulkan instance");
+
+#ifndef NDEBUG
+     // Load debug util function
+    pfn_vkCreateDebugUtilsMessengerEXT =
+        reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance,
+                                                                    "vkCreateDebugUtilsMessengerEXT"));
+    if(!pfn_vkCreateDebugUtilsMessengerEXT)
+        throw std::runtime_error("Failed to load debug messenger creation function");
+    
+    pfn_vkDestroyDebugUtilsMessengerEXT =
+        reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance,
+                                                                    "vkDestroyDebugUtilsMessengerEXT"));
+    if(!pfn_vkDestroyDebugUtilsMessengerEXT)
+        throw std::runtime_error("Failed to load debug messenger destroy function");
+    
+    vk::DebugUtilsMessengerCreateInfoEXT debugCallbackInfo;
+    debugCallbackInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError   |
+                                    vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo    |
+                                    vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+    debugCallbackInfo.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral     |
+                                vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+                                vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+    debugCallbackInfo.pfnUserCallback = generalDebugCallback;
+
+    VkResult result = pfn_vkCreateDebugUtilsMessengerEXT(instance,
+                                    reinterpret_cast<VkDebugUtilsMessengerCreateInfoEXT*>(&debugCallbackInfo),
+                                    nullptr,
+                                    reinterpret_cast<VkDebugUtilsMessengerEXT*>(&vulkanHandleDebugCallback));
+    if(result != VK_SUCCESS)
+        throw std::runtime_error("Failed to create debug utils messenger");
+#endif
 
     return;
 }
@@ -747,6 +786,40 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(
     //         << p_CallbackData->pMessage << "\n\n";
     //     std::cout << oss.str();
     // }
+    return false;
+}
+VKAPI_ATTR
+VkBool32 VKAPI_CALL generalDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
+                                         [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
+                                         const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
+                                         [[maybe_unused]] void* p_UserData)
+{
+    if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+    {
+        std::ostringstream oss;
+        oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
+            << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
+        std::cout << oss.str();
+    }
+    if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        std::ostringstream oss;
+        oss << std::endl
+            << "Warning: " << p_CallbackData->messageIdNumber << ", "
+            << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
+        std::cout << oss.str();
+    }
+    if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    {
+        std::ostringstream oss;
+        oss << std::endl
+            << "Error: " << p_CallbackData->messageIdNumber << ", "
+            << p_CallbackData->pMessageIdName << "\n"
+            << p_CallbackData->pMessage << "\n\n";
+        std::cout << oss.str();
+    }
     return false;
 }
 

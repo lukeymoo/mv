@@ -122,7 +122,11 @@ class Window
 
   public:
     // Instance/Device extension functions -- must be loaded
-    PFN_vkCmdSetPrimitiveTopologyEXT pfn_vkCmdSetPrimitiveTopology;
+    PFN_vkCmdSetPrimitiveTopologyEXT pfn_vkCmdSetPrimitiveTopology = nullptr;
+
+    vk::DebugUtilsMessengerEXT vulkanHandleDebugCallback;
+    PFN_vkCreateDebugUtilsMessengerEXT pfn_vkCreateDebugUtilsMessengerEXT = nullptr;
+    PFN_vkDestroyDebugUtilsMessengerEXT pfn_vkDestroyDebugUtilsMessengerEXT = nullptr;
 
     // Glfw
     GLFWwindow *window = nullptr;
@@ -180,8 +184,15 @@ class Window
     // clang-format on
 }; // end window
 
+// Instance creation/destruction callback
 VKAPI_ATTR
 VkBool32 VKAPI_CALL debug_message_processor(
     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
     VkDebugUtilsMessageTypeFlagsEXT message_type,
     const VkDebugUtilsMessengerCallbackDataEXT *callback_data, void *user_data);
+
+// Persistent vulkan debug callback
+VKAPI_ATTR
+VkBool32 VKAPI_CALL generalDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                         VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                         const VkDebugUtilsMessengerCallbackDataEXT *callbackData, void* userData);

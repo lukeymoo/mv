@@ -157,10 +157,6 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
 
     // get the surface width|height reported by vulkan
     // store in our interface member variables for future use
-    std::cout << "Current window width => " << std::to_string(p_WindowWidth) << "\n";
-    std::cout << "Current window height => " << std::to_string(p_WindowHeight) << "\n";
-    std::cout << "Reported width => " << std::to_string(capabilities.currentExtent.width) << "\n";
-    std::cout << "Report height => " << std::to_string(capabilities.currentExtent.height) << "\n";
     p_WindowWidth = capabilities.currentExtent.width;
     p_WindowHeight = capabilities.currentExtent.height;
     swapExtent.width = p_WindowWidth;

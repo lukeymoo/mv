@@ -316,38 +316,76 @@ void Mesh::bindBuffers(vk::CommandBuffer &p_CommandBuffer)
     return;
 }
 
-// void Mesh::cleanup(const vk::Device &p_LogicalDevice)
-// {
-//     if (vertexBuffer)
-//     {
-//         p_LogicalDevice.logicalDevice->destroyBuffer(vertexBuffer);
-//         vertexBuffer = nullptr;
-//     }
+std::ostream& operator<<(std::ostream& p_OutputStream, const Vertex& p_Vertex)
+{
+    p_OutputStream
+            << p_Vertex.position.x << " "
+            << p_Vertex.position.y << " "
+            << p_Vertex.position.z << " "
+            << p_Vertex.position.w << "|"
+            << p_Vertex.color.r << " "
+            << p_Vertex.color.g << " "
+            << p_Vertex.color.b << " "
+            << p_Vertex.color.a << "|"
+            << p_Vertex.uv.x << " "
+            << p_Vertex.uv.y << " "
+            << 0.0f << " "
+            << 0.0f << "\n";
+    return p_OutputStream;
+}
 
-//     if (vertexMemory)
-//     {
-//         p_LogicalDevice.logicalDevice->freeMemory(vertexMemory);
-//         vertexMemory = nullptr;
-//     }
+std::istream& operator>>(std::istream& p_InputStream, Vertex& p_DestObject)
+{
+    std::string input;
+    std::getline(p_InputStream, input);
 
-//     if (indexBuffer)
-//     {
-//         p_LogicalDevice.logicalDevice->destroyBuffer(indexBuffer);
-//         indexBuffer = nullptr;
-//     }
-//     if (indexMemory)
-//     {
-//         p_LogicalDevice.logicalDevice->freeMemory(indexMemory);
-//         indexMemory = nullptr;
-//     }
+    // If empty, disregard
+    if(input.empty())
+        return p_InputStream;
 
-//     // cleanup textures
-//     if (!textures.empty())
-//     {
-//         for (auto &texture : textures)
-//         {
-//             texture.mvImage.destroy(p_LogicalDevice);
-//         }
-//     }
-//     return;
-// }
+    // Grab each segment of line
+    // x y z w|r g b a|u v 0 0
+    
+    size_t posDelimit = input.find('|');
+    if(posDelimit == std::string::npos)
+    {
+        std::cout << "Current input : " << input << "\n";
+        throw std::runtime_error("Error reading position values, corrupted file");
+    }
+
+    size_t colorDelimit = input.find('|', posDelimit+1);
+    if(colorDelimit == std::string::npos)
+    {
+        std::cout << "Current input : " << input << "\n";
+        throw std::runtime_error("Error reading color values, corrupted file");
+    }
+
+    std::string strPosition(input.substr(0, posDelimit));
+    std::string strColor(&input.at(posDelimit+1), &input.at(colorDelimit));
+    std::string strUV(input.substr(colorDelimit+1));
+
+    std::istringstream posStream(strPosition);
+    std::istringstream colorStream(strColor);
+    std::istringstream uvStream(strUV);
+
+    std::vector<std::string> position {std::istream_iterator<std::string>(posStream), {}};
+    std::vector<std::string> color {std::istream_iterator<std::string>(colorStream), {}};
+    std::vector<std::string> uv {std::istream_iterator<std::string>(uvStream), {}};
+    
+    p_DestObject.position.x = std::stof(position.at(0));
+    p_DestObject.position.y = std::stof(position.at(1));
+    p_DestObject.position.z = std::stof(position.at(2));
+    p_DestObject.position.w = std::stof(position.at(3));
+    p_DestObject.color.r = std::stof(color.at(0));
+    p_DestObject.color.g = std::stof(color.at(1));
+    p_DestObject.color.b = std::stof(color.at(2));
+    p_DestObject.color.a = std::stof(color.at(3));
+    p_DestObject.uv.x = std::stof(uv.at(0));
+    p_DestObject.uv.y = std::stof(uv.at(1));
+    // p_DestObject.uv.z = std::stof(uv.at(2));
+    // p_DestObject.uv.w = std::stof(uv.at(3));
+    p_DestObject.uv.z = 0.0f; // Last 2 values disregard
+    p_DestObject.uv.w = 0.0f;
+
+    return p_InputStream;
+}

@@ -1,5 +1,10 @@
 #pragma once
 
+#include <iterator>
+#include <algorithm>
+#include <istream>
+#include <ostream>
+
 #include <vulkan/vulkan.hpp>
 
 #define GLM_FORCE_RADIANS
@@ -178,6 +183,22 @@ struct Vertex
     glm::vec4 position = {0.0f, 0.0f, 0.0f, 0.0f};
     glm::vec4 color = {0.0f, 0.0f, 0.0f, 0.0f};
     glm::vec4 uv = {0.0f, 0.0f, 0.0f, 0.0f};
+
+    // For copying directly to/from file streams
+    Vertex& operator=(Vertex& rhs) {
+        this->position = rhs.position;
+        this->color = rhs.color;
+        this->uv = rhs.uv;
+        return *this;
+    }
+    Vertex& operator=(const Vertex& rhs) {
+        this->position = rhs.position;
+        this->color = rhs.color;
+        this->uv = rhs.uv;
+        return *this;
+    }
+    friend std::ostream& operator<<(std::ostream& p_OutputStream, const Vertex& p_Vertex);
+    friend std::istream& operator>>(std::istream& p_InputStream, Vertex& p_Vertex);
 
     static vk::VertexInputBindingDescription getBindingDescription()
     {
