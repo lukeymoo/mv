@@ -1,6 +1,6 @@
 {
-    "editor.formatOnSave": false,
-    "C_Cpp.clang_format_style": "None",
+    "editor.formatOnSave": true,
+    "C_Cpp.clang_format_style": "file",
     "files.associations": {
         "array": "cpp",
         "atomic": "cpp",
@@ -66,6 +66,7 @@
         "thread": "cpp",
         "codecvt": "cpp",
         "numbers": "cpp",
-        "regex": "cpp"
+        "regex": "cpp",
+        "semaphore": "cpp"
     }
 }

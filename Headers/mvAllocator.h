@@ -13,147 +13,155 @@ class Engine;
 
 class Allocator
 {
+public:
+  struct ContainerInitStruct;
+  class Container
+  {
   public:
-    struct ContainerInitStruct;
-    class Container
+    enum Status
     {
-      public:
-        enum Status
-        {
-            Clear,
-            Usable,
-            Fragmented,
-            Full
-        };
-
-        Container(ContainerInitStruct &p_ContainerInitStruct);
-        ~Container();
-
-        // Disallow copy
-        Container(const Container &) = delete;
-        Container &operator=(const Container &) = delete;
-
-        // Allow move
-        Container(Container &&) = default;
-        Container &operator=(Container &&) = delete;
-
-        // owns
-        vk::DescriptorPool pool;
-
-        // references
-        Allocator *parentAllocator = nullptr;
-        std::vector<Container> *poolContainersArray = nullptr; // pointer to container for all pools
-
-        // infos
-        uint32_t index = 0;      // index to self in pools_array
-        uint32_t count = 0;      // max sets requested from this pool on allocation
-        vk::DescriptorType type; // type of descriptors this pool was created for
-        Container *self = nullptr;
-        Container::Status status = Status::Clear;
+      Clear,
+      Usable,
+      Fragmented,
+      Full
     };
 
-  private:
-    Container *retryAllocateSet(vk::DescriptorSetLayout p_DescriptorLayout,
-                                vk::DescriptorSet p_DestinationDescriptorSet,
-                                uint32_t p_PoolMaxDescriptorSets);
+    Container (ContainerInitStruct &p_ContainerInitStruct);
+    ~Container ();
 
-  public:
-    Engine *engine = nullptr;
+    // Disallow copy
+    Container (const Container &) = delete;
+    Container &operator= (const Container &) = delete;
 
-    std::vector<Container> containers;
-    std::unordered_map<std::string, vk::DescriptorSetLayout> layouts;
+    // Allow move
+    Container (Container &&) = default;
+    Container &operator= (Container &&) = delete;
+
+    // owns
+    vk::DescriptorPool pool;
+
+    // references
+    Allocator *parentAllocator = nullptr;
+    std::vector<Container> *poolContainersArray
+        = nullptr; // pointer to container for all pools
 
     // infos
-    uint32_t currentPool = 0;
+    uint32_t index = 0;      // index to self in pools_array
+    uint32_t count = 0;      // max sets requested from this pool on allocation
+    vk::DescriptorType type; // type of descriptors this pool was created for
+    Container *self = nullptr;
+    Container::Status status = Status::Clear;
+  };
 
-    // disallow copy
-    Allocator(const Allocator &) = delete;
-    Allocator &operator=(const Allocator &) = delete;
+private:
+  Container *retryAllocateSet (vk::DescriptorSetLayout p_DescriptorLayout,
+                               vk::DescriptorSet p_DestinationDescriptorSet,
+                               uint32_t p_PoolMaxDescriptorSets);
 
-    // allow move
-    Allocator(Allocator &&) = default;
-    Allocator &operator=(Allocator &&) = default;
+public:
+  Engine *engine = nullptr;
 
-    Allocator(Engine *p_Engine);
-    ~Allocator();
+  std::vector<Container> containers;
+  std::unordered_map<vk::DescriptorType, vk::DescriptorSetLayout> layouts;
 
-    // Load model
-    void loadModel(std::vector<Model> *p_Models, std::vector<std::string> *p_ModelNames,
-                   const char *p_Filename);
+  // infos
+  uint32_t currentPool = 0;
 
-    // Creates object with specified model data
-    void createObject(std::vector<Model> *p_Models, std::string p_ModelName);
+  // disallow copy
+  Allocator (const Allocator &) = delete;
+  Allocator &operator= (const Allocator &) = delete;
 
-    void cleanup(void);
+  // allow move
+  Allocator (Allocator &&) = default;
+  Allocator &operator= (Allocator &&) = default;
 
-    // returns handle to current pool in use
-    Container *get(void);
+  Allocator (Engine *p_Engine);
+  ~Allocator ();
 
-    Container *allocatePool(uint32_t p_Count);
+  // Load model
+  void loadModel (std::vector<Model> *p_Models,
+                  std::vector<std::string> *p_ModelNames,
+                  const char *p_Filename);
 
-    void createLayout(std::string p_LayoutName, vk::DescriptorType p_DescriptorType,
-                      uint32_t p_Count, vk::ShaderStageFlagBits p_ShaderStageFlags,
-                      uint32_t p_Binding);
+  // Creates object with specified model data
+  void createObject (std::vector<Model> *p_Models, std::string p_ModelName);
 
-    void createLayout(std::string p_LayoutName, vk::DescriptorSetLayoutCreateInfo &p_CreateInfo);
+  void cleanup (void);
 
-    vk::DescriptorSetLayout getLayout(std::string p_LayoutName);
+  // returns handle to current pool in use
+  Container *get (void);
 
-    /*
-        Allocate descriptor set
-        Manual descriptor pool container selection
-    */
-    void allocateSet(vk::DescriptorSetLayout &p_DescriptorLayout,
-                     vk::DescriptorSet &p_DestinationSet);
+  Container *allocatePool (uint32_t p_Count);
 
-    /*
-        Allocate descriptor set
-        Automatically uses latest allocated pool as source for allocation
-    */
-    void allocateSet(Container *p_PoolContainer, vk::DescriptorSetLayout &p_DescriptorLayout,
-                     vk::DescriptorSet &p_DestinationSet);
+  void createLayout (vk::DescriptorType p_DescriptorType, uint32_t p_Count,
+                     vk::ShaderStageFlagBits p_ShaderStageFlags,
+                     uint32_t p_Binding);
 
-    /*
-        Bind a buffer descriptor to a target descriptor set
-        Automatically selects latest allocated pool
-    */
-    void updateSet(vk::DescriptorBufferInfo &p_BufferDescriptor,
-                   vk::DescriptorSet &p_TargetDescriptorSet, uint32_t p_DestinationBinding);
+  void createLayout (vk::DescriptorSetLayoutCreateInfo &p_CreateInfo);
 
-    /*
-        Bind buffer descriptor to target descriptor set
-        Manual pool container selection
-    */
-    // void updateSet(const vk::Device &p_LogicalDevice, Container
-    // *p_PoolContainer,
-    //                vk::DescriptorBufferInfo &p_BufferDescriptor,
-    //                vk::DescriptorSet &p_TargetDescriptorSet, uint32_t
-    //                p_DestinationBinding);
+  vk::DescriptorSetLayout getLayout (vk::DescriptorType p_LayoutType);
 
-    /*
-        Bind image descriptor to a target descriptor set
-        Automatically selects latest allocated pool
-    */
-    void updateSet(vk::DescriptorImageInfo &p_ImageDescriptor,
-                   vk::DescriptorSet &p_TargetDescriptorSet, uint32_t p_DestinationBinding);
+  /*
+      Allocate descriptor set
+      Manual descriptor pool container selection
+  */
+  void allocateSet (vk::DescriptorSetLayout &p_DescriptorLayout,
+                    vk::DescriptorSet &p_DestinationSet);
 
-    /*
-        Bind image descriptor to a target descriptor set
-        Manual pool container selection
-    */
-    // void updateSet(const vk::Device &p_LogicalDevice, Container
-    // *p_PoolContainer,
-    //                vk::DescriptorImageInfo &p_ImageDescriptor,
-    //                vk::DescriptorSet &p_TargetDescriptorSet, uint32_t
-    //                p_DestinationBinding);
+  /*
+      Allocate descriptor set
+      Automatically uses latest allocated pool as source for allocation
+  */
+  void allocateSet (Container *p_PoolContainer,
+                    vk::DescriptorSetLayout &p_DescriptorLayout,
+                    vk::DescriptorSet &p_DestinationSet);
 
-    struct ContainerInitStruct
-    {
-        uint32_t count = 1000; // max sets specified at pool allocation
+  /*
+      Bind a buffer descriptor to a target descriptor set
+      Automatically selects latest allocated pool
+  */
+  void updateSet (vk::DescriptorBufferInfo &p_BufferDescriptor,
+                  vk::DescriptorSet &p_TargetDescriptorSet,
+                  uint32_t p_DestinationBinding);
 
-        // ptr to allocator all pools have been allocated with
-        Allocator *parentAllocator = nullptr;
-        // ptr to container for all pools
-        std::vector<Allocator::Container> *poolContainersArray = nullptr;
-    };
+  /*
+      Bind buffer descriptor to target descriptor set
+      Manual pool container selection
+  */
+  // void updateSet(const vk::Device &p_LogicalDevice, Container
+  // *p_PoolContainer,
+  //                vk::DescriptorBufferInfo &p_BufferDescriptor,
+  //                vk::DescriptorSet &p_TargetDescriptorSet, uint32_t
+  //                p_DestinationBinding);
+
+  /*
+      Bind image descriptor to a target descriptor set
+      Automatically selects latest allocated pool
+  */
+  void updateSet (vk::DescriptorImageInfo &p_ImageDescriptor,
+                  vk::DescriptorSet &p_TargetDescriptorSet,
+                  uint32_t p_DestinationBinding);
+
+  /*
+      Bind image descriptor to a target descriptor set
+      Manual pool container selection
+  */
+  // void updateSet(const vk::Device &p_LogicalDevice, Container
+  // *p_PoolContainer,
+  //                vk::DescriptorImageInfo &p_ImageDescriptor,
+  //                vk::DescriptorSet &p_TargetDescriptorSet, uint32_t
+  //                p_DestinationBinding);
+
+  struct ContainerInitStruct
+  {
+    uint32_t count = 1000; // max sets specified at pool allocation
+
+    // ptr to allocator all pools have been allocated with
+    Allocator *parentAllocator = nullptr;
+    // ptr to container for all pools
+    std::vector<Allocator::Container> *poolContainersArray = nullptr;
+  };
+
+private:
+  std::string descriptorTypeToString (vk::DescriptorType p_Type);
 };

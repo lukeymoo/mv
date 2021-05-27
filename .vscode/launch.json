@@ -21,11 +21,11 @@
                 //     "text": "-enable-pretty-printing",
                 //     "ignoreFailures": true
                 // }
-                // {
-                //     "description": "Enable break on all exceptions",
-                //     "text": "catch throw",
-                //     "ignoreFailures": true
-                // }
+                {
+                    "description": "Enable break on all exceptions",
+                    "text": "catch throw",
+                    "ignoreFailures": true
+                }
             ],
             "preLaunchTask": "C/C++: g++-11 build active file",
             "miDebuggerPath": "/usr/bin/gdb"

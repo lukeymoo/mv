@@ -5,59 +5,95 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <mutex>
+#include <ranges>
 #include <string>
+#include <thread>
 #include <vector>
 
+class GuiHandler;
 struct Vertex;
+class Engine;
 
 class MapHandler
 {
-  public:
-    MapHandler();
-    ~MapHandler();
+public:
+  MapHandler (Engine *p_ParentEngine);
+  ~MapHandler ();
 
-    enum NoiseType
-    {
-        ePerlin = 0,
-        eOpenSimplex,
-    };
+  enum NoiseType
+  {
+    ePerlin = 0,
+    eOpenSimplex,
+  };
 
-    vk::Buffer vertexBuffer;
-    vk::DeviceMemory vertexMemory;
+  bool isMapLoaded = false;
 
-    vk::Buffer indexBuffer;
-    vk::DeviceMemory indexMemory;
+  std::string filename = "None";
 
-    size_t vertexCount = 0;
-    size_t indexCount = 0;
+  vk::Buffer vertexBuffer;
+  vk::DeviceMemory vertexMemory;
 
-    void optimize(std::vector<Vertex>& p_Vertices, std::vector<uint32_t>& p_Indices);
+  vk::Buffer indexBuffer;
+  vk::DeviceMemory indexMemory;
 
-    void writeRaw(std::string p_OriginalFilenameRequested,
-                  std::vector<Vertex>& p_VertexContainer,
-                  std::vector<uint32_t>& p_IndexContainer);
+  size_t vertexCount = 0;
+  size_t indexCount = 0;
 
-    // Returns vertex array & indices array
-    std::pair<std::vector<Vertex>, std::vector<uint32_t>> readHeightMap(std::string p_Filename);
+  // offset of vertices each index start/count correspond to
+  std::vector<size_t> vertexOffsets;
+  // { index start, index count }
+  std::vector<std::pair<uint32_t, uint32_t>> indexOffsets;
 
-    void bindBuffer(vk::CommandBuffer& p_CommandBuffer);
+  Engine *ptrEngine = nullptr;
 
-    void cleanup(const vk::Device& p_LogicalDevice);
+  // Load map file while also updating Gui
+  void readHeightMap (GuiHandler *p_Gui, std::string p_Filename);
 
-  private:
-    // Manipulates the filename that was originally requested by load
-    // removes extension and appends _v.bin && _i.bin to look for the optimized file
-    // Vertices file & indices file
-    bool isAlreadyOptimized(std::string p_OriginalFilenameRequested);
+  // Load map file without updating gui
+  std::pair<std::vector<Vertex>, std::vector<uint32_t>>
+  readHeightMap (std::string p_Filename);
 
-    void readVertexFile(std::string p_OriginalFilenameRequested,
-                        std::vector<Vertex>& p_VertexContainer);
+  void bindBuffer (vk::CommandBuffer &p_CommandBuffer);
 
-    void readIndexFile(std::string p_OriginalFilenameRequested,
-                        std::vector<uint32_t>& p_IndexContainer);
+  void cleanup (const vk::Device &p_LogicalDevice);
 
-    // converts to _v.bin filename
-    std::string filenameToBinV(std::string& p_Filename);
-    // converts to _i.bin filename
-    std::string filenameToBinI(std::string& p_Filename);
+private:
+  // Generates array of quads from array of xyz points
+  std::vector<Vertex> generateMesh (size_t p_XLength, size_t p_ZLength,
+                                    std::vector<Vertex> &p_HeightValues);
+
+  std::pair<std::vector<Vertex>, std::vector<uint32_t>>
+  optimize (std::vector<Vertex> &p_Vertices);
+
+  void writeRaw (std::string p_FilenameIndexAppended,
+                 std::vector<Vertex> &p_VertexContainer,
+                 std::vector<uint32_t> &p_IndexContainer);
+
+  void writeVertexFile (std::string p_FilenameIndexAppended,
+                        std::vector<Vertex> &p_VertexContainer);
+
+  void writeIndexFile (std::string p_FilenameIndexAppended,
+                       std::vector<uint32_t> &p_IndexContainer);
+
+  // Manipulates the filename that was originally requested by load
+  // removes extension and appends _v.bin && _i.bin to look for the optimized
+  // file Vertices file & indices file
+  bool isAlreadyOptimized (std::string p_OriginalFilenameRequested);
+
+  void readVertexFile (std::string p_OriginalFilenameRequested,
+                       std::vector<Vertex> &p_VertexContainer);
+
+  void readIndexFile (std::string p_OriginalFilenameRequested,
+                      std::vector<uint32_t> &p_IndexContainer);
+
+  void allocate (std::vector<Vertex> &p_VertexContainer,
+                 std::vector<uint32_t> &p_IndexContainer);
+
+  std::string getBaseFilename (std::string &p_Filename);
+
+  // converts to _v.bin filename
+  std::string filenameToBinV (std::string &p_Filename);
+  // converts to _i.bin filename
+  std::string filenameToBinI (std::string &p_Filename);
 };

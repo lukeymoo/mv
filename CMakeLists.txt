@@ -64,4 +64,4 @@ add_executable(main ${HEADERS} ${SOURCES})
 
 target_include_directories(main PUBLIC Headers/ Headers/imgui-1.82/ Headers/imgui-1.82/backends/)
 
-target_link_libraries(main gcc vulkan dl stdc++fs assimp glfw)
+target_link_libraries(main gcc vulkan dl pthread stdc++fs assimp glfw)
