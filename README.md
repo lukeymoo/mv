@@ -31,4 +31,11 @@ Vertex count is based on models so it's not accurate. This mesh is originally lo
 
 After an optimization function it is shrunk down to ~8.4 million vertices & 28.5 million indices.
 ZERO frustum culling; ZERO occlusion culling; With some basic optimizations I am hoping to get frame time back ~1-2 ms for raw terrain data.
-![Terrain Loading](https://raw.githubusercontent.com/lukeymoo/mv/development/snapshots/Screenshot%20from%202021-05-24%2008-53-56.png)
+
+Multi threaded loading/generation; Now integrates with GUI so maps can actually be loaded in game instead of via source rebuild.
+Currently supports 4 threads for loading/generation; Does not handle non multi threaded or less than 4 threads.
+
+PNG images are divided into 4 chunks; Each chunk is passed to a thread. The chunks generate vertices from height values of original grayscale image.
+Height values that lie on the edges of a chunk are colored & later, after all chunks generated, when it's time to stitch them together the color values
+are used to determine how to and where to generate the extra vertices.
+![Terrain Loading](https://raw.githubusercontent.com/lukeymoo/mv/development/snapshots/Screenshot%20from%202021-05-29%2003-22-48.png)
