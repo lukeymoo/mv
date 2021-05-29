@@ -63,29 +63,29 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>>
 MapHandler::readHeightMap (std::string p_Filename)
 {
   //   // Look for already optimized filename
-  if (isAlreadyOptimized (p_Filename))
-    {
-      // Read vertex file
-      std::vector<Vertex> vertices;
-      readVertexFile (p_Filename, vertices);
-      std::cout << "Read " << vertices.size () << " vertices\n";
+  // if (isAlreadyOptimized (p_Filename))
+  //   {
+  //     // Read vertex file
+  //     std::vector<Vertex> vertices;
+  //     readVertexFile (p_Filename, vertices);
+  //     std::cout << "Read " << vertices.size () << " vertices\n";
 
-      // Read indices file
-      std::vector<uint32_t> indices;
-      readIndexFile (p_Filename, indices);
-      std::cout << "Read " << indices.size () << " indices\n";
+  //     // Read indices file
+  //     std::vector<uint32_t> indices;
+  //     readIndexFile (p_Filename, indices);
+  //     std::cout << "Read " << indices.size () << " indices\n";
 
-      // Ensure we setup sizes
-      vertexCount = vertices.size ();
-      indexCount = indices.size ();
+  //     // Ensure we setup sizes
+  //     vertexCount = vertices.size ();
+  //     indexCount = indices.size ();
 
-      allocate (vertices, indices);
+  //     allocate (vertices, indices);
 
-      isMapLoaded = true;
-      filename = p_Filename;
+  //     isMapLoaded = true;
+  //     filename = p_Filename;
 
-      return { vertices, indices };
-    }
+  //     return { vertices, indices };
+  //   }
 
   // Pre optimized file does not exist, load raw & generate optimizations
 
@@ -737,18 +737,36 @@ MapHandler::bindBuffer (vk::CommandBuffer &p_CommandBuffer)
 bool
 MapHandler::isAlreadyOptimized (std::string p_OriginalFilenameRequested)
 {
-  std::string nameV = filenameToBinV (p_OriginalFilenameRequested);
-  std::string nameI = filenameToBinI (p_OriginalFilenameRequested);
-  try
+  std::string base = getBaseFilename (p_OriginalFilenameRequested);
+  std::cout << "Checking for base name : " << base << "\n";
+
+  bool good = true;
+  for (size_t idx = 0; idx < 4; idx++)
     {
-      return (std::filesystem::exists (nameV)
-              && std::filesystem::exists (nameI));
+      try
+        {
+          auto vfile = base + std::to_string (idx) + "_v.bin";
+          auto ifile = base + std::to_string (idx) + "_i.bin";
+          if (!std::filesystem::exists (vfile))
+            {
+              std::cout << "Failed to find vertex file " + vfile + "\n";
+              good = false;
+            }
+          if (!std::filesystem::exists (ifile))
+            {
+              std::cout << "Failed to find index file " + ifile + "\n";
+              good = false;
+            }
+        }
+      catch (std::filesystem::filesystem_error &e)
+        {
+          throw std::runtime_error (
+              "Error occurred while checking for existing meshes "
+              + std::string (e.what ()));
+        }
     }
-  catch (std::filesystem::filesystem_error &e)
-    {
-      throw std::runtime_error ("Filesystem error : "
-                                + std::string (e.what ()));
-    }
+
+  return good;
 }
 
 std::string
