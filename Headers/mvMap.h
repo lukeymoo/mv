@@ -21,12 +21,6 @@ public:
   MapHandler (Engine *p_ParentEngine);
   ~MapHandler ();
 
-  enum NoiseType
-  {
-    ePerlin = 0,
-    eOpenSimplex,
-  };
-
   bool isMapLoaded = false;
 
   std::string filename = "None";
@@ -89,6 +83,36 @@ private:
 
   void allocate (std::vector<Vertex> &p_VertexContainer,
                  std::vector<uint32_t> &p_IndexContainer);
+
+  // Removes duplicate values; if horizontal|vertical -> prunes x|z axis
+  // This method also sorts the vertices based on target axis
+  // Does not manipulate splitValues container so ptrs are still valid
+  void cleanEdge (std::vector<Vertex *> &p_Edge, bool isHorizontal);
+
+  // Provide edge params left->right or top->bottom
+  // creates quads between two provided edges
+  void stitchEdge (std::vector<Vertex *> &p_FirstEdge,
+                   std::vector<Vertex *> &p_SecondEdge,
+                   std::vector<Vertex> &p_Vertices, bool isVertical);
+
+  enum WindingStyle
+  {
+    eFirstCornerToFirstEdge = 0,
+    eFirstCornerToSecondCorner,
+    eFirstCornerToSecondEdge,
+    eFirstEdgeToFirstCorner,
+    eFirstEdgeToSecondEdge,
+    eCenter
+  };
+  // Needs first vertex that starts the edge
+  void stitchCorner (Vertex *p_FirstCorner, Vertex *p_FirstEdgeVertex,
+                     Vertex *p_SecondCorner, Vertex *p_SecondEdgeVertex,
+                     std::vector<Vertex> &p_Vertices, WindingStyle p_Style);
+
+  // stitch center corners where chunks intersect
+  // void stitchCorner (Vertex *p_TLCorner, Vertex *p_TRCorner,
+  //                    Vertex *p_BRCorner, Vertex *p_BLCorner,
+  //                    std::vector<Vertex> &p_Vertices);
 
   std::string getBaseFilename (std::string &p_Filename);
 

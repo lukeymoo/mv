@@ -63,29 +63,29 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>>
 MapHandler::readHeightMap (std::string p_Filename)
 {
   //   // Look for already optimized filename
-  //   if (isAlreadyOptimized (p_Filename))
-  //     {
-  //       // Read vertex file
-  //       std::vector<Vertex> vertices;
-  //       readVertexFile (p_Filename, vertices);
-  //       std::cout << "Read " << vertices.size () << " vertices\n";
+  if (isAlreadyOptimized (p_Filename))
+    {
+      // Read vertex file
+      std::vector<Vertex> vertices;
+      readVertexFile (p_Filename, vertices);
+      std::cout << "Read " << vertices.size () << " vertices\n";
 
-  //       // Read indices file
-  //       std::vector<uint32_t> indices;
-  //       readIndexFile (p_Filename, indices);
-  //       std::cout << "Read " << indices.size () << " indices\n";
+      // Read indices file
+      std::vector<uint32_t> indices;
+      readIndexFile (p_Filename, indices);
+      std::cout << "Read " << indices.size () << " indices\n";
 
-  //       // Ensure we setup sizes
-  //       vertexCount = vertices.size ();
-  //       indexCount = indices.size ();
+      // Ensure we setup sizes
+      vertexCount = vertices.size ();
+      indexCount = indices.size ();
 
-  //       allocate (vertices, indices);
+      allocate (vertices, indices);
 
-  //       isMapLoaded = true;
-  //       filename = p_Filename;
+      isMapLoaded = true;
+      filename = p_Filename;
 
-  //       return { vertices, indices };
-  //     }
+      return { vertices, indices };
+    }
 
   // Pre optimized file does not exist, load raw & generate optimizations
 
@@ -111,6 +111,10 @@ MapHandler::readHeightMap (std::string p_Filename)
         throw std::runtime_error ("STBI returned invalid values :: width, "
                                   "height or color channels is < 0");
 
+      if (tXLength % 2 != 0 || tXLength != tZLength)
+        throw std::runtime_error (
+            "Maps must be even squares where each side is divisible by 2");
+
       size_t xLength = static_cast<size_t> (tXLength);
       size_t zLength = static_cast<size_t> (tZLength);
       [[maybe_unused]] size_t channels = static_cast<size_t> (tChannels);
@@ -125,11 +129,82 @@ MapHandler::readHeightMap (std::string p_Filename)
       // Extract height values and place into new vector
       std::vector<Vertex> heightValues;
       int offset = 0;
-      std::cout << "Getting height values from PNG\n";
+      size_t splitWidth = xLength / 2;
       for (size_t j = 0; j < zLength; j++)
         {
           for (size_t i = 0; i < xLength; i++)
             {
+              glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+              // if left edge
+              if (i == 0 || i == splitWidth)
+                {
+                  if (j == 0 || j == splitWidth) // if top left
+                    {
+                      color = { 1.0f, 1.0f, 0.0f, 1.0f };
+                    }
+                  else if (j == splitWidth - 1
+                           || j == zLength - 1) // if bottom left
+                    {
+                      color = { 1.0f, 0.5f, 0.5f, 1.0f };
+                    }
+                  else
+                    {
+                      color = { 1.0f, 0.0f, 0.0f, 1.0f };
+                    }
+                }
+              // if top edge
+              if (j == 0 || j == splitWidth)
+                {
+                  if (i == 0 || i == splitWidth) // top left
+                    {
+                      color = { 1.0f, 1.0f, 0.0f, 1.0f };
+                    }
+                  else if (i == splitWidth - 1
+                           || i == xLength - 1) // top right
+                    {
+                      color = { 0.0f, 1.0f, 1.0f, 1.0f };
+                    }
+                  else
+                    {
+                      color = { 0.0f, 1.0f, 0.0f, 1.0f };
+                    }
+                }
+              // right edge
+              if (i == splitWidth - 1 || i == xLength - 1)
+                {
+                  if (j == 0 || j == splitWidth) // top right
+                    {
+                      color = { 0.0f, 1.0f, 1.0f, 1.0f };
+                    }
+                  else if (j == splitWidth - 1
+                           || j == zLength - 1) // bottom right
+                    {
+                      color = { 0.5f, 0.5f, 1.0f, 1.0f };
+                    }
+                  else
+                    {
+                      color = { 0.0f, 0.0f, 1.0f, 1.0f };
+                    }
+                }
+              // bottom edge
+              if (j == splitWidth - 1 || j == zLength - 1)
+                {
+                  // bottom left
+                  if (i == 0 || i == splitWidth)
+                    {
+                      color = { 1.0f, 0.5f, 0.5f, 1.0f };
+                    }
+                  else if (i == splitWidth - 1
+                           || i == xLength - 1) // bottom right
+                    {
+                      color = { 0.5f, 0.5f, 1.0f, 1.0f };
+                    }
+                  else
+                    {
+                      color = { 0.5f, 0.5f, 0.5f, 1.0f };
+                    }
+                }
               heightValues.push_back (Vertex{
                   {
                       static_cast<float> (i),
@@ -137,88 +212,117 @@ MapHandler::readHeightMap (std::string p_Filename)
                       static_cast<float> (j),
                       1.0f,
                   },
-                  { 1.0f, 1.0f, 1.0f, 1.0f },
+                  color,
                   { 0.0f, 0.0f, 0.0f, 0.0f },
               });
               offset += 4;
             }
         }
+      // Divide map in half -- we can use UP 4 cores
+      // Anything less and we simply parse each section in a ring buffer of
+      // threads
+      if (xLength % 2 != 0)
+        throw std::runtime_error (
+            "Maps must be an even square; Where a side is divisible by 2");
 
-      std::cout << heightValues.size () << " height values obtained\n";
+      size_t numCores = (std::thread::hardware_concurrency () >= 4)
+                            ? 4
+                            : std::thread::hardware_concurrency ();
 
-      std::cout << "Hardware supports up to "
-                << std::thread::hardware_concurrency ()
-                << " concurrent threads\n";
-
-      int i = static_cast<int> (std::thread::hardware_concurrency ());
-      do
-        {
-          if (heightValues.size () % i == 0)
-            break;
-          i--;
-        }
-      while (i > 0);
-
-      size_t splitSize = heightValues.size () / i;
-
-      std::vector<std::thread> threads (static_cast<size_t> (i));
+      std::vector<std::thread> threads (numCores);
 
       std::cout << "Created " << threads.size () << " threads awaiting jobs\n";
 
       std::vector<std::vector<Vertex>> splitValues;
 
       std::vector<Vertex>::iterator beginIterator = heightValues.begin ();
+      std::vector<Vertex>::iterator bottomQuadIterator
+          = heightValues.begin () + (xLength * splitWidth);
+      std::vector<Vertex>::iterator endIterator = heightValues.end ();
 
+      // Need to divide mesh into even squares
+      // We lose dimensions of map when just fetching contiguous elements
+      // copy top quadrants
+      std::vector<Vertex> tlm;
+      std::vector<Vertex> trm;
+      bool leftOrRight = false; // false = left
       do
         {
-          // Fetch and insert range
-          std::vector<Vertex> tmp;
-          std::copy (beginIterator, std::next (beginIterator, splitSize),
-                     std::back_inserter (tmp));
-
-          splitValues.push_back (tmp);
-
-          beginIterator += splitSize;
-          i--;
+          if (!leftOrRight) // copy left
+            {
+              std ::copy (beginIterator, std::next (beginIterator, splitWidth),
+                          std::back_inserter (tlm));
+            }
+          else // copy right
+            {
+              std::copy (beginIterator, std::next (beginIterator, splitWidth),
+                         std::back_inserter (trm));
+            }
+          // Flip
+          leftOrRight = !leftOrRight;
+          // Incr
+          beginIterator += splitWidth;
         }
-      while (i > 0);
+      while (beginIterator < bottomQuadIterator);
+
+      // Copy bottom quadrants
+      std::vector<Vertex> blm;
+      std::vector<Vertex> brm;
+      leftOrRight = false; // false = left
+      do
+        {
+
+          if (!leftOrRight) // copy bottom left
+            {
+              std::copy (beginIterator, std::next (beginIterator, splitWidth),
+                         std::back_inserter (blm));
+            }
+          else // copy bottom right
+            {
+              std::copy (beginIterator, std::next (beginIterator, splitWidth),
+                         std::back_inserter (brm));
+            }
+          // flip
+          leftOrRight = !leftOrRight;
+          // incr
+          beginIterator += splitWidth;
+        }
+      while (beginIterator < endIterator);
+
+      splitValues = { tlm, trm, blm, brm };
 
       std::mutex mtx; // lock access to mesh vector<vector>
 
       size_t idx = 0;
+
       auto spinThreadGenerateMesh = [&] (std::thread &thread) {
-        if (idx < threads.size ())
+        if (idx < splitValues.size ())
           {
             auto job = [&] (size_t ourIndex) {
-              bool copied = false;
               std::vector<Vertex> tmp;
               do
                 {
                   if (!mtx.try_lock ())
                     continue;
-                  // copy
+
                   auto cpy = splitValues.at (ourIndex);
-                  // release
                   mtx.unlock ();
-                  // do work
-                  tmp = generateMesh ((xLength / threads.size ()),
-                                      (zLength / threads.size ()), cpy);
-                  copied = true;
+                  tmp = generateMesh (splitWidth, splitWidth, cpy);
+                  break; // done gen mesh
                 }
-              while (!copied);
-              bool done = false;
+              while (1);
+
+              // save results
               do
                 {
-                  // try to lock
                   if (!mtx.try_lock ())
                     continue;
-                  // if locked update vector
                   splitValues.at (ourIndex).clear ();
                   splitValues.at (ourIndex) = tmp;
-                  mtx.unlock (); // release
-                  done = true;   // exit
+                  mtx.unlock ();
+                  break; // done saving
                 }
-              while (!done);
+              while (1);
             };
 
             thread = std::thread (job, idx);
@@ -237,24 +341,193 @@ MapHandler::readHeightMap (std::string p_Filename)
 
       std::for_each (threads.begin (), threads.end (), joinThread);
 
+      struct ChunkData
+      {
+        std::vector<Vertex *> leftEdge;
+        std::vector<Vertex *> rightEdge;
+        std::vector<Vertex *> topEdge;
+        std::vector<Vertex *> bottomEdge;
+
+        Vertex *tl = nullptr;
+        Vertex *tr = nullptr;
+        Vertex *bl = nullptr;
+        Vertex *br = nullptr;
+      };
+
+      std::vector<ChunkData> chunks (4);
+
+      // iterate each mesh vertices; find origin of edges
+      size_t chunkidx = 0;
+      for (auto &m : splitValues) // for each chunk
+        {
+          // iterate each vertex & find our tagged vertices
+          for (auto &v : m)
+            {
+              // left edge
+              if (v.color == glm::vec4 (1.0f, 0.0f, 0.0f, 1.0f))
+                {
+                  chunks.at (chunkidx).leftEdge.push_back (&v);
+                }
+              // top edge
+              if (v.color == glm::vec4 (0.0f, 1.0f, 0.0f, 1.0f))
+                {
+                  chunks.at (chunkidx).topEdge.push_back (&v);
+                }
+              // right edge
+              if (v.color == glm::vec4 (0.0f, 0.0f, 1.0f, 1.0f))
+                {
+                  chunks.at (chunkidx).rightEdge.push_back (&v);
+                }
+              // bottom edge
+              if (v.color == glm::vec4 (0.5f, 0.5f, 0.5f, 1.0f))
+                {
+                  chunks.at (chunkidx).bottomEdge.push_back (&v);
+                }
+
+              // corner cases
+              if (v.color == glm::vec4 (1.0f, 1.0f, 0.0f, 1.0f)) // top left
+                {
+                  chunks.at (chunkidx).tl = &v;
+                }
+              if (v.color == glm::vec4 (0.0f, 1.0f, 1.0f, 1.0f)) // top right
+                {
+                  chunks.at (chunkidx).tr = &v;
+                }
+              if (v.color == glm::vec4 (1.0f, 0.5f, 0.5f, 1.0f)) // bottom left
+                {
+                  chunks.at (chunkidx).bl = &v;
+                }
+              if (v.color
+                  == glm::vec4 (0.5f, 0.5f, 1.0f, 1.0f)) // bottom right
+                {
+                  chunks.at (chunkidx).br = &v;
+                }
+            }
+          chunkidx++;
+        }
+
+      std::vector<Vertex> stitches;
+
+      /*
+        Stitch all the edges of chunks & reset colors
+      */
+      {
+        // clean edge before stitching
+        cleanEdge (chunks.at (0).rightEdge, false);
+        cleanEdge (chunks.at (1).leftEdge, false);
+        // stitch tl -> tr
+        stitchEdge (chunks.at (0).rightEdge, chunks.at (1).leftEdge, stitches,
+                    true);
+
+        // prune dups
+        cleanEdge (chunks.at (2).rightEdge, false);
+        cleanEdge (chunks.at (3).leftEdge, false);
+        // stitch bl -> br
+        stitchEdge (chunks.at (2).rightEdge, chunks.at (3).leftEdge, stitches,
+                    true);
+
+        // prune dups
+        cleanEdge (chunks.at (0).bottomEdge, true);
+        cleanEdge (chunks.at (2).topEdge, true);
+        // stich tl -> bl
+        stitchEdge (chunks.at (0).bottomEdge, chunks.at (2).topEdge, stitches,
+                    false);
+
+        // prune dups
+        cleanEdge (chunks.at (1).bottomEdge, true);
+        cleanEdge (chunks.at (3).topEdge, true);
+        // stitch tr -> br
+        stitchEdge (chunks.at (1).bottomEdge, chunks.at (3).topEdge, stitches,
+                    false);
+
+        // stitch tl -> tr corner
+        stitchCorner (chunks.at (0).tr, chunks.at (0).rightEdge.at (0),
+                      chunks.at (1).tl, chunks.at (1).leftEdge.at (0),
+                      stitches, eFirstCornerToFirstEdge);
+
+        // stitch tl -> bl corner
+        stitchCorner (chunks.at (0).bl, chunks.at (0).bottomEdge.at (0),
+                      chunks.at (2).tl, chunks.at (2).topEdge.at (0), stitches,
+                      eFirstCornerToSecondCorner);
+
+        // stitch bl -> br corner
+        stitchCorner (
+            chunks.at (2).br,
+            chunks.at (2).rightEdge.at (chunks.at (2).rightEdge.size () - 1),
+            chunks.at (3).bl,
+            chunks.at (3).leftEdge.at (chunks.at (3).leftEdge.size () - 1),
+            stitches, eFirstEdgeToFirstCorner);
+
+        // stitch tr -> br corner
+        stitchCorner (
+            chunks.at (1).br,
+            chunks.at (1).bottomEdge.at (chunks.at (1).bottomEdge.size () - 1),
+            chunks.at (3).tr,
+            chunks.at (3).topEdge.at (chunks.at (3).topEdge.size () - 1),
+            stitches, eFirstEdgeToSecondEdge);
+
+        // stitch tl -> bl RIGHT corner
+        stitchCorner (
+            chunks.at (0).br,
+            chunks.at (0).bottomEdge.at (chunks.at (0).bottomEdge.size () - 1),
+            chunks.at (2).tr,
+            chunks.at (2).topEdge.at (chunks.at (2).topEdge.size () - 1),
+            stitches, eFirstEdgeToSecondEdge);
+
+        // stitch tr -> br LEFT CORNER
+        stitchCorner (chunks.at (1).bl, chunks.at (1).bottomEdge.at (0),
+                      chunks.at (3).tl, chunks.at (3).topEdge.at (0), stitches,
+                      eFirstCornerToSecondCorner);
+        // stitch bl -> br RIGHT CORNER
+        stitchCorner (chunks.at (2).tr, chunks.at (2).rightEdge.at (0),
+                      chunks.at (3).tl, chunks.at (3).leftEdge.at (0),
+                      stitches, eFirstCornerToFirstEdge);
+
+        // stitch tl -> tr
+        stitchCorner (
+            chunks.at (0).br,
+            chunks.at (0).rightEdge.at (chunks.at (0).rightEdge.size () - 1),
+            chunks.at (1).bl,
+            chunks.at (1).leftEdge.at (chunks.at (1).leftEdge.size () - 1),
+            stitches, eFirstEdgeToFirstCorner);
+
+        // stitch center corners - provide params left->right order
+        stitchCorner (chunks.at (0).br, chunks.at (1).bl, chunks.at (2).tr,
+                      chunks.at (3).tl, stitches, eCenter);
+
+        // append to splitvals after all stitches generated; otherwise we
+        // invalidate our ptrs
+        splitValues.at (0).insert (splitValues.at (0).end (),
+                                   stitches.begin (), stitches.end ());
+
+        // reset colors for all verts
+        std::for_each (splitValues.begin (), splitValues.end (),
+                       [] (std::vector<Vertex> &values) {
+                         std::for_each (
+                             values.begin (), values.end (),
+                             [] (Vertex &vertex) {
+                               vertex.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                             });
+                       });
+      }
+
       size_t tc = 0;
       for (const auto &v : splitValues)
         {
           tc += v.size ();
         }
-      std::cout << "Pre optimized vertex count : " << tc << "\n";
 
       std::vector<std::pair<std::vector<Vertex>, std::vector<uint32_t>>>
           optimizedMesh (splitValues.size ());
 
       idx = 0;
       auto spinThreadOptimizeMesh = [&] (std::thread &thread) {
-        if (idx < threads.size ())
+        if (idx < splitValues.size ())
           {
             // optimize mesh
             auto job = [&] (size_t ourIndex) {
-              bool copied = false;
               std::pair<std::vector<Vertex>, std::vector<uint32_t>> pair;
+              // copy mesh data & optimize
               do
                 {
                   if (!mtx.try_lock ())
@@ -262,14 +535,14 @@ MapHandler::readHeightMap (std::string p_Filename)
                   // copy and release
                   auto cpy = splitValues.at (ourIndex);
                   mtx.unlock ();
-                  copied = true;
 
                   // do work
                   pair = optimize (cpy);
+                  break; // job done
                 }
-              while (!copied);
+              while (1);
 
-              bool done = false;
+              // move mesh into container safely
               do
                 {
                   // try lock
@@ -278,9 +551,9 @@ MapHandler::readHeightMap (std::string p_Filename)
                   // if lock, do work
                   optimizedMesh.at (ourIndex) = pair;
                   mtx.unlock ();
-                  done = true;
+                  break; // job done
                 }
-              while (!done);
+              while (1);
             };
 
             thread = std::thread (job, idx);
@@ -292,35 +565,24 @@ MapHandler::readHeightMap (std::string p_Filename)
 
       std::for_each (threads.begin (), threads.end (), joinThread);
 
-      // free memory from old mesh data
-      for (auto &p : splitValues)
-        {
-          p.clear ();
-        }
-      splitValues.clear ();
-
       idx = 0;
       auto spinThreadWriteVertex = [&] (std::thread &thread) {
-        if (idx < threads.size ())
+        if (idx < splitValues.size ())
           {
             auto job = [&] (size_t ourIndex) {
               auto fname = getBaseFilename (p_Filename);
-
-              bool copied = false;
               do
                 {
                   // try lock
                   if (!mtx.try_lock ())
                     continue;
-                  // copy
                   auto cpy = optimizedMesh.at (ourIndex).first;
-                  // release
                   mtx.unlock ();
                   // do work
                   writeVertexFile (fname + std::to_string (ourIndex), cpy);
-                  copied = true;
+                  break; // job done
                 }
-              while (!copied);
+              while (1);
             };
 
             thread = std::thread (job, idx);
@@ -335,12 +597,11 @@ MapHandler::readHeightMap (std::string p_Filename)
 
       idx = 0;
       auto spinThreadWriteIndex = [&] (std::thread &thread) {
-        if (idx < threads.size ())
+        if (idx < splitValues.size ())
           {
             auto job = [&] (size_t ourIndex) {
               auto fname = getBaseFilename (p_Filename);
 
-              bool copied = false;
               do
                 {
                   // try lock
@@ -352,9 +613,9 @@ MapHandler::readHeightMap (std::string p_Filename)
                   mtx.unlock ();
                   // do work
                   writeIndexFile (fname + std::to_string (ourIndex), cpy);
-                  copied = true;
+                  break; // job done
                 }
-              while (!copied);
+              while (1);
             };
 
             thread = std::thread (job, idx);
@@ -366,24 +627,38 @@ MapHandler::readHeightMap (std::string p_Filename)
 
       std::for_each (threads.begin (), threads.end (), joinThread);
 
+      // free memory from old mesh data
+      for (auto &p : splitValues)
+        {
+          p.clear ();
+        }
+      splitValues.clear ();
+
       std::vector<Vertex> vertices;
       std::vector<uint32_t> indices;
 
       // concat vertices
       for (auto &p : optimizedMesh)
         {
-          std::cout << "First mesh offsets v: " << vertices.size ()
-                    << " i: " << indices.size () << "|" << p.second.size ()
-                    << "\n";
           vertexOffsets.push_back (vertices.size ());
           indexOffsets.push_back ({ indices.size (), p.second.size () });
+
+          // increment each indice by indices.size() before copy to apply its
+          // offset
+          std::for_each (p.second.begin (), p.second.end (),
+                         [&] (uint32_t &index) { index += vertices.size (); });
+
           // copy vertices
           std::copy (p.first.begin (), p.first.end (),
                      std::back_inserter (vertices));
+
           // copy indices
           std::copy (p.second.begin (), p.second.end (),
                      std::back_inserter (indices));
         }
+
+      // align indices for each submesh (indice += start offset)
+      // { index start, index count }
 
       vertexCount = vertices.size ();
       indexCount = indices.size ();
@@ -700,8 +975,6 @@ MapHandler::generateMesh (size_t p_XLength, size_t p_ZLength,
 {
   std::vector<Vertex> vertices;
 
-  std::cout << "gen mesh given " << p_HeightValues.size () << "\n";
-
   // Generates terribly bloated & inefficient mesh data
   // Iterate image height
   for (size_t j = 0; j < (p_ZLength - 1); j++)
@@ -709,10 +982,10 @@ MapHandler::generateMesh (size_t p_XLength, size_t p_ZLength,
       // Iterate image width
       for (size_t i = 0; i < (p_XLength - 1); i++)
         {
-          size_t topLeftIndex = (p_ZLength * j) + i;
-          size_t topRightIndex = (p_ZLength * j) + (i + 1);
-          size_t bottomLeftIndex = (p_ZLength * (j + 1)) + i;
-          size_t bottomRightIndex = (p_ZLength * (j + 1)) + (i + 1);
+          const size_t topLeftIndex = (p_ZLength * j) + i;
+          const size_t topRightIndex = (p_ZLength * j) + (i + 1);
+          const size_t bottomLeftIndex = (p_ZLength * (j + 1)) + i;
+          const size_t bottomRightIndex = (p_ZLength * (j + 1)) + (i + 1);
 
           Vertex topLeft = p_HeightValues.at (topLeftIndex);
           Vertex topRight = p_HeightValues.at (topRightIndex);
@@ -723,11 +996,224 @@ MapHandler::generateMesh (size_t p_XLength, size_t p_ZLength,
           vertices.push_back (bottomLeft);
           vertices.push_back (bottomRight);
 
-          vertices.push_back (topLeft);
           vertices.push_back (bottomRight);
           vertices.push_back (topRight);
+          vertices.push_back (topLeft);
         }
     }
-  std::cout << "done: " << vertices.size () << "\n";
   return vertices;
 }
+
+void
+MapHandler::cleanEdge (std::vector<Vertex *> &p_Edge, bool isHorizontal)
+{
+  std::vector<Vertex *> optimized;
+  if (isHorizontal)
+    {
+      // prune x axis
+      for (auto &vptr : p_Edge)
+        {
+          bool unique = true;
+          // search for x:z val
+          if (!optimized.empty ())
+            {
+              // iterate optimized and look for dup
+              for (const auto &o : optimized)
+                {
+                  if (o->position == vptr->position)
+                    {
+                      unique = false;
+                    }
+                }
+            }
+          if (unique) // add to optimized
+            {
+              optimized.push_back (vptr);
+            }
+        }
+    }
+  else
+    {
+      // prune z axis
+      for (auto &vptr : p_Edge)
+        {
+          bool unique = true;
+          // search for x:z val
+          if (!optimized.empty ())
+            {
+              // iterate optimized and look for dup
+              for (const auto &o : optimized)
+                {
+                  if (o->position == vptr->position)
+                    {
+                      unique = false;
+                    }
+                }
+            }
+          if (unique) // add to optimized
+            {
+              optimized.push_back (vptr);
+            }
+        }
+    }
+  p_Edge.clear ();
+  p_Edge = optimized;
+  return;
+}
+
+// must be same size
+// stitches edges together with param 1 being origin
+void
+MapHandler::stitchEdge (std::vector<Vertex *> &p_FirstEdge,
+                        std::vector<Vertex *> &p_SecondEdge,
+                        std::vector<Vertex> &p_Vertices, bool p_IsVertical)
+{
+  // sanity check
+  if (p_FirstEdge.size () != p_SecondEdge.size ())
+    throw std::runtime_error ("Cannot stich edges of uneven lengths");
+
+  if (p_IsVertical)
+    {
+      for (size_t i = 0; i < (p_FirstEdge.size () - 1); i++)
+        {
+          // grab verts for quad
+          auto tl = p_FirstEdge.at (i);
+          auto bl = p_FirstEdge.at (i + 1);
+          auto br = p_SecondEdge.at (i + 1);
+          auto tr = p_SecondEdge.at (i);
+
+          tl->color = { 1.0f, 0.0f, 0.0f, 1.0f };
+          bl->color = { 0.0f, 1.0f, 0.0f, 1.0f };
+          br->color = { 0.0f, 1.0f, 1.0f, 1.0f };
+          tr->color = { 0.0f, 1.0f, 1.0f, 1.0f };
+
+          // push counter clockwise
+          p_Vertices.push_back (*tl);
+          p_Vertices.push_back (*bl);
+          p_Vertices.push_back (*br);
+
+          p_Vertices.push_back (*br);
+          p_Vertices.push_back (*tr);
+          p_Vertices.push_back (*tl);
+        }
+    }
+  else
+    {
+      for (size_t i = 0; i < (p_FirstEdge.size () - 1); i++)
+        {
+          // grab verts for quad
+          auto tl = p_FirstEdge.at (i);
+          auto bl = p_SecondEdge.at (i);
+          auto br = p_SecondEdge.at (i + 1);
+          auto tr = p_FirstEdge.at (i + 1);
+
+          // push counter clockwise
+          p_Vertices.push_back (*tl);
+          p_Vertices.push_back (*bl);
+          p_Vertices.push_back (*br);
+
+          p_Vertices.push_back (*br);
+          p_Vertices.push_back (*tr);
+          p_Vertices.push_back (*tl);
+        }
+    }
+  return;
+}
+
+void
+MapHandler::stitchCorner (Vertex *p_FirstCorner, Vertex *p_FirstEdgeVertex,
+                          Vertex *p_SecondCorner, Vertex *p_SecondEdgeVertex,
+                          std::vector<Vertex> &p_Vertices,
+                          WindingStyle p_Style)
+{
+  using enum WindingStyle;
+  if (p_Style == eFirstCornerToFirstEdge)
+    {
+      auto tl = p_FirstCorner;
+      auto bl = p_FirstEdgeVertex;
+      auto br = p_SecondEdgeVertex;
+      auto tr = p_SecondCorner;
+
+      p_Vertices.push_back (*tl);
+      p_Vertices.push_back (*bl);
+      p_Vertices.push_back (*br);
+
+      p_Vertices.push_back (*br);
+      p_Vertices.push_back (*tr);
+      p_Vertices.push_back (*tl);
+    }
+  else if (p_Style == eFirstCornerToSecondCorner)
+    {
+      auto tl = p_FirstCorner;
+      auto bl = p_SecondCorner;
+      auto br = p_SecondEdgeVertex;
+      auto tr = p_FirstEdgeVertex;
+
+      p_Vertices.push_back (*tl);
+      p_Vertices.push_back (*bl);
+      p_Vertices.push_back (*br);
+
+      p_Vertices.push_back (*br);
+      p_Vertices.push_back (*tr);
+      p_Vertices.push_back (*tl);
+    }
+  else if (p_Style == eFirstEdgeToFirstCorner)
+    {
+      auto tl = p_FirstEdgeVertex;
+      auto bl = p_FirstCorner;
+      auto br = p_SecondCorner;
+      auto tr = p_SecondEdgeVertex;
+
+      p_Vertices.push_back (*tl);
+      p_Vertices.push_back (*bl);
+      p_Vertices.push_back (*br);
+
+      p_Vertices.push_back (*br);
+      p_Vertices.push_back (*tr);
+      p_Vertices.push_back (*tl);
+    }
+  else if (p_Style == eFirstEdgeToSecondEdge)
+    {
+      auto tl = p_FirstEdgeVertex;
+      auto bl = p_SecondEdgeVertex;
+      auto br = p_SecondCorner;
+      auto tr = p_FirstCorner;
+
+      p_Vertices.push_back (*tl);
+      p_Vertices.push_back (*bl);
+      p_Vertices.push_back (*br);
+
+      p_Vertices.push_back (*br);
+      p_Vertices.push_back (*tr);
+      p_Vertices.push_back (*tl);
+    }
+  else if (p_Style == eCenter)
+    {
+      // param
+      // 1
+      // 3
+      // 4
+      // 2
+      auto tl = p_FirstCorner;
+      auto bl = p_SecondCorner;
+      auto br = p_SecondEdgeVertex;
+      auto tr = p_FirstEdgeVertex;
+
+      p_Vertices.push_back (*tl);
+      p_Vertices.push_back (*bl);
+      p_Vertices.push_back (*br);
+
+      p_Vertices.push_back (*br);
+      p_Vertices.push_back (*tr);
+      p_Vertices.push_back (*tl);
+    }
+  return;
+}
+
+// void
+// MapHandler::stitchCorner (Vertex *p_TLCorner, Vertex *p_TRCorner,
+//                           Vertex *p_BRCorner, Vertex *p_BLCorner,
+//                           std::vector<Vertex> &p_Vertices)
+// {
+//   return;
+// }

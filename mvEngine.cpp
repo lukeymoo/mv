@@ -1080,22 +1080,22 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
                                pipelineLayouts.at (eVPNoSampler), 0, toBind,
                                nullptr);
 
-      for (const auto &vOffset : mapHandler.vertexOffsets)
-        {
-          // Index offset
-          // { index start, index count }
-          commandBuffers.at (p_ImageIndex)
-              .drawIndexed (mapHandler.indexOffsets
-                                .at (&vOffset - &mapHandler.vertexOffsets[0])
-                                .second,
-                            1,
-                            mapHandler.indexOffsets
-                                .at (&vOffset - &mapHandler.vertexOffsets[0])
-                                .first,
-                            vOffset, 0);
-        }
-      // commandBuffers.at (p_ImageIndex)
-      //     .drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
+      // for (const auto &vOffset : mapHandler.vertexOffsets)
+      //   {
+      //     // Index offset
+      //     // { index start, index count }
+      //     commandBuffers.at (p_ImageIndex)
+      //         .drawIndexed (mapHandler.indexOffsets
+      //                           .at (&vOffset -
+      //                           &mapHandler.vertexOffsets[0]) .second,
+      //                       1,
+      //                       mapHandler.indexOffsets
+      //                           .at (&vOffset -
+      //                           &mapHandler.vertexOffsets[0]) .first,
+      //                       vOffset, 0);
+      //   }
+      commandBuffers.at (p_ImageIndex)
+          .drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
       // commandBuffers.at(p_ImageIndex).draw(mapHandler.vertexCount, 1, 0, 0);
     }
 
@@ -1373,7 +1373,7 @@ Engine::goSetup (void)
       = (float)swapchain.swapExtent.width / (float)swapchain.swapExtent.height;
   cameraParams.nearz = 0.1f;
   cameraParams.farz = 2000.0f;
-  cameraParams.position = glm::vec3 (0.0f, -40.0f, 200.0f);
+  cameraParams.position = glm::vec3 (400.0f, -40.0f, 200.0f);
   cameraParams.viewUniformObject = collectionHandler->viewUniform.get ();
   cameraParams.projectionUniformObject
       = collectionHandler->projectionUniform.get ();
@@ -1386,7 +1386,7 @@ Engine::goSetup (void)
   /*
       Hard coding settings
   */
-  camera.rotation = { 0.0f, -90.0f, 0.0f };
+  // camera.rotation = { 0.0f, -90.0f, 0.0f };
   camera.zoomLevel = 7.0f;
   mouse.deltaStyle = Mouse::DeltaStyles::eFromLastPosition;
   mouse.isDragging = false;
