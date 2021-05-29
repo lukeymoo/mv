@@ -277,8 +277,7 @@ GuiHandler::doRenderPass (const vk::RenderPass &p_RenderPass,
 void
 GuiHandler::update (const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
                     float p_FrameDelta, uint32_t p_ModelCount,
-                    uint32_t p_ObjectCount, uint32_t p_VertexCount,
-                    uint32_t p_TriangleCount)
+                    uint32_t p_ObjectCount, uint32_t p_VertexCount)
 {
   /*
       Determine if should update engine status deltas
@@ -353,9 +352,9 @@ GuiHandler::update (const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
   ImGui::Begin ("Status", nullptr, engineDataFlags);
   ImGui::Text ("Render time: %.2f ms | Frame time: %.2f ms | FPS: %i | Model "
                "Count: %i | Object Count: %i | Vertex "
-               "Count: %i | Triangle Count: %i",
+               "Count: %i",
                storedRenderDelta, storedFrameDelta, displayFPS, p_ModelCount,
-               p_ObjectCount, p_VertexCount, p_TriangleCount);
+               p_ObjectCount, p_VertexCount);
   ImGui::End ();
 
   // Clear key states
@@ -505,8 +504,21 @@ GuiHandler::loadHeightMap (std::string p_Path, std::string p_Filename)
   show = noShow;
   mapModal.selectTerrainModal.isOpen = false;
 
-  // Load heightmap
-  ptrMapHandler->readHeightMap (this, p_Path + p_Filename);
+  try
+    {
+      // Load heightmap
+      ptrMapHandler->readHeightMap (this, p_Path + p_Filename);
+    }
+  catch (std::exception &e)
+    {
+      auto msg
+          = ":: Fatal error in gui handler ::\n  Attempted to load map file "
+            + p_Path + p_Filename + " but exception occurred => "
+            + std::string (e.what ());
+
+      glfwSetWindowShouldClose (window, GLFW_TRUE);
+      throw std::runtime_error (msg);
+    }
 
   return;
 }

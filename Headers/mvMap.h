@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <ranges>
 #include <string>
@@ -14,6 +15,7 @@
 class GuiHandler;
 struct Vertex;
 class Engine;
+class Image;
 
 class MapHandler
 {
@@ -25,19 +27,22 @@ public:
 
   std::string filename = "None";
 
-  vk::Buffer vertexBuffer;
-  vk::DeviceMemory vertexMemory;
+  std::unique_ptr<vk::Buffer> vertexBuffer;
+  std::unique_ptr<vk::DeviceMemory> vertexMemory;
 
-  vk::Buffer indexBuffer;
-  vk::DeviceMemory indexMemory;
+  std::unique_ptr<vk::Buffer> indexBuffer;
+  std::unique_ptr<vk::DeviceMemory> indexMemory;
+
+  std::unique_ptr<Image> defaultTexture;
+  vk::DescriptorSet terrainDescriptor;
 
   size_t vertexCount = 0;
   size_t indexCount = 0;
 
   // offset of vertices each index start/count correspond to
-  std::vector<size_t> vertexOffsets;
+  // std::vector<size_t> vertexOffsets;
   // { index start, index count }
-  std::vector<std::pair<uint32_t, uint32_t>> indexOffsets;
+  // std::vector<std::pair<uint32_t, uint32_t>> indexOffsets;
 
   Engine *ptrEngine = nullptr;
 

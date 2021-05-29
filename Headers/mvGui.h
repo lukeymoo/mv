@@ -249,8 +249,7 @@ public:
   ImGuiIO &getIO (void);
   void update (const vk::Extent2D &p_SwapExtent, float p_RenderDelta,
                float p_FrameDelta, uint32_t p_ModelCount,
-               uint32_t p_ObjectCount, uint32_t p_VertexCount,
-               uint32_t p_TriangleCount);
+               uint32_t p_ObjectCount, uint32_t p_VertexCount);
 
   std::vector<vk::Framebuffer>
   createFramebuffers (const vk::Device &p_LogicalDevice,

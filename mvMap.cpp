@@ -1,6 +1,9 @@
 #define STBI_IMAGE_IMPLEMENTATION
 #include "mvMap.h"
 
+// For handling terrain related textures
+#include "mvImage.h"
+
 // For struct Vertex definition
 #include "mvModel.h"
 
@@ -28,17 +31,34 @@ MapHandler::~MapHandler () { return; }
 void
 MapHandler::cleanup (const vk::Device &p_LogicalDevice)
 {
+  if (defaultTexture)
+    {
+      defaultTexture->destroy ();
+      defaultTexture.reset ();
+    }
   if (vertexBuffer)
-    p_LogicalDevice.destroyBuffer (vertexBuffer);
+    {
+      p_LogicalDevice.destroyBuffer (*vertexBuffer);
+      vertexBuffer.reset ();
+    }
 
   if (vertexMemory)
-    p_LogicalDevice.freeMemory (vertexMemory);
+    {
+      p_LogicalDevice.freeMemory (*vertexMemory);
+      vertexMemory.reset ();
+    }
 
   if (indexBuffer)
-    p_LogicalDevice.destroyBuffer (indexBuffer);
+    {
+      p_LogicalDevice.destroyBuffer (*indexBuffer);
+      indexBuffer.reset ();
+    }
 
   if (indexMemory)
-    p_LogicalDevice.freeMemory (indexMemory);
+    {
+      p_LogicalDevice.freeMemory (*indexMemory);
+      indexMemory.reset ();
+    }
   return;
 }
 
@@ -46,6 +66,9 @@ MapHandler::cleanup (const vk::Device &p_LogicalDevice)
 void
 MapHandler::readHeightMap (GuiHandler *p_Gui, std::string p_Filename)
 {
+  if (!ptrEngine)
+    throw std::runtime_error (
+        "Pass map handler core engine before attempting to read heightmaps");
   auto [vertices, indices] = readHeightMap (p_Filename);
 
   // validate before return
@@ -55,6 +78,38 @@ MapHandler::readHeightMap (GuiHandler *p_Gui, std::string p_Filename)
 
   // update gui
   p_Gui->setLoadedTerrainFile (filename);
+
+  // Load default terrain texture
+  if (!defaultTexture)
+    {
+      // allocate image
+      defaultTexture = std::make_unique<Image> ();
+
+      Image::ImageCreateInfo createInfo = {};
+      createInfo.tiling = vk::ImageTiling::eOptimal;
+      createInfo.format = vk::Format::eR8G8B8A8Srgb;
+      createInfo.memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
+      createInfo.usage = vk::ImageUsageFlagBits::eSampled
+                         | vk::ImageUsageFlagBits::eTransferDst;
+
+      try
+        {
+          defaultTexture->create (ptrEngine, createInfo,
+                                  "terrain/defaultTexture.png");
+        }
+      catch (std::exception &e)
+        {
+          throw std::runtime_error ("Failed to load default terrain texture");
+        }
+
+      auto layout = ptrEngine->allocator->getLayout (
+          vk::DescriptorType::eCombinedImageSampler);
+
+      ptrEngine->allocator->allocateSet (layout, terrainDescriptor);
+      ptrEngine->allocator->updateSet (defaultTexture->descriptor,
+                                       terrainDescriptor, 0);
+      std::cout << "Loaded default terrain texture\n";
+    }
 
   return;
 }
@@ -69,11 +124,9 @@ MapHandler::readHeightMap (std::string p_Filename)
       std::vector<std::pair<std::vector<Vertex>, std::vector<uint32_t>>>
           chunks (4);
 
-      size_t numCores = (std::thread::hardware_concurrency () >= 4)
-                            ? 4
-                            : std::thread::hardware_concurrency ();
+      size_t numThreads = 4;
 
-      std::vector<std::thread> threads (numCores);
+      std::vector<std::thread> threads (numThreads);
 
       std::cout << "Created " << threads.size () << " threads awaiting jobs\n";
 
@@ -164,9 +217,9 @@ MapHandler::readHeightMap (std::string p_Filename)
       // concat all data
       for (auto &chunkpair : chunks)
         {
-          vertexOffsets.push_back (vertices.size ());
-          indexOffsets.push_back (
-              { indices.size (), chunkpair.second.size () });
+          // vertexOffsets.push_back (vertices.size ());
+          // indexOffsets.push_back (
+          // { indices.size (), chunkpair.second.size () });
 
           // increment each indice by indices.size() before copy to apply
           // its offset
@@ -332,11 +385,9 @@ MapHandler::readHeightMap (std::string p_Filename)
         throw std::runtime_error (
             "Maps must be an even square; Where a side is divisible by 2");
 
-      size_t numCores = (std::thread::hardware_concurrency () >= 4)
-                            ? 4
-                            : std::thread::hardware_concurrency ();
+      size_t numThreads = 4;
 
-      std::vector<std::thread> threads (numCores);
+      std::vector<std::thread> threads (numThreads);
 
       std::cout << "Created " << threads.size () << " threads awaiting jobs\n";
 
@@ -747,14 +798,13 @@ MapHandler::readHeightMap (std::string p_Filename)
       // concat vertices
       for (auto &p : optimizedMesh)
         {
-          vertexOffsets.push_back (vertices.size ());
-          indexOffsets.push_back ({ indices.size (), p.second.size () });
+          // vertexOffsets.push_back (vertices.size ());
+          // indexOffsets.push_back ({ indices.size (), p.second.size () });
 
           // increment each indice by indices.size() before copy to apply its
           // offset
           std::for_each (p.second.begin (), p.second.end (),
                          [&] (uint32_t &index) { index += vertices.size (); });
-
           // copy vertices
           std::copy (p.first.begin (), p.first.end (),
                      std::back_inserter (vertices));
@@ -836,8 +886,12 @@ MapHandler::optimize (std::vector<Vertex> &p_Vertices)
 void
 MapHandler::bindBuffer (vk::CommandBuffer &p_CommandBuffer)
 {
-  p_CommandBuffer.bindVertexBuffers (0, vertexBuffer, vk::DeviceSize{ 0 });
-  p_CommandBuffer.bindIndexBuffer (indexBuffer, 0, vk::IndexType::eUint32);
+  // sanity check
+  if (!vertexBuffer || !vertexMemory)
+    throw std::runtime_error (
+        "Attempted to bind buffer without creating them :: map handler");
+  p_CommandBuffer.bindVertexBuffers (0, *vertexBuffer, vk::DeviceSize{ 0 });
+  p_CommandBuffer.bindIndexBuffer (*indexBuffer, 0, vk::IndexType::eUint32);
   return;
 }
 
@@ -1043,25 +1097,35 @@ MapHandler::allocate (std::vector<Vertex> &p_VertexContainer,
         std::cout << "Map already loaded so cleaning up\n";
         if (vertexBuffer)
           {
-            ptrEngine->logicalDevice.destroyBuffer (vertexBuffer);
-            vertexBuffer = nullptr;
+            ptrEngine->logicalDevice.destroyBuffer (*vertexBuffer);
+            vertexBuffer.reset ();
           }
         if (vertexMemory)
           {
-            ptrEngine->logicalDevice.freeMemory (vertexMemory);
-            vertexMemory = nullptr;
+            ptrEngine->logicalDevice.freeMemory (*vertexMemory);
+            vertexMemory.reset ();
           }
         if (indexBuffer)
           {
-            ptrEngine->logicalDevice.destroyBuffer (indexBuffer);
-            indexBuffer = nullptr;
+            ptrEngine->logicalDevice.destroyBuffer (*indexBuffer);
+            indexBuffer.reset ();
           }
         if (indexMemory)
           {
-            ptrEngine->logicalDevice.freeMemory (indexMemory);
-            indexMemory = nullptr;
+            ptrEngine->logicalDevice.freeMemory (*indexMemory);
+            indexMemory.reset ();
           }
       }
+
+    // ensure vk objects allocated
+    if (!vertexBuffer)
+      vertexBuffer = std::make_unique<vk::Buffer> ();
+    if (!vertexMemory)
+      vertexMemory = std::make_unique<vk::DeviceMemory> ();
+    if (!indexBuffer)
+      indexBuffer = std::make_unique<vk::Buffer> ();
+    if (!indexMemory)
+      indexMemory = std::make_unique<vk::DeviceMemory> ();
   }
 
   {
@@ -1074,14 +1138,14 @@ MapHandler::allocate (std::vector<Vertex> &p_VertexContainer,
     // Create vertex buffer
     ptrEngine->createBuffer (
         vk::BufferUsageFlagBits::eVertexBuffer, eHostCoherent | eHostVisible,
-        p_VertexContainer.size () * sizeof (Vertex), &vertexBuffer,
-        &vertexMemory, p_VertexContainer.data ());
+        p_VertexContainer.size () * sizeof (Vertex), vertexBuffer.get (),
+        vertexMemory.get (), p_VertexContainer.data ());
 
     // Create index buffer
     ptrEngine->createBuffer (
         vk::BufferUsageFlagBits::eIndexBuffer, eHostCoherent | eHostVisible,
-        p_IndexContainer.size () * sizeof (uint32_t), &indexBuffer,
-        &indexMemory, p_IndexContainer.data ());
+        p_IndexContainer.size () * sizeof (uint32_t), indexBuffer.get (),
+        indexMemory.get (), p_IndexContainer.data ());
   }
   return;
 }

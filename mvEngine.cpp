@@ -230,6 +230,14 @@ Engine::go (void)
       logicalDevice, renderPasses.at (eImGui), swapchain.buffers,
       swapchain.swapExtent.width, swapchain.swapExtent.height);
 
+  auto renderStart = chrono::now ();
+  auto renderStop = chrono::now ();
+
+#ifndef NDEBUG
+  // FORCE TESTING SWAPCHAIN RECREATION TO ENSURE
+  // WE AREN'T MISSING REINITIALIZATION METHODS
+  recreateSwapchain ();
+
   try
     {
       mapHandler.readHeightMap (gui.get (), "heightmaps/scaled.png");
@@ -238,18 +246,8 @@ Engine::go (void)
     {
       std::cout << ":: Fatal error reading heightmap :: \n"
                 << e.what () << "\n";
-      glfwSetWindowShouldClose (window, GLFW_TRUE);
+      std::exit (1);
     }
-
-  auto renderStart = chrono::now ();
-  auto renderStop = chrono::now ();
-
-  logger.logMessage ("Entering game loop\n");
-
-#ifndef NDEBUG
-  // FORCE TESTING SWAPCHAIN RECREATION TO ENSURE
-  // WE AREN'T MISSING REINITIALIZATION METHODS
-  recreateSwapchain ();
 #endif
 
   while (!glfwWindowShouldClose (window))
@@ -571,8 +569,7 @@ Engine::go (void)
                 .count (),
             static_cast<uint32_t> (collectionHandler->modelNames.size ()),
             collectionHandler->getObjectCount (),
-            collectionHandler->getVertexCount (),
-            collectionHandler->getTriangleCount ());
+            collectionHandler->getVertexCount () + mapHandler.indexCount);
 
         gui->renderFrame ();
       }
@@ -704,7 +701,7 @@ Engine::preparePipeline (void)
   vk::PipelineRasterizationStateCreateInfo rsState;
   rsState.depthClampEnable = VK_FALSE;
   rsState.rasterizerDiscardEnable = VK_FALSE;
-  rsState.polygonMode = vk::PolygonMode::eLine;
+  rsState.polygonMode = vk::PolygonMode::eFill;
   rsState.cullMode = vk::CullModeFlagBits::eBack;
   rsState.frontFace = vk::FrontFace::eCounterClockwise;
   rsState.depthBiasEnable = VK_FALSE;
@@ -1070,14 +1067,16 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
 
       commandBuffers.at (p_ImageIndex)
           .bindPipeline (vk::PipelineBindPoint::eGraphics,
-                         pipelines.at (eVPNoSampler));
+                         pipelines.at (eVPWSampler));
 
-      std::vector<vk::DescriptorSet> toBind
-          = { collectionHandler->viewUniform->descriptor,
-              collectionHandler->projectionUniform->descriptor };
+      std::vector<vk::DescriptorSet> toBind = {
+        collectionHandler->viewUniform->descriptor,
+        collectionHandler->projectionUniform->descriptor,
+        mapHandler.terrainDescriptor,
+      };
       commandBuffers.at (p_ImageIndex)
           .bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
-                               pipelineLayouts.at (eVPNoSampler), 0, toBind,
+                               pipelineLayouts.at (eVPWSampler), 0, toBind,
                                nullptr);
 
       // for (const auto &vOffset : mapHandler.vertexOffsets)
