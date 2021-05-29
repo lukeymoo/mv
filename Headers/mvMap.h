@@ -75,10 +75,10 @@ private:
   // file Vertices file & indices file
   bool isAlreadyOptimized (std::string p_OriginalFilenameRequested);
 
-  void readVertexFile (std::string p_OriginalFilenameRequested,
+  void readVertexFile (std::string p_FinalFilename,
                        std::vector<Vertex> &p_VertexContainer);
 
-  void readIndexFile (std::string p_OriginalFilenameRequested,
+  void readIndexFile (std::string p_FinalFilename,
                       std::vector<uint32_t> &p_IndexContainer);
 
   void allocate (std::vector<Vertex> &p_VertexContainer,
@@ -114,10 +114,10 @@ private:
   //                    Vertex *p_BRCorner, Vertex *p_BLCorner,
   //                    std::vector<Vertex> &p_Vertices);
 
-  std::string getBaseFilename (std::string &p_Filename);
+  std::string getBaseFilename (const std::string &p_Filename);
 
   // converts to _v.bin filename
-  std::string filenameToBinV (std::string &p_Filename);
+  std::string filenameToBinV (const std::string &p_Filename);
   // converts to _i.bin filename
-  std::string filenameToBinI (std::string &p_Filename);
+  std::string filenameToBinI (const std::string &p_Filename);
 };

@@ -63,29 +63,136 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>>
 MapHandler::readHeightMap (std::string p_Filename)
 {
   //   // Look for already optimized filename
-  // if (isAlreadyOptimized (p_Filename))
-  //   {
-  //     // Read vertex file
-  //     std::vector<Vertex> vertices;
-  //     readVertexFile (p_Filename, vertices);
-  //     std::cout << "Read " << vertices.size () << " vertices\n";
+  if (isAlreadyOptimized (p_Filename))
+    {
+      std::mutex mtx; // for chunk container
+      std::vector<std::pair<std::vector<Vertex>, std::vector<uint32_t>>>
+          chunks (4);
 
-  //     // Read indices file
-  //     std::vector<uint32_t> indices;
-  //     readIndexFile (p_Filename, indices);
-  //     std::cout << "Read " << indices.size () << " indices\n";
+      size_t numCores = (std::thread::hardware_concurrency () >= 4)
+                            ? 4
+                            : std::thread::hardware_concurrency ();
 
-  //     // Ensure we setup sizes
-  //     vertexCount = vertices.size ();
-  //     indexCount = indices.size ();
+      std::vector<std::thread> threads (numCores);
 
-  //     allocate (vertices, indices);
+      std::cout << "Created " << threads.size () << " threads awaiting jobs\n";
 
-  //     isMapLoaded = true;
-  //     filename = p_Filename;
+      // spin up threads
+      size_t idx = 0;
+      auto spinThreadReadVertex = [&] (std::thread &thread) {
+        auto job = [&] (size_t ourIndex) {
+          std::vector<Vertex> verts;
+          auto name = getBaseFilename (p_Filename) + std::to_string (ourIndex)
+                      + "_v.bin";
+          // read file
+          readVertexFile (name, verts);
 
-  //     return { vertices, indices };
-  //   }
+          // insert in container
+          do
+            {
+              if (!mtx.try_lock ())
+                continue;
+              chunks.at (ourIndex).first = verts;
+              mtx.unlock ();
+              break;
+            }
+          while (1);
+        };
+
+        thread = std::thread (job, idx);
+        idx++;
+      };
+
+      auto joinThread = [&] (std::thread &thread) {
+        if (thread.joinable ())
+          thread.join ();
+      };
+
+      std::for_each (threads.begin (), threads.end (), spinThreadReadVertex);
+
+      std::for_each (threads.begin (), threads.end (), joinThread);
+
+      std::cout << "Done reading vertex files\n";
+
+      // load indices
+      idx = 0;
+      auto spinThreadReadIndex = [&] (std::thread &thread) {
+        auto job = [&] (size_t ourIndex) {
+          std::vector<uint32_t> inds;
+          auto name = getBaseFilename (p_Filename) + std::to_string (ourIndex)
+                      + "_i.bin";
+          // read file
+          readIndexFile (name, inds);
+
+          // insert into container
+          do
+            {
+              if (!mtx.try_lock ())
+                continue;
+              chunks.at (ourIndex).second = inds;
+              mtx.unlock ();
+              break;
+            }
+          while (1);
+        };
+        thread = std::thread (job, idx);
+        idx++;
+      };
+
+      std::for_each (threads.begin (), threads.end (), spinThreadReadIndex);
+
+      std::for_each (threads.begin (), threads.end (), joinThread);
+
+      std::cout << "Done reading index files\n";
+
+      // ensure no empty chunks
+      auto allLoaded = std::all_of (
+          chunks.begin (), chunks.end (),
+          [] (std::pair<std::vector<Vertex>, std::vector<uint32_t>> &p) {
+            if (p.first.empty () || p.second.empty ())
+              return false;
+
+            return true;
+          });
+
+      if (!allLoaded)
+        std::cout << "One or more chunk vertices failed to load\n";
+
+      std::vector<Vertex> vertices;
+      std::vector<uint32_t> indices;
+
+      // concat all data
+      for (auto &chunkpair : chunks)
+        {
+          vertexOffsets.push_back (vertices.size ());
+          indexOffsets.push_back (
+              { indices.size (), chunkpair.second.size () });
+
+          // increment each indice by indices.size() before copy to apply
+          // its offset
+          std::for_each (chunkpair.second.begin (), chunkpair.second.end (),
+                         [&] (uint32_t &index) { index += vertices.size (); });
+
+          // copy vertices
+          std::copy (chunkpair.first.begin (), chunkpair.first.end (),
+                     std::back_inserter (vertices));
+
+          // copy indices
+          std::copy (chunkpair.second.begin (), chunkpair.second.end (),
+                     std::back_inserter (indices));
+        }
+
+      // Ensure we setup sizes
+      vertexCount = vertices.size ();
+      indexCount = indices.size ();
+
+      allocate (vertices, indices);
+
+      isMapLoaded = true;
+      filename = p_Filename;
+
+      return { vertices, indices };
+    }
 
   // Pre optimized file does not exist, load raw & generate optimizations
 
@@ -770,19 +877,19 @@ MapHandler::isAlreadyOptimized (std::string p_OriginalFilenameRequested)
 }
 
 std::string
-MapHandler::getBaseFilename (std::string &p_Filename)
+MapHandler::getBaseFilename (const std::string &p_Filename)
 {
   return p_Filename.substr (0, p_Filename.find ("."));
 }
 
 std::string
-MapHandler::filenameToBinV (std::string &p_Filename)
+MapHandler::filenameToBinV (const std::string &p_Filename)
 {
   return p_Filename.substr (0, p_Filename.find (".")) + "_v.bin";
 }
 
 std::string
-MapHandler::filenameToBinI (std::string &p_Filename)
+MapHandler::filenameToBinI (const std::string &p_Filename)
 {
   return p_Filename.substr (0, p_Filename.find (".")) + "_i.bin";
 }
@@ -831,12 +938,10 @@ MapHandler::writeRaw (std::string p_FilenameIndexAppended,
 }
 
 void
-MapHandler::readVertexFile (std::string p_OriginalFilenameRequested,
+MapHandler::readVertexFile (std::string p_FinalName,
                             std::vector<Vertex> &p_VertexContainer)
 {
-  std::cout << "Reading vertex bin file : "
-            << filenameToBinV (p_OriginalFilenameRequested) << "\n";
-  std::ifstream file (filenameToBinV (p_OriginalFilenameRequested));
+  std::ifstream file (p_FinalName);
   if (!file.is_open ())
     throw std::runtime_error ("Failed to open pre optimized file");
 
@@ -866,8 +971,6 @@ MapHandler::readVertexFile (std::string p_OriginalFilenameRequested,
 
   p_VertexContainer.reserve (vertexCount);
 
-  std::cout << "Beginning read of vertex data\n";
-
   std::vector<Vertex>::iterator iterator = p_VertexContainer.begin ();
   std::insert_iterator<std::vector<Vertex>> vertexInserter (p_VertexContainer,
                                                             iterator);
@@ -884,12 +987,10 @@ MapHandler::readVertexFile (std::string p_OriginalFilenameRequested,
 }
 
 void
-MapHandler::readIndexFile (std::string p_OriginalFilenameRequested,
+MapHandler::readIndexFile (std::string p_FinalFilename,
                            std::vector<uint32_t> &p_IndexContainer)
 {
-  std::cout << "Reading index bin file : "
-            << filenameToBinI (p_OriginalFilenameRequested) << "\n";
-  std::ifstream file (filenameToBinI (p_OriginalFilenameRequested));
+  std::ifstream file (p_FinalFilename);
   if (!file.is_open ())
     throw std::runtime_error ("Failed to open pre optimized file");
 
@@ -914,8 +1015,6 @@ MapHandler::readIndexFile (std::string p_OriginalFilenameRequested,
     throw std::runtime_error ("Invalid index count in map file, = 0");
 
   p_IndexContainer.reserve (indexCount);
-
-  std::cout << "Beginning read of index data\n";
 
   std::vector<uint32_t>::iterator iterator = p_IndexContainer.begin ();
   std::insert_iterator<std::vector<uint32_t>> indexInserter (p_IndexContainer,
