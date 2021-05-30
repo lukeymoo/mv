@@ -8,9 +8,8 @@ layout(location = 1) in vec4 in_uv;
 
 layout(location = 0) out vec4 out_color;
 
-void main() {
-    vec2 uv_formatted = vec2(in_uv.x, in_uv.y);
+void main()
+{
+    vec2 uv_formatted = vec2(in_uv.x / 8, in_uv.y / 8);
     out_color = texture(texture_sampler, uv_formatted);
 }
-
-

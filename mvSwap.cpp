@@ -7,8 +7,7 @@ Swap::~Swap()
 {
 }
 
-void Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
-                const vk::PhysicalDevice &p_PhysicalDevice)
+void Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance, const vk::PhysicalDevice &p_PhysicalDevice)
 {
     // create window
     VkSurfaceKHR tempSurface = nullptr;
@@ -18,8 +17,7 @@ void Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     surface = tempSurface;
 
     // get queue family properties
-    std::vector<vk::QueueFamilyProperties> queueProperties =
-        p_PhysicalDevice.getQueueFamilyProperties();
+    std::vector<vk::QueueFamilyProperties> queueProperties = p_PhysicalDevice.getQueueFamilyProperties();
     if (queueProperties.size() < 1)
         throw std::runtime_error("No command queue families found on device");
 
@@ -72,8 +70,7 @@ void Swap::init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
     graphicsIndex = tempGraphicsIdx;
 
     // get supported surface formats
-    std::vector<vk::SurfaceFormatKHR> surfaceFormats =
-        p_PhysicalDevice.getSurfaceFormatsKHR(surface);
+    std::vector<vk::SurfaceFormatKHR> surfaceFormats = p_PhysicalDevice.getSurfaceFormatsKHR(surface);
 
     if (surfaceFormats.size() < 1)
         throw std::runtime_error("No supported surface formats found");
@@ -120,20 +117,17 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
     switch (res)
     {
         using enum vk::Result;
-        case eSuccess:
-            {
-                break;
-            }
-        default:
-            {
-                throw std::runtime_error("Failed to get surface capabilities, does "
-                                         "the window no longer exist?");
-            }
+    case eSuccess: {
+        break;
+    }
+    default: {
+        throw std::runtime_error("Failed to get surface capabilities, does "
+                                 "the window no longer exist?");
+    }
     }
 
     // get surface present modes
-    std::vector<vk::PresentModeKHR> presentModes =
-        p_PhysicalDevice.getSurfacePresentModesKHR(surface);
+    std::vector<vk::PresentModeKHR> presentModes = p_PhysicalDevice.getSurfacePresentModesKHR(surface);
 
     if (presentModes.size() < 1)
         throw std::runtime_error("Failed to find any surface present modes");
@@ -263,8 +257,7 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
     return;
 }
 
-void Swap::cleanup(const vk::Instance &p_Instance, const vk::Device &p_LogicalDevice,
-                   bool p_ShouldDestroySurface)
+void Swap::cleanup(const vk::Instance &p_Instance, const vk::Device &p_LogicalDevice, bool p_ShouldDestroySurface)
 {
 
     if (swapchain)
