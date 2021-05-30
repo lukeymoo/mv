@@ -36,31 +36,36 @@ GuiHandler::GuiHandler(GLFWwindow *p_GLFWwindow, MapHandler *p_MapHandler, Camer
     switch (ptrCamera->type)
     {
         using enum ::CameraType;
-    case eInvalid: {
-        throw std::runtime_error("Camera not initialized before debugger : Camera type is "
-                                 "set to eInvalid");
-        break;
-    }
-    case eFreeLook: {
-        mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eFreeLook;
-        mapModal.cameraItem.select();
-        break;
-    }
-    case eThirdPerson: {
-        mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eThirdPerson;
-        mapModal.cameraItem.select();
-        break;
-    }
-    case eFirstPerson: {
-        mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eFirstPerson;
-        mapModal.cameraItem.select();
-        break;
-    }
-    case eIsometric: {
-        mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eIsometric;
-        mapModal.cameraItem.select();
-        break;
-    }
+        case eInvalid:
+            {
+                throw std::runtime_error("Camera not initialized before debugger : Camera type is "
+                                         "set to eInvalid");
+                break;
+            }
+        case eFreeLook:
+            {
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eFreeLook;
+                mapModal.cameraItem.select();
+                break;
+            }
+        case eThirdPerson:
+            {
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eThirdPerson;
+                mapModal.cameraItem.select();
+                break;
+            }
+        case eFirstPerson:
+            {
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eFirstPerson;
+                mapModal.cameraItem.select();
+                break;
+            }
+        case eIsometric:
+            {
+                mapModal.cameraItem.selectedType = MapModal::CameraItem::Type::eIsometric;
+                mapModal.cameraItem.select();
+                break;
+            }
     }
     if (!p_GLFWwindow)
         throw std::runtime_error("Invalid GLFW window handle passed to Gui handler");
@@ -228,6 +233,10 @@ void GuiHandler::cleanup(const vk::Device &p_LogicalDevice)
 void GuiHandler::doRenderPass(const vk::RenderPass &p_RenderPass, const vk::Framebuffer &p_Framebuffer,
                               const vk::CommandBuffer &p_CommandBuffer, vk::Extent2D &p_RenderAreaExtent)
 {
+    constexpr auto defaultClearColor = std::array<float, 4>({{0.0f, 0.0f, 0.0f, 1.0f}});
+    std::array<vk::ClearValue, 1> cls;
+    cls[0].color = defaultClearColor;
+
     vk::RenderPassBeginInfo guiPassInfo;
     guiPassInfo.renderPass = p_RenderPass;
     guiPassInfo.framebuffer = p_Framebuffer;
@@ -235,6 +244,8 @@ void GuiHandler::doRenderPass(const vk::RenderPass &p_RenderPass, const vk::Fram
     guiPassInfo.renderArea.offset.y = 0;
     guiPassInfo.renderArea.extent.width = p_RenderAreaExtent.width;
     guiPassInfo.renderArea.extent.height = p_RenderAreaExtent.height;
+    guiPassInfo.clearValueCount = static_cast<uint32_t>(cls.size());
+    guiPassInfo.pClearValues = cls.data();
 
     p_CommandBuffer.beginRenderPass(guiPassInfo, vk::SubpassContents::eInline);
 

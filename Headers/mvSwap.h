@@ -13,10 +13,12 @@
 
 // container for swap chain image
 // contains swap image + a view into it
+class Image;
 struct SwapchainBuffer
 {
     vk::Image image;
     vk::ImageView view;
+    std::unique_ptr<Image> msaaImage;
 };
 
 class Swap
@@ -27,18 +29,14 @@ class Swap
 
     // creates vulkan surface & retreives basic info such as graphics queue
     // index
-    void init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance,
-              const vk::PhysicalDevice &p_PhysicalDevice);
+    void init(GLFWwindow *p_GLFWwindow, const vk::Instance &p_Instance, const vk::PhysicalDevice &p_PhysicalDevice);
 
     // create vulkan swap chain, retrieve images & create views into them
-    void create(const vk::PhysicalDevice &p_PhysicalDevice,
-                const vk::Device &p_LogicalDevice, uint32_t &p_WindowWidth,
+    void create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice, uint32_t &p_WindowWidth,
                 uint32_t &p_WindowHeight);
 
     // destroy resources owned by this interface
-    void cleanup(const vk::Instance &p_Instance,
-                 const vk::Device &p_LogicalDevice,
-                 bool p_ShouldDestroySurface = true);
+    void cleanup(const vk::Instance &p_Instance, const vk::Device &p_LogicalDevice, bool p_ShouldDestroySurface = true);
 
   public:
     // clang-format off
@@ -51,5 +49,6 @@ class Swap
     vk::Format        depthFormat;
     vk::ColorSpaceKHR colorSpace;
     vk::Extent2D      swapExtent;
+    vk::SampleCountFlagBits sampleCount;
     // clang-format on
 };

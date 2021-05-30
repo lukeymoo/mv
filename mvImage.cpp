@@ -1,347 +1,429 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "mvImage.h"
 
-Image::Image () { return; }
-
-Image::~Image () { return; }
-
-void
-Image::create (Engine *p_Engine, ImageCreateInfo &p_ImageCreateInfo,
-               std::string p_ImageFilename)
+Image::Image(void)
 {
-  if (!p_Engine)
-    throw std::runtime_error ("Invalid engine handle passed to image");
-  if (!p_Engine->commandPool)
-    throw std::runtime_error ("command pool not initialized in mv device "
-                              "handler:: image handler");
+    return;
+}
 
-  engine = p_Engine;
+Image::~Image()
+{
+    return;
+}
 
-  int width = 0;
-  int height = 0;
-  int channels = 0;
+void Image::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+                   const size_t p_ImageWidth, const size_t p_ImageHeight, const ImageCreateInfo &p_ImageCreateInfo)
+{
+    if (!p_PhysicalDevice)
+        throw std::runtime_error("Invalid physical device handle passed to image");
+    if (!p_LogicalDevice)
+        throw std::runtime_error("Invalid logical device handle passed to image");
 
-  // load image
-  stbi_uc *rawImage = stbi_load (p_ImageFilename.c_str (), &width, &height,
-                                 &channels, STBI_rgb_alpha);
-  vk::DeviceSize imageSize = width * height * 4;
+    physicalDevice = &p_PhysicalDevice;
+    logicalDevice = &p_LogicalDevice;
 
-  if (!rawImage)
-    throw std::runtime_error ("Failed to load image => " + p_ImageFilename);
+    vk::ImageCreateInfo imageInfo;
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.format = p_ImageCreateInfo.format;
+    imageInfo.extent.width = p_ImageWidth;
+    imageInfo.extent.height = p_ImageHeight;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = p_ImageCreateInfo.samples;
+    imageInfo.tiling = p_ImageCreateInfo.tiling;
+    imageInfo.usage = p_ImageCreateInfo.usage; // VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                               // | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
+    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
 
-  vk::Buffer stagingBuffer;
-  vk::DeviceMemory stagingMemory;
-  void *stagingMapped = nullptr;
+    image = p_LogicalDevice.createImage(imageInfo);
 
-  // create staging buffer
-  createStagingBuffer (imageSize, stagingBuffer, stagingMemory);
+    memoryRequirements = p_LogicalDevice.getImageMemoryRequirements(image);
 
-  stagingMapped
-      = p_Engine->logicalDevice.mapMemory (stagingMemory, 0, imageSize);
+    vk::MemoryAllocateInfo allocInfo;
+    allocInfo.allocationSize = memoryRequirements.size;
+    allocInfo.memoryTypeIndex =
+        getMemoryType(p_PhysicalDevice, memoryRequirements.memoryTypeBits, p_ImageCreateInfo.memoryProperties);
 
-  // copy raw image to staging memory
-  memcpy (stagingMapped, rawImage, static_cast<size_t> (imageSize));
+    // allocate image memory
+    memory = p_LogicalDevice.allocateMemory(allocInfo);
 
-  p_Engine->logicalDevice.unmapMemory (stagingMemory);
+    p_LogicalDevice.bindImageMemory(image, memory, 0);
 
-  // free stb image
-  stbi_image_free (rawImage);
+    // create view into image
+    vk::ImageViewCreateInfo viewInfo;
+    viewInfo.image = image;
+    viewInfo.viewType = vk::ImageViewType::e2D;
+    viewInfo.format = p_ImageCreateInfo.format;
+    viewInfo.components = {
+        vk::ComponentSwizzle::eR,
+        vk::ComponentSwizzle::eG,
+        vk::ComponentSwizzle::eB,
+        vk::ComponentSwizzle::eA,
+    };
+    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
 
-  // In case I forgot to add TransferDst
-  if (!(p_ImageCreateInfo.usage & vk::ImageUsageFlagBits::eTransferDst))
+    // create image view
+    imageView = p_LogicalDevice.createImageView(viewInfo);
+    return;
+}
+
+void Image::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+                   const vk::CommandPool &p_CommandPool, const vk::Queue &p_GraphicsQueue,
+                   ImageCreateInfo &p_ImageCreateInfo, std::string p_ImageFilename)
+{
+    if (!p_PhysicalDevice)
+        throw std::runtime_error("Invalid physical device handle passed to image");
+    if (!p_LogicalDevice)
+        throw std::runtime_error("Invalid logical device handle passed to image");
+    if (!p_CommandPool)
+        throw std::runtime_error("Invalid command pool handle passed to image");
+
+    physicalDevice = &p_PhysicalDevice;
+    logicalDevice = &p_LogicalDevice;
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+
+    // load image
+    stbi_uc *rawImage = stbi_load(p_ImageFilename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+    vk::DeviceSize imageSize = width * height * 4;
+
+    if (!rawImage)
+        throw std::runtime_error("Failed to load image => " + p_ImageFilename);
+
+    vk::Buffer stagingBuffer;
+    vk::DeviceMemory stagingMemory;
+    void *stagingMapped = nullptr;
+
+    // create staging buffer
+    createStagingBuffer(p_PhysicalDevice, p_LogicalDevice, imageSize, stagingBuffer, stagingMemory);
+
+    stagingMapped = p_LogicalDevice.mapMemory(stagingMemory, 0, imageSize);
+
+    // copy raw image to staging memory
+    memcpy(stagingMapped, rawImage, static_cast<size_t>(imageSize));
+
+    p_LogicalDevice.unmapMemory(stagingMemory);
+
+    // free stb image
+    stbi_image_free(rawImage);
+
+    // In case I forgot to add TransferDst
+    if (!(p_ImageCreateInfo.usage & vk::ImageUsageFlagBits::eTransferDst))
     {
-      p_ImageCreateInfo.usage |= vk::ImageUsageFlagBits::eTransferDst;
+        p_ImageCreateInfo.usage |= vk::ImageUsageFlagBits::eTransferDst;
     }
 
-  // create vulkan image that will store our pixel data
-  vk::ImageCreateInfo imageInfo;
-  imageInfo.imageType = vk::ImageType::e2D;
-  imageInfo.format = p_ImageCreateInfo.format;
-  imageInfo.extent.width = width;
-  imageInfo.extent.height = height;
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = 1;
-  imageInfo.arrayLayers = 1;
-  imageInfo.samples = vk::SampleCountFlagBits::e1;
-  imageInfo.tiling = p_ImageCreateInfo.tiling;
-  imageInfo.usage = p_ImageCreateInfo.usage; // VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                                             // | VK_IMAGE_USAGE_SAMPLED_BIT;
-  imageInfo.sharingMode = vk::SharingMode::eExclusive;
-  imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+    // create vulkan image that will store our pixel data
+    vk::ImageCreateInfo imageInfo;
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.format = p_ImageCreateInfo.format;
+    imageInfo.extent.width = width;
+    imageInfo.extent.height = height;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = p_ImageCreateInfo.samples;
+    imageInfo.tiling = p_ImageCreateInfo.tiling;
+    imageInfo.usage = p_ImageCreateInfo.usage; // VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                               // | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
+    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
 
-  image = p_Engine->logicalDevice.createImage (imageInfo);
+    image = p_LogicalDevice.createImage(imageInfo);
 
-  memoryRequirements
-      = p_Engine->logicalDevice.getImageMemoryRequirements (image);
+    memoryRequirements = p_LogicalDevice.getImageMemoryRequirements(image);
 
-  vk::MemoryAllocateInfo allocInfo;
-  allocInfo.allocationSize = memoryRequirements.size;
-  allocInfo.memoryTypeIndex = p_Engine->getMemoryType (
-      memoryRequirements.memoryTypeBits, p_ImageCreateInfo.memoryProperties);
+    vk::MemoryAllocateInfo allocInfo;
+    allocInfo.allocationSize = memoryRequirements.size;
+    allocInfo.memoryTypeIndex =
+        getMemoryType(p_PhysicalDevice, memoryRequirements.memoryTypeBits, p_ImageCreateInfo.memoryProperties);
 
-  // allocate image memory
-  memory = p_Engine->logicalDevice.allocateMemory (allocInfo);
+    // allocate image memory
+    memory = p_LogicalDevice.allocateMemory(allocInfo);
 
-  p_Engine->logicalDevice.bindImageMemory (image, memory, 0);
+    p_LogicalDevice.bindImageMemory(image, memory, 0);
 
-  // transition image to transfer dst
-  transitionImageLayout (&image, vk::ImageLayout::eUndefined,
-                         vk::ImageLayout::eTransferDstOptimal);
+    // transition image to transfer dst
+    transitionImageLayout(p_LogicalDevice, p_CommandPool, p_GraphicsQueue, &image, vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eTransferDstOptimal);
 
-  // copy staging buffer to image
-  vk::CommandBuffer commandBuffer = beginCommandBuffer ();
+    // copy staging buffer to image
+    vk::CommandBuffer commandBuffer = beginCommandBuffer(p_LogicalDevice, p_CommandPool);
 
-  vk::BufferImageCopy region;
-  region.bufferOffset = 0;
-  region.bufferRowLength = 0;
-  region.bufferImageHeight = 0;
-  region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
-  region.imageSubresource.mipLevel = 0;
-  region.imageSubresource.baseArrayLayer = 0;
-  region.imageSubresource.layerCount = 1;
-  region.imageOffset = vk::Offset3D{ 0, 0, 0 };
-  region.imageExtent = vk::Extent3D{ static_cast<uint32_t> (width),
-                                     static_cast<uint32_t> (height), 1 };
+    vk::BufferImageCopy region;
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = vk::Offset3D{0, 0, 0};
+    region.imageExtent = vk::Extent3D{static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
 
-  commandBuffer.copyBufferToImage (
-      stagingBuffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+    commandBuffer.copyBufferToImage(stagingBuffer, image, vk::ImageLayout::eTransferDstOptimal, region);
 
-  endCommandBuffer (commandBuffer);
+    endCommandBuffer(p_LogicalDevice, p_CommandPool, p_GraphicsQueue, commandBuffer);
 
-  // transition image to shader read only
-  transitionImageLayout (&image, vk::ImageLayout::eTransferDstOptimal,
-                         vk::ImageLayout::eShaderReadOnlyOptimal);
+    // transition image to shader read only
+    transitionImageLayout(p_LogicalDevice, p_CommandPool, p_GraphicsQueue, &image, vk::ImageLayout::eTransferDstOptimal,
+                          vk::ImageLayout::eShaderReadOnlyOptimal);
 
-  // create view into image
-  vk::ImageViewCreateInfo viewInfo;
-  viewInfo.image = image;
-  viewInfo.viewType = vk::ImageViewType::e2D;
-  viewInfo.format = p_ImageCreateInfo.format;
-  viewInfo.components = {
-    vk::ComponentSwizzle::eR,
-    vk::ComponentSwizzle::eG,
-    vk::ComponentSwizzle::eB,
-    vk::ComponentSwizzle::eA,
-  };
-  viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
-  viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = 1;
+    // create view into image
+    vk::ImageViewCreateInfo viewInfo;
+    viewInfo.image = image;
+    viewInfo.viewType = vk::ImageViewType::e2D;
+    viewInfo.format = p_ImageCreateInfo.format;
+    viewInfo.components = {
+        vk::ComponentSwizzle::eR,
+        vk::ComponentSwizzle::eG,
+        vk::ComponentSwizzle::eB,
+        vk::ComponentSwizzle::eA,
+    };
+    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
 
-  // create image view
-  imageView = p_Engine->logicalDevice.createImageView (viewInfo);
+    // create image view
+    imageView = p_LogicalDevice.createImageView(viewInfo);
 
-  // create image sampler
-  vk::SamplerCreateInfo samplerInfo;
-  samplerInfo.magFilter = vk::Filter::eLinear;
-  samplerInfo.minFilter = vk::Filter::eLinear;
-  samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
-  samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
-  samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
-  samplerInfo.anisotropyEnable = VK_TRUE;
-  samplerInfo.maxAnisotropy
-      = p_Engine->physicalProperties.limits.maxSamplerAnisotropy;
-  samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
-  samplerInfo.unnormalizedCoordinates = VK_FALSE;
-  samplerInfo.compareEnable = VK_FALSE;
-  samplerInfo.compareOp = vk::CompareOp::eAlways;
-  samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+    // create image sampler
+    auto physicalProperties = p_PhysicalDevice.getProperties();
+    vk::SamplerCreateInfo samplerInfo;
+    samplerInfo.magFilter = vk::Filter::eLinear;
+    samplerInfo.minFilter = vk::Filter::eLinear;
+    samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    samplerInfo.maxAnisotropy = physicalProperties.limits.maxSamplerAnisotropy;
+    samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = vk::CompareOp::eAlways;
+    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
 
-  // create sampler
-  sampler = p_Engine->logicalDevice.createSampler (samplerInfo);
+    // create sampler
+    sampler = p_LogicalDevice.createSampler(samplerInfo);
 
-  // cleanup staging resources
-  p_Engine->logicalDevice.destroyBuffer (stagingBuffer);
-  p_Engine->logicalDevice.freeMemory (stagingMemory);
+    // cleanup staging resources
+    p_LogicalDevice.destroyBuffer(stagingBuffer);
+    p_LogicalDevice.freeMemory(stagingMemory);
 
-  // setup the descriptor
-  descriptor.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-  descriptor.imageView = imageView;
-  descriptor.sampler = sampler;
+    // setup the descriptor
+    descriptor.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    descriptor.imageView = imageView;
+    descriptor.sampler = sampler;
 
-  return;
+    return;
 }
 
-void
-Image::createStagingBuffer (vk::DeviceSize &p_BufferSize,
-                            vk::Buffer &p_StagingBuffer,
-                            vk::DeviceMemory &p_StagingMemory)
+void Image::createStagingBuffer(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+                                vk::DeviceSize &p_BufferSize, vk::Buffer &p_StagingBuffer,
+                                vk::DeviceMemory &p_StagingMemory)
 {
-  vk::MemoryRequirements stagingReq;
+    vk::MemoryRequirements stagingReq;
 
-  vk::BufferCreateInfo bufferInfo;
-  bufferInfo.size = p_BufferSize;
-  bufferInfo.sharingMode = vk::SharingMode::eExclusive;
-  bufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
+    vk::BufferCreateInfo bufferInfo;
+    bufferInfo.size = p_BufferSize;
+    bufferInfo.sharingMode = vk::SharingMode::eExclusive;
+    bufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
 
-  // create staging buffer
-  p_StagingBuffer = engine->logicalDevice.createBuffer (bufferInfo);
+    // create staging buffer
+    p_StagingBuffer = p_LogicalDevice.createBuffer(bufferInfo);
 
-  // get memory requirements
-  stagingReq
-      = engine->logicalDevice.getBufferMemoryRequirements (p_StagingBuffer);
+    // get memory requirements
+    stagingReq = p_LogicalDevice.getBufferMemoryRequirements(p_StagingBuffer);
 
-  vk::MemoryAllocateInfo allocInfo;
-  allocInfo.allocationSize = stagingReq.size;
-  allocInfo.memoryTypeIndex = engine->getMemoryType (
-      stagingReq.memoryTypeBits,
-      vk::MemoryPropertyFlagBits::eHostVisible
-          | vk::MemoryPropertyFlagBits::eHostCoherent);
+    vk::MemoryAllocateInfo allocInfo;
+    allocInfo.allocationSize = stagingReq.size;
+    allocInfo.memoryTypeIndex =
+        getMemoryType(p_PhysicalDevice, stagingReq.memoryTypeBits,
+                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-  // allocate staging memory
-  p_StagingMemory = engine->logicalDevice.allocateMemory (allocInfo);
+    // allocate staging memory
+    p_StagingMemory = p_LogicalDevice.allocateMemory(allocInfo);
 
-  // bind staging buffer & memory
-  engine->logicalDevice.bindBufferMemory (p_StagingBuffer, p_StagingMemory, 0);
-  return;
+    // bind staging buffer & memory
+    p_LogicalDevice.bindBufferMemory(p_StagingBuffer, p_StagingMemory, 0);
+    return;
 }
 
-vk::CommandBuffer
-Image::beginCommandBuffer (void)
+vk::CommandBuffer Image::beginCommandBuffer(const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool)
 {
-  if (!engine->commandPool)
-    throw std::runtime_error ("Command pool not initialized in mv device "
-                              "handler :: image handler");
+    if (!p_CommandPool)
+        throw std::runtime_error("Invalid command pool handle passed to image");
 
-  vk::CommandBufferAllocateInfo allocInfo;
-  allocInfo.level = vk::CommandBufferLevel::ePrimary;
-  allocInfo.commandPool = engine->commandPool;
-  allocInfo.commandBufferCount = 1;
+    vk::CommandBufferAllocateInfo allocInfo;
+    allocInfo.level = vk::CommandBufferLevel::ePrimary;
+    allocInfo.commandPool = p_CommandPool;
+    allocInfo.commandBufferCount = 1;
 
-  // create command buffer
-  std::vector<vk::CommandBuffer> cmdBuffers
-      = engine->logicalDevice.allocateCommandBuffers (allocInfo);
+    // create command buffer
+    std::vector<vk::CommandBuffer> cmdBuffers = p_LogicalDevice.allocateCommandBuffers(allocInfo);
 
-  if (cmdBuffers.size () < 1)
-    throw std::runtime_error (
-        "Failed to allocate command buffers :: image handler");
+    if (cmdBuffers.size() < 1)
+        throw std::runtime_error("Failed to allocate command buffers :: image handler");
 
-  // destroy other command buffers if more than 1 created
-  // shouldn't happen
-  if (cmdBuffers.size () > 1)
+    // destroy other command buffers if more than 1 created
+    // shouldn't happen
+    if (cmdBuffers.size() > 1)
     {
-      std::vector<vk::CommandBuffer> toDestroy;
-      for (auto &buf : cmdBuffers)
+        std::vector<vk::CommandBuffer> toDestroy;
+        for (auto &buf : cmdBuffers)
         {
-          if (&buf - &cmdBuffers[0] > 0)
+            if (&buf - &cmdBuffers[0] > 0)
             {
-              toDestroy.push_back (buf);
+                toDestroy.push_back(buf);
             }
         }
-      engine->logicalDevice.freeCommandBuffers (engine->commandPool,
-                                                toDestroy);
+        p_LogicalDevice.freeCommandBuffers(p_CommandPool, toDestroy);
     }
 
-  vk::CommandBufferBeginInfo begin_info;
-  begin_info.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+    vk::CommandBufferBeginInfo begin_info;
+    begin_info.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
 
-  cmdBuffers.at (0).begin (begin_info);
+    cmdBuffers.at(0).begin(begin_info);
 
-  return cmdBuffers.at (0);
+    return cmdBuffers.at(0);
 }
 
-void
-Image::endCommandBuffer (vk::CommandBuffer p_CommandBuffer)
+void Image::endCommandBuffer(const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool,
+                             const vk::Queue &p_GraphicsQueue, vk::CommandBuffer p_CommandBuffer)
 {
 
-  if (!engine->commandPool)
-    throw std::runtime_error (
-        "Command pool invalid ending commands :: image handler");
+    if (!p_CommandPool)
+        throw std::runtime_error("Invalid command pool handle passed to image");
 
-  if (!engine->graphicsQueue)
-    throw std::runtime_error ("Graphics queue reference invalid ending "
-                              "commands :: image handler");
+    if (!p_GraphicsQueue)
+        throw std::runtime_error("Invalid graphics queue handle passed to image");
 
-  p_CommandBuffer.end ();
+    p_CommandBuffer.end();
 
-  vk::SubmitInfo submitInfo;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &p_CommandBuffer;
+    vk::SubmitInfo submitInfo;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &p_CommandBuffer;
 
-  engine->graphicsQueue.submit (submitInfo);
-  engine->graphicsQueue.waitIdle ();
+    p_GraphicsQueue.submit(submitInfo);
+    p_GraphicsQueue.waitIdle();
 
-  engine->logicalDevice.freeCommandBuffers (engine->commandPool,
-                                            p_CommandBuffer);
-  return;
+    p_LogicalDevice.freeCommandBuffers(p_CommandPool, p_CommandBuffer);
+    return;
 }
 
-void
-Image::transitionImageLayout (vk::Image *p_TargetImage,
-                              vk::ImageLayout p_StartingLayout,
-                              vk::ImageLayout p_EndingLayout)
+void Image::transitionImageLayout(const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool,
+                                  const vk::Queue &p_GraphicsQueue, vk::Image *p_TargetImage,
+                                  vk::ImageLayout p_StartingLayout, vk::ImageLayout p_EndingLayout)
 {
-  vk::CommandBuffer commandBuffer = beginCommandBuffer ();
+    vk::CommandBuffer commandBuffer = beginCommandBuffer(p_LogicalDevice, p_CommandPool);
 
-  vk::ImageMemoryBarrier barrier;
-  barrier.oldLayout = p_StartingLayout;
-  barrier.newLayout = p_EndingLayout;
-  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = *p_TargetImage;
-  barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-  barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = 1;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 1;
+    vk::ImageMemoryBarrier barrier;
+    barrier.oldLayout = p_StartingLayout;
+    barrier.newLayout = p_EndingLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = *p_TargetImage;
+    barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
 
-  vk::PipelineStageFlags sourceStage;
-  vk::PipelineStageFlags destinationStage;
+    vk::PipelineStageFlags sourceStage;
+    vk::PipelineStageFlags destinationStage;
 
-  if (p_StartingLayout == vk::ImageLayout::eUndefined
-      && p_EndingLayout == vk::ImageLayout::eTransferDstOptimal)
+    if (p_StartingLayout == vk::ImageLayout::eUndefined && p_EndingLayout == vk::ImageLayout::eTransferDstOptimal)
     {
-      barrier.srcAccessMask = vk::AccessFlagBits::eNoneKHR;
-      barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+        barrier.srcAccessMask = vk::AccessFlagBits::eNoneKHR;
+        barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
 
-      sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
-      destinationStage = vk::PipelineStageFlagBits::eTransfer;
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        destinationStage = vk::PipelineStageFlagBits::eTransfer;
     }
-  else if (p_StartingLayout == vk::ImageLayout::eTransferDstOptimal
-           && p_EndingLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+    else if (p_StartingLayout == vk::ImageLayout::eTransferDstOptimal &&
+             p_EndingLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
     {
-      barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-      barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+        barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+        barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 
-      sourceStage = vk::PipelineStageFlagBits::eTransfer;
-      destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+        sourceStage = vk::PipelineStageFlagBits::eTransfer;
+        destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
     }
-  else
+    else
     {
-      throw std::runtime_error ("Layout transition requested is unsupported");
+        throw std::runtime_error("Layout transition requested is unsupported");
     }
 
-  commandBuffer.pipelineBarrier (sourceStage, destinationStage,
-                                 vk::DependencyFlags (), nullptr, nullptr,
-                                 barrier);
+    commandBuffer.pipelineBarrier(sourceStage, destinationStage, vk::DependencyFlags(), nullptr, nullptr, barrier);
 
-  endCommandBuffer (commandBuffer);
-  return;
+    endCommandBuffer(p_LogicalDevice, p_CommandPool, p_GraphicsQueue, commandBuffer);
+    return;
 }
 
-void
-Image::destroy (void)
+void Image::destroy(void)
 {
-  if (sampler)
+    if (!logicalDevice)
+        throw std::runtime_error("Logical device handle nullptr before image could cleanup!");
+    if (sampler)
     {
-      engine->logicalDevice.destroySampler (sampler);
-      sampler = nullptr;
+        logicalDevice->destroySampler(sampler);
+        sampler = nullptr;
     }
-  if (imageView)
+    if (imageView)
     {
-      engine->logicalDevice.destroyImageView (imageView);
-      imageView = nullptr;
+        logicalDevice->destroyImageView(imageView);
+        imageView = nullptr;
     }
-  if (image)
+    if (image)
     {
-      engine->logicalDevice.destroyImage (image);
-      image = nullptr;
+        logicalDevice->destroyImage(image);
+        image = nullptr;
     }
-  if (memory)
+    if (memory)
     {
-      engine->logicalDevice.freeMemory (memory);
-      memory = nullptr;
+        logicalDevice->freeMemory(memory);
+        memory = nullptr;
     }
-  return;
+    return;
+}
+
+uint32_t Image::getMemoryType(const vk::PhysicalDevice &p_PhysicalDevice, uint32_t p_MemoryTypeBits,
+                              const vk::MemoryPropertyFlags p_MemoryProperties, vk::Bool32 *p_IsMemoryTypeFound) const
+{
+    auto physicalMemoryProperties = p_PhysicalDevice.getMemoryProperties();
+    for (uint32_t i = 0; i < physicalMemoryProperties.memoryTypeCount; i++)
+    {
+        if ((p_MemoryTypeBits & 1) == 1)
+        {
+            if ((physicalMemoryProperties.memoryTypes[i].propertyFlags & p_MemoryProperties))
+            {
+                if (p_IsMemoryTypeFound)
+                {
+                    *p_IsMemoryTypeFound = true;
+                }
+                return i;
+            }
+        }
+        p_MemoryTypeBits >>= 1;
+    }
+
+    if (p_IsMemoryTypeFound)
+    {
+        *p_IsMemoryTypeFound = false;
+        return 0;
+    }
+    else
+    {
+        throw std::runtime_error("Could not find a matching memory type");
+    }
 }

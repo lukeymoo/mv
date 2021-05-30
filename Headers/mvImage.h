@@ -15,7 +15,9 @@ class Image
     Image(void);
     ~Image(); // Image cleaned up in engine
 
-    Engine *engine = nullptr; // initialized in call to create()
+    // initialized in call to create()
+    const vk::PhysicalDevice *physicalDevice = nullptr;
+    const vk::Device *logicalDevice = nullptr;
 
     vk::Image image;
     vk::ImageView imageView;
@@ -33,23 +35,36 @@ class Image
             vk::MemoryPropertyFlags memoryProperties;
             vk::Format              format = vk::Format::eR8G8B8A8Srgb;
             vk::ImageTiling         tiling = vk::ImageTiling::eOptimal;
+            vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
         // clang-format on
     };
 
-    void create(Engine *p_Engine, ImageCreateInfo &p_ImageCreateInfo,
-                std::string p_ImageFilename);
+    // Create image and preload with data from file
+    void create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+                const vk::CommandPool &p_CommandPool, const vk::Queue &p_GraphicsQueue,
+                ImageCreateInfo &p_ImageCreateInfo, std::string p_ImageFilename);
 
-    void createStagingBuffer(vk::DeviceSize &p_BufferSize,
-                             vk::Buffer &p_StagingBuffer,
+    // Creates a vk image with no data -- used for creating msaa target
+    void create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+                const size_t p_ImageWidth, const size_t p_ImageHeight, const ImageCreateInfo &p_ImageCreateInfo);
+
+    void createStagingBuffer(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &p_LogicalDevice,
+                             vk::DeviceSize &p_BufferSize, vk::Buffer &p_StagingBuffer,
                              vk::DeviceMemory &p_StagingMemory);
 
-    void transitionImageLayout(vk::Image *p_TargetImage,
-                               vk::ImageLayout p_StartingLayout,
-                               vk::ImageLayout p_EndingLayout);
+    void transitionImageLayout(const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool,
+                               const vk::Queue &p_GraphicsQueue, vk::Image *p_TargetImage,
+                               vk::ImageLayout p_StartingLayout, vk::ImageLayout p_EndingLayout);
 
-    vk::CommandBuffer beginCommandBuffer(void);
+    vk::CommandBuffer beginCommandBuffer(const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool);
 
-    void endCommandBuffer(vk::CommandBuffer p_CommandBuffer);
+    void endCommandBuffer(const vk::Device &p_LogicalDevice, const vk::CommandPool &p_CommandPool,
+                          const vk::Queue &p_GraphicsQueue, vk::CommandBuffer p_CommandBuffer);
 
     void destroy(void);
+
+  private:
+    uint32_t getMemoryType(const vk::PhysicalDevice &p_PhysicalDevice, uint32_t p_MemoryTypeBits,
+                           const vk::MemoryPropertyFlags p_MemoryProperties,
+                           vk::Bool32 *p_IsMemoryTypeFound = nullptr) const;
 };

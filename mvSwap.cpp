@@ -1,5 +1,8 @@
 #include "mvSwap.h"
 
+// For createImage method
+#include "mvImage.h"
+
 Swap::Swap(void)
 {
 }
@@ -113,17 +116,13 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
 {
     // get surface capabilities
     vk::SurfaceCapabilitiesKHR capabilities;
-    vk::Result res = p_PhysicalDevice.getSurfaceCapabilitiesKHR(surface, &capabilities);
-    switch (res)
+    try
     {
-        using enum vk::Result;
-    case eSuccess: {
-        break;
+        capabilities = p_PhysicalDevice.getSurfaceCapabilitiesKHR(surface);
     }
-    default: {
-        throw std::runtime_error("Failed to get surface capabilities, does "
-                                 "the window no longer exist?");
-    }
+    catch (vk::SystemError &e)
+    {
+        throw std::runtime_error("\n:: Failed to get surface capabilities ::\nmessage => " + std::string(e.what()));
     }
 
     // get surface present modes
@@ -162,6 +161,22 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
     if ((capabilities.maxImageCount > 0) && (requestedImageCount > capabilities.maxImageCount))
     {
         requestedImageCount = capabilities.maxImageCount;
+    }
+
+    // get supported sample count
+    {
+        auto physicalProperties = p_PhysicalDevice.getProperties();
+        auto supportedSamples = physicalProperties.limits.framebufferColorSampleCounts &
+                                physicalProperties.limits.framebufferDepthSampleCounts;
+
+        if (supportedSamples & vk::SampleCountFlagBits::e16)
+            sampleCount = vk::SampleCountFlagBits::e16;
+        else if (supportedSamples & vk::SampleCountFlagBits::e8)
+            sampleCount = vk::SampleCountFlagBits::e8;
+        else if (supportedSamples & vk::SampleCountFlagBits::e4)
+            sampleCount = vk::SampleCountFlagBits::e4;
+        else
+            sampleCount = vk::SampleCountFlagBits::e1;
     }
 
     // get transform
@@ -253,6 +268,16 @@ void Swap::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device &
         viewInfo.viewType = vk::ImageViewType::e2D;
 
         buffer.view = p_LogicalDevice.createImageView(viewInfo);
+
+        // Create msaa target
+        buffer.msaaImage = std::make_unique<Image>();
+        Image::ImageCreateInfo msaaInfo;
+        msaaInfo.format = colorFormat;
+        msaaInfo.memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
+        msaaInfo.samples = sampleCount;
+        msaaInfo.tiling = vk::ImageTiling::eOptimal;
+        msaaInfo.usage = vk::ImageUsageFlagBits::eColorAttachment;
+        buffer.msaaImage->create(p_PhysicalDevice, p_LogicalDevice, swapExtent.width, swapExtent.height, msaaInfo);
     }
     return;
 }
@@ -267,6 +292,12 @@ void Swap::cleanup(const vk::Instance &p_Instance, const vk::Device &p_LogicalDe
             for (auto &swapBuffer : buffers)
             {
                 p_LogicalDevice.destroyImageView(swapBuffer.view);
+
+                if (swapBuffer.msaaImage)
+                {
+                    swapBuffer.msaaImage->destroy();
+                    swapBuffer.msaaImage.reset();
+                }
             }
         }
         p_LogicalDevice.destroySwapchainKHR(swapchain);

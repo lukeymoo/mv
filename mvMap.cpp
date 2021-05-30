@@ -90,10 +90,12 @@ void MapHandler::readHeightMap(GuiHandler *p_Gui, std::string p_Filename, bool p
         createInfo.format = vk::Format::eR8G8B8A8Srgb;
         createInfo.memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
         createInfo.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
+        createInfo.samples = vk::SampleCountFlagBits::e8;
 
         try
         {
-            defaultTexture->create(ptrEngine, createInfo, "terrain/defaultTexture.png");
+            defaultTexture->create(ptrEngine->physicalDevice, ptrEngine->logicalDevice, ptrEngine->commandPool,
+                                   ptrEngine->graphicsQueue, createInfo, "terrain/defaultTexture.png");
 
             auto layout = ptrEngine->allocator->getLayout(vk::DescriptorType::eCombinedImageSampler);
 
@@ -218,10 +220,11 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
         std::mutex mtx_splitValues;
         std::vector<std::thread> threads(numThreads);
 
-        size_t idx = 0;
-
         auto joinThread = [&](std::thread &thread) { thread.join(); };
 
+        // generate proper mesh from chunkified heightvalues
+        // heightvalues is only an array of single point vertices(1 vertex per height)
+        size_t idx = 0;
         std::for_each(threads.begin(), threads.end(),
                       [&mtx_splitValues, &splitValues, &idx, splitWidth, this](std::thread &thread) {
                           thread = std::thread([&mtx_splitValues, &splitValues, idx, splitWidth, this]() {

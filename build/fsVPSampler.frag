@@ -10,6 +10,6 @@ layout(location = 0) out vec4 out_color;
 
 void main()
 {
-    vec2 uv_formatted = vec2(in_uv.x / 8, in_uv.y / 8);
+    vec2 uv_formatted = vec2(in_uv.x / 16, in_uv.y / 16);
     out_color = texture(texture_sampler, uv_formatted);
 }

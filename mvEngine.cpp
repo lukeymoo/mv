@@ -674,7 +674,9 @@ void Engine::preparePipeline(void)
     vpState.pScissors = &sc;
 
     vk::PipelineMultisampleStateCreateInfo msState;
-    msState.rasterizationSamples = vk::SampleCountFlagBits::e1;
+    msState.rasterizationSamples = swapchain.sampleCount;
+    msState.sampleShadingEnable = VK_TRUE;
+    msState.minSampleShading = 1.0f;
 
     // Load shaders
     auto vsMVP = readFile("shaders/vsMVP.spv");
@@ -945,9 +947,10 @@ void Engine::recordCommandBuffer(uint32_t p_ImageIndex)
     vk::CommandBufferBeginInfo beginInfo;
 
     // render pass info
-    std::array<vk::ClearValue, 2> cls;
+    std::array<vk::ClearValue, 3> cls;
     cls[0].color = defaultClearColor;
     cls[1].depthStencil = vk::ClearDepthStencilValue{1.0f, 0};
+    cls[2].color = defaultClearColor;
 
     vk::RenderPassBeginInfo passInfo;
     passInfo.renderPass = renderPasses.at(eCore);
@@ -1075,23 +1078,26 @@ void Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
     switch (result)
     {
         using enum vk::Result;
-    case eErrorOutOfDateKHR: {
-        recreateSwapchain();
-        return;
-    }
-    case eSuboptimalKHR: {
-        using enum LogHandler::MessagePriority;
-        logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
-        break;
-    }
-    case eSuccess: {
-        break;
-    }
-    default: // unhandled error occurred
-    {
-        throw std::runtime_error("Unhandled error case while acquiring a swapchain image for "
-                                 "rendering");
-    }
+        case eErrorOutOfDateKHR:
+            {
+                recreateSwapchain();
+                return;
+            }
+        case eSuboptimalKHR:
+            {
+                using enum LogHandler::MessagePriority;
+                logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
+                break;
+            }
+        case eSuccess:
+            {
+                break;
+            }
+        default: // unhandled error occurred
+            {
+                throw std::runtime_error("Unhandled error case while acquiring a swapchain image for "
+                                         "rendering");
+            }
     }
 
     if (waitFences.at(p_CurrentImageIndex))
@@ -1125,22 +1131,25 @@ void Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
     switch (result)
     {
         using enum vk::Result;
-    case eErrorOutOfDateKHR: {
-        recreateSwapchain();
-        return;
-    }
-    case eSuboptimalKHR: {
-        using enum LogHandler::MessagePriority;
-        logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
-        break;
-    }
-    case eSuccess: {
-        break;
-    }
-    default: // unhandled error occurred
-    {
-        throw std::runtime_error("Unhandled error case while submitting queue");
-    }
+        case eErrorOutOfDateKHR:
+            {
+                recreateSwapchain();
+                return;
+            }
+        case eSuboptimalKHR:
+            {
+                using enum LogHandler::MessagePriority;
+                logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
+                break;
+            }
+        case eSuccess:
+            {
+                break;
+            }
+        default: // unhandled error occurred
+            {
+                throw std::runtime_error("Unhandled error case while submitting queue");
+            }
     }
 
     vk::PresentInfoKHR presentInfo;
@@ -1157,23 +1166,26 @@ void Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
     switch (result)
     {
         using enum vk::Result;
-    case eErrorOutOfDateKHR: {
-        recreateSwapchain();
-        return;
-        break;
-    }
-    case eSuboptimalKHR: {
-        using enum LogHandler::MessagePriority;
-        logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
-        break;
-    }
-    case eSuccess: {
-        break;
-    }
-    default: // unhandled error occurred
-    {
-        throw std::runtime_error("Unhandled error case while presenting");
-    }
+        case eErrorOutOfDateKHR:
+            {
+                recreateSwapchain();
+                return;
+                break;
+            }
+        case eSuboptimalKHR:
+            {
+                using enum LogHandler::MessagePriority;
+                logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
+                break;
+            }
+        case eSuccess:
+            {
+                break;
+            }
+        default: // unhandled error occurred
+            {
+                throw std::runtime_error("Unhandled error case while presenting");
+            }
     }
     p_CurrentFrame = (p_CurrentFrame + 1) % MAX_IN_FLIGHT;
     return;
@@ -1282,42 +1294,42 @@ void mouseButtonCallback(GLFWwindow *p_GLFWwindow, int p_Button, int p_Action, [
 
     switch (p_Button)
     {
-    case GLFW_MOUSE_BUTTON_1: // LMB
-    {
-        if (p_Action == GLFW_PRESS)
-        {
-            engine->mouse.onLeftPress();
-        }
-        else if (p_Action == GLFW_RELEASE)
-        {
-            engine->mouse.onLeftRelease();
-        }
-        break;
-    }
-    case GLFW_MOUSE_BUTTON_2: // RMB
-    {
-        if (p_Action == GLFW_PRESS)
-        {
-            engine->mouse.onRightPress();
-        }
-        else if (p_Action == GLFW_RELEASE)
-        {
-            engine->mouse.onRightRelease();
-        }
-        break;
-    }
-    case GLFW_MOUSE_BUTTON_3: // MMB
-    {
-        if (p_Action == GLFW_PRESS)
-        {
-            engine->mouse.onMiddlePress();
-        }
-        else if (p_Action == GLFW_RELEASE)
-        {
-            engine->mouse.onMiddleRelease();
-        }
-        break;
-    }
+        case GLFW_MOUSE_BUTTON_1: // LMB
+            {
+                if (p_Action == GLFW_PRESS)
+                {
+                    engine->mouse.onLeftPress();
+                }
+                else if (p_Action == GLFW_RELEASE)
+                {
+                    engine->mouse.onLeftRelease();
+                }
+                break;
+            }
+        case GLFW_MOUSE_BUTTON_2: // RMB
+            {
+                if (p_Action == GLFW_PRESS)
+                {
+                    engine->mouse.onRightPress();
+                }
+                else if (p_Action == GLFW_RELEASE)
+                {
+                    engine->mouse.onRightRelease();
+                }
+                break;
+            }
+        case GLFW_MOUSE_BUTTON_3: // MMB
+            {
+                if (p_Action == GLFW_PRESS)
+                {
+                    engine->mouse.onMiddlePress();
+                }
+                else if (p_Action == GLFW_RELEASE)
+                {
+                    engine->mouse.onMiddleRelease();
+                }
+                break;
+            }
     }
     return;
 }

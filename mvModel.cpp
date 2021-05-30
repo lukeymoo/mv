@@ -229,7 +229,8 @@ std::vector<Texture> Model::loadMaterialTextures(Engine *p_Engine, aiMaterial *p
             createInfo.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
 
             // load texture
-            tex.mvImage.create(p_Engine, createInfo, filename);
+            tex.mvImage.create(p_Engine->physicalDevice, p_Engine->logicalDevice, p_Engine->commandPool,
+                               p_Engine->graphicsQueue, createInfo, filename);
             // add to vector for return
             textures.push_back(tex);
             // add to loaded_textures to save processing time in event of
