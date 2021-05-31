@@ -359,24 +359,22 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
                                                 p_Filename, idx, this]() {
                               // tmp container for vertices
                               std::vector<Vertex> cpy;
+                              std::pair<std::vector<Vertex>, std::vector<uint32_t>> pair;
                               { // copy vertices
                                   std::lock_guard<std::mutex> lock{mtx_splitValues};
                                   cpy = splitValues.at(idx);
                               }
-                              { // optimize and save
-                                  std::lock_guard<std::mutex> lock{mtx_optimizedMesh};
-                                  optimizedMesh.at(idx) = optimize(cpy);
-                                  cpy.clear(); // release memory
+                              { // optimize
+                                  pair = optimize(cpy);
+                                  cpy.clear(); // release cpy
+                                  // write files
+                                  auto baseFilename = getBaseFilename(p_Filename);
+                                  writeVertexFile(baseFilename + std::to_string(idx), pair.first);
+                                  writeIndexFile(baseFilename + std::to_string(idx), pair.second);
                               }
-                              auto baseFilename = getBaseFilename(p_Filename);
-                              // split scopes to allow other threads access to container
-                              { // write vertex file
+                              { // place in optimizedMesh
                                   std::lock_guard<std::mutex> lock{mtx_optimizedMesh};
-                                  writeVertexFile(baseFilename + std::to_string(idx), optimizedMesh.at(idx).first);
-                              }
-                              { // write index file
-                                  std::lock_guard<std::mutex> lock{mtx_optimizedMesh};
-                                  writeIndexFile(baseFilename + std::to_string(idx), optimizedMesh.at(idx).second);
+                                  optimizedMesh.at(idx) = pair;
                               }
                           });
                           idx++;

@@ -109,12 +109,13 @@ class GuiHandler
     struct CameraModal
     {
         const int width = 300;
-        const int height = 100;
+        const int height = 150;
         std::string xInputBuffer;
         std::string yInputBuffer;
+        std::string zInputBuffer;
         void *userData;
         ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_EnterReturnsTrue |
-                                         ImGuiInputTextFlags_CallbackCharFilter;
+                                         ImGuiInputTextFlags_CallbackCharFilter | ImGuiColorEditFlags_NoLabel;
         ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
     } cameraModal;

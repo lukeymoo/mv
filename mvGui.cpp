@@ -911,7 +911,7 @@ void GuiHandler::renderCameraModal(void)
 
     ImGui::Text("X: ");
     ImGui::SameLine();
-    if (ImGui::InputText("xinput", &cameraModal.xInputBuffer, cameraModal.inputFlags, handleInputThunk, this))
+    if (ImGui::InputText("###XINPUT", &cameraModal.xInputBuffer, cameraModal.inputFlags, handleInputThunk, this))
     {
         // Parse input as uint32_t
         try
@@ -931,7 +931,7 @@ void GuiHandler::renderCameraModal(void)
 
     ImGui::Text("Y: ");
     ImGui::SameLine();
-    if (ImGui::InputText("yinput", &cameraModal.yInputBuffer, cameraModal.inputFlags, handleInputThunk, this))
+    if (ImGui::InputText("###YINPUT", &cameraModal.yInputBuffer, cameraModal.inputFlags, handleInputThunk, this))
     {
         try
         {
@@ -945,6 +945,24 @@ void GuiHandler::renderCameraModal(void)
     }
     if (!ImGui::IsItemActive())
         cameraModal.yInputBuffer = std::to_string(ptrCamera->position.y);
+    ImGui::Spacing();
+
+    ImGui::Text("Z: ");
+    ImGui::SameLine();
+    if (ImGui::InputText("###ZINPUT", &cameraModal.zInputBuffer, cameraModal.inputFlags, handleInputThunk, this))
+    {
+        try
+        {
+            auto pos = Helper::stouint32(cameraModal.zInputBuffer);
+            ptrCamera->position.z = pos;
+        }
+        catch (std::exception &e)
+        {
+            std::cout << "Could not parse input => " << std::string(e.what()) << "\n";
+        }
+    }
+    if (!ImGui::IsItemActive())
+        cameraModal.zInputBuffer = std::to_string(ptrCamera->position.z);
     ImGui::End();
     return;
 } // end asset modal
