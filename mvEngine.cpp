@@ -1,6 +1,7 @@
 #include "mvEngine.h"
 #include "mvAllocator.h"
 #include "mvCollection.h"
+#include "mvHelper.h"
 #include "mvModel.h"
 
 extern LogHandler logger;
@@ -228,15 +229,15 @@ void Engine::go(void)
     // WE AREN'T MISSING REINITIALIZATION METHODS
     recreateSwapchain();
 
-    try
-    {
-        mapHandler.readHeightMap(gui.get(), "heightmaps/scaled.png");
-    }
-    catch (std::exception &e)
-    {
-        std::cout << ":: Fatal error reading heightmap :: \n" << e.what() << "\n";
-        std::exit(1);
-    }
+    // try
+    // {
+    //     mapHandler.readHeightMap(gui.get(), "heightmaps/scaled.png");
+    // }
+    // catch (std::exception &e)
+    // {
+    //     std::cout << ":: Fatal error reading heightmap :: \n" << e.what() << "\n";
+    //     std::exit(1);
+    // }
 #endif
 
     while (!glfwWindowShouldClose(window))
@@ -978,7 +979,7 @@ void Engine::recordCommandBuffer(uint32_t p_ImageIndex)
         std::vector<vk::DescriptorSet> toBind = {
             collectionHandler->viewUniform->descriptor,
             collectionHandler->projectionUniform->descriptor,
-            mapHandler.terrainDescriptor,
+            mapHandler.terrainTextureDescriptor,
         };
         commandBuffers.at(p_ImageIndex)
             .bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayouts.at(eVPWSampler), 0, toBind, nullptr);
@@ -1068,6 +1069,8 @@ void Engine::recordCommandBuffer(uint32_t p_ImageIndex)
 
 void Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
 {
+    if (glfwWindowShouldClose(window))
+        return;
     vk::Result res = logicalDevice.waitForFences(inFlightFences.at(p_CurrentFrame), VK_TRUE, UINT64_MAX);
     if (res != vk::Result::eSuccess)
         throw std::runtime_error("Error occurred while waiting for fence");
@@ -1085,7 +1088,7 @@ void Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
             }
         case eSuboptimalKHR:
             {
-                using enum LogHandler::MessagePriority;
+                using enum LogHandlerMessagePriority;
                 logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
                 break;
             }
@@ -1138,7 +1141,7 @@ void Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
             }
         case eSuboptimalKHR:
             {
-                using enum LogHandler::MessagePriority;
+                using enum LogHandlerMessagePriority;
                 logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
                 break;
             }
@@ -1174,7 +1177,7 @@ void Engine::draw(size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
             }
         case eSuboptimalKHR:
             {
-                using enum LogHandler::MessagePriority;
+                using enum LogHandlerMessagePriority;
                 logger.logMessage(eWarning, "Swapchain is no longer optimal : not recreating");
                 break;
             }
@@ -1245,8 +1248,8 @@ inline void Engine::goSetup(void)
     cameraParams.fov = 50.0f;
     cameraParams.aspect = (float)swapchain.swapExtent.width / (float)swapchain.swapExtent.height;
     cameraParams.nearz = 0.1f;
-    cameraParams.farz = 2000.0f;
-    cameraParams.position = glm::vec3(400.0f, -40.0f, 200.0f);
+    cameraParams.farz = 5000.0f;
+    cameraParams.position = glm::vec3(512.0f, -40.0f, 512.0f);
     cameraParams.viewUniformObject = collectionHandler->viewUniform.get();
     cameraParams.projectionUniformObject = collectionHandler->projectionUniform.get();
 
@@ -1349,7 +1352,7 @@ void keyCallback(GLFWwindow *p_GLFWwindow, int p_Key, [[maybe_unused]] int p_Sca
     if (p_Action == GLFW_PRESS)
     {
         engine->keyboard.onKeyPress(p_Key);
-        engine->gui->getIO().AddInputCharacter(p_Key);
+        // engine->gui->getIO().AddInputCharacter(p_Key);
     }
     else if (p_Action == GLFW_RELEASE)
     {
@@ -1360,8 +1363,8 @@ void keyCallback(GLFWwindow *p_GLFWwindow, int p_Key, [[maybe_unused]] int p_Sca
 
 void glfwErrCallback(int p_Error, const char *p_Description)
 {
-    logger.logMessage(LogHandler::MessagePriority::eError, "GLFW Error...\nCode => " + std::to_string(p_Error) +
-                                                               "\nMessage=> " + std::string(p_Description));
+    logger.logMessage(LogHandlerMessagePriority::eError, "GLFW Error...\nCode => " + std::to_string(p_Error) +
+                                                             "\nMessage=> " + std::string(p_Description));
     return;
 }
 

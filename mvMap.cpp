@@ -32,10 +32,15 @@ MapHandler::~MapHandler()
 
 void MapHandler::cleanup(const vk::Device &p_LogicalDevice)
 {
-    if (defaultTexture)
+    if (terrainTexture)
     {
-        defaultTexture->destroy();
-        defaultTexture.reset();
+        terrainTexture->destroy();
+        terrainTexture.reset();
+    }
+    if (terrainNormal)
+    {
+        terrainNormal->destroy();
+        terrainNormal.reset();
     }
     if (vertexBuffer)
     {
@@ -80,36 +85,48 @@ void MapHandler::readHeightMap(GuiHandler *p_Gui, std::string p_Filename, bool p
     p_Gui->setLoadedTerrainFile(filename);
 
     // Load default terrain texture
-    if (!defaultTexture)
+    if (!terrainTexture)
     {
-        // allocate image
-        defaultTexture = std::make_unique<Image>();
+        terrainTexture = std::make_unique<Image>(); // image
+        terrainNormal = std::make_unique<Image>();  // normal map
 
-        Image::ImageCreateInfo createInfo = {};
-        createInfo.tiling = vk::ImageTiling::eOptimal;
-        createInfo.format = vk::Format::eR8G8B8A8Srgb;
-        createInfo.memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
-        createInfo.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
-        createInfo.samples = vk::SampleCountFlagBits::e8;
+        Image::ImageCreateInfo textureCreateInfo = {};
+        textureCreateInfo.tiling = vk::ImageTiling::eOptimal;
+        textureCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
+        textureCreateInfo.memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
+        textureCreateInfo.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
+
+        Image::ImageCreateInfo normalCreateInfo = {};
+        normalCreateInfo.tiling = vk::ImageTiling::eOptimal;
+        normalCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
+        normalCreateInfo.memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
+        normalCreateInfo.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
 
         try
         {
-            defaultTexture->create(ptrEngine->physicalDevice, ptrEngine->logicalDevice, ptrEngine->commandPool,
-                                   ptrEngine->graphicsQueue, createInfo, "terrain/defaultTexture.png");
+            terrainTexture->create(ptrEngine->physicalDevice, ptrEngine->logicalDevice, ptrEngine->commandPool,
+                                   ptrEngine->graphicsQueue, textureCreateInfo, "terrain/crackedMud.png");
 
             auto layout = ptrEngine->allocator->getLayout(vk::DescriptorType::eCombinedImageSampler);
 
-            ptrEngine->allocator->allocateSet(layout, terrainDescriptor);
-            ptrEngine->allocator->updateSet(defaultTexture->descriptor, terrainDescriptor, 0);
+            ptrEngine->allocator->allocateSet(layout, terrainTextureDescriptor);
+            ptrEngine->allocator->updateSet(terrainTexture->descriptor, terrainTextureDescriptor, 0);
+
+            terrainNormal->create(ptrEngine->physicalDevice, ptrEngine->logicalDevice, ptrEngine->commandPool,
+                                  ptrEngine->graphicsQueue, normalCreateInfo, "terrain/crackedMudNormal.png");
+
+            ptrEngine->allocator->allocateSet(layout, terrainNormalDescriptor);
+            ptrEngine->allocator->updateSet(terrainNormal->descriptor, terrainNormalDescriptor, 0);
         }
         catch (std::exception &e)
         {
             // cleanup any resources partially created
-            defaultTexture->destroy();
-            throw std::runtime_error("Failed to load default terrain texture");
+            terrainTexture->destroy();
+            terrainNormal->destroy();
+            throw std::runtime_error("Failed to load terrain texture => " + std::string(e.what()));
         }
 
-        std::cout << "Loaded default terrain texture\n";
+        std::cout << "Loaded terrain texture\n";
     }
 
     return;
@@ -123,6 +140,7 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
     {
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
+        std::cout << "Loading preoptimized files\n";
         loadPreoptimized(p_Filename, vertices, indices);
 
         // ensure we got something
@@ -156,9 +174,11 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
 
         {
             std::vector<unsigned char> rawImage;
+            std::cout << "Loading PNG\n";
             loadPNG(xLength, zLength, channels, p_Filename, rawImage);
 
             // Extract height values and place into new vector
+            std::cout << "Converting pixels to vertex objects\n";
             pngToVertices(xLength, rawImage, heightValues);
         }
 
@@ -171,7 +191,8 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
         std::vector<Vertex>::iterator bottomQuadIterator = heightValues.begin() + (xLength * splitWidth);
         std::vector<Vertex>::iterator endIterator = heightValues.end();
 
-        {     // split heightValues into 4 chunks
+        { // split heightValues into 4 chunks
+            std::cout << "Splitting into chunks\n";
             { // copy top left & top right map mesh quadrants
                 size_t leftOrRight = 0;
                 do
@@ -221,6 +242,8 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
         std::vector<std::thread> threads(numThreads);
 
         auto joinThread = [&](std::thread &thread) { thread.join(); };
+
+        std::cout << "Converting pixel chunks to meshes\n";
 
         // generate proper mesh from chunkified heightvalues
         // heightvalues is only an array of single point vertices(1 vertex per height)
@@ -298,6 +321,7 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
         std::vector<Vertex> stitches;
 
         { // Stitch all the edges of chunks & reset colors
+            std::cout << "Generating stitches to reconnect chunks\n";
             cleanAndStitch(chunks, stitches);
             chunks.clear(); // release mem
 
@@ -327,6 +351,7 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
         // optimize chunks
         // store in optimizedMesh
         // write optimized data to respective .bin files
+        std::cout << "Optimizing vertex data :: Started with " << tc << " vertices non-indexed\n";
         std::for_each(threads.begin(), threads.end(),
                       [&mtx_splitValues, &mtx_optimizedMesh, &idx, &optimizedMesh, &splitValues, p_Filename,
                        this](std::thread &thread) { // for each loop
@@ -338,18 +363,21 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
                                   std::lock_guard<std::mutex> lock{mtx_splitValues};
                                   cpy = splitValues.at(idx);
                               }
-                              // optimize copied chunk
-                              auto pair = optimize(cpy);
-                              // save work in optimizedMesh
-                              {
+                              { // optimize and save
                                   std::lock_guard<std::mutex> lock{mtx_optimizedMesh};
-                                  optimizedMesh.at(idx) = pair;
+                                  optimizedMesh.at(idx) = optimize(cpy);
+                                  cpy.clear(); // release memory
                               }
-                              // write vertex file
                               auto baseFilename = getBaseFilename(p_Filename);
-                              writeVertexFile(baseFilename + std::to_string(idx), pair.first);
-                              // write index file
-                              writeIndexFile(baseFilename + std::to_string(idx), pair.second);
+                              // split scopes to allow other threads access to container
+                              { // write vertex file
+                                  std::lock_guard<std::mutex> lock{mtx_optimizedMesh};
+                                  writeVertexFile(baseFilename + std::to_string(idx), optimizedMesh.at(idx).first);
+                              }
+                              { // write index file
+                                  std::lock_guard<std::mutex> lock{mtx_optimizedMesh};
+                                  writeIndexFile(baseFilename + std::to_string(idx), optimizedMesh.at(idx).second);
+                              }
                           });
                           idx++;
                       });
@@ -367,6 +395,7 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
         std::vector<uint32_t> indices;
 
         // concat vertices
+        std::cout << "Rebinding chunks\n";
         for (auto &p : optimizedMesh)
         {
             // vertexOffsets.push_back (vertices.size ());
@@ -389,6 +418,7 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>> MapHandler::readHeightMap(
 
         vertexCount = vertices.size();
         indexCount = indices.size();
+        std::cout << "Done\nVertex count : " << vertexCount << " Index Count : " << indexCount << "\n";
         allocate(vertices, indices);
 
         isMapLoaded = true;

@@ -331,6 +331,33 @@ Headers/imgui-1.82/imgui_widgets.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/imgui_widgets.cpp.s
 .PHONY : Headers/imgui-1.82/imgui_widgets.cpp.s
 
+Headers/imgui-1.82/misc/cpp/imgui_stdlib.o: Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.o
+
+.PHONY : Headers/imgui-1.82/misc/cpp/imgui_stdlib.o
+
+# target to build an object file
+Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.o
+.PHONY : Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.o
+
+Headers/imgui-1.82/misc/cpp/imgui_stdlib.i: Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.i
+
+.PHONY : Headers/imgui-1.82/misc/cpp/imgui_stdlib.i
+
+# target to preprocess a source file
+Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.i
+.PHONY : Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.i
+
+Headers/imgui-1.82/misc/cpp/imgui_stdlib.s: Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.s
+
+.PHONY : Headers/imgui-1.82/misc/cpp/imgui_stdlib.s
+
+# target to generate assembly for a file
+Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.s
+.PHONY : Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp.s
+
 main.o: main.cpp.o
 
 .PHONY : main.o
@@ -766,6 +793,9 @@ help:
 	@echo "... Headers/imgui-1.82/imgui_widgets.o"
 	@echo "... Headers/imgui-1.82/imgui_widgets.i"
 	@echo "... Headers/imgui-1.82/imgui_widgets.s"
+	@echo "... Headers/imgui-1.82/misc/cpp/imgui_stdlib.o"
+	@echo "... Headers/imgui-1.82/misc/cpp/imgui_stdlib.i"
+	@echo "... Headers/imgui-1.82/misc/cpp/imgui_stdlib.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"

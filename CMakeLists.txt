@@ -18,6 +18,7 @@ set(HEADERS
     Headers/imgui-1.82/imgui.h
     Headers/imgui-1.82/backends/imgui_impl_glfw.h
     Headers/imgui-1.82/backends/imgui_impl_vulkan.h
+    Headers/imgui-1.82/misc/cpp/imgui_stdlib.h
     Headers/mvMisc.h
     Headers/mvMap.h
     Headers/mvGui.h
@@ -36,6 +37,7 @@ set(HEADERS
 
 set(SOURCES
     Headers/imgui-1.82/backends/imgui_impl_glfw.cpp
+    Headers/imgui-1.82/misc/cpp/imgui_stdlib.cpp
     Headers/imgui-1.82/backends/imgui_impl_vulkan.cpp
     Headers/imgui-1.82/imgui_tables.cpp
     Headers/imgui-1.82/imgui_widgets.cpp

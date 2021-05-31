@@ -77,6 +77,9 @@ void Image::create(const vk::PhysicalDevice &p_PhysicalDevice, const vk::Device 
                    const vk::CommandPool &p_CommandPool, const vk::Queue &p_GraphicsQueue,
                    ImageCreateInfo &p_ImageCreateInfo, std::string p_ImageFilename)
 {
+    // sanity check
+    if (image || imageView || sampler || memory)
+        throw std::runtime_error("You already called create() for this object bozo; Call destroy() first!");
     if (!p_PhysicalDevice)
         throw std::runtime_error("Invalid physical device handle passed to image");
     if (!p_LogicalDevice)
@@ -372,8 +375,8 @@ void Image::transitionImageLayout(const vk::Device &p_LogicalDevice, const vk::C
 
 void Image::destroy(void)
 {
-    if (!logicalDevice)
-        throw std::runtime_error("Logical device handle nullptr before image could cleanup!");
+    if (!logicalDevice) // nothing probably loaded but if there is..nothing we can do from here
+        return;
     if (sampler)
     {
         logicalDevice->destroySampler(sampler);

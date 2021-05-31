@@ -1,4 +1,5 @@
 #include "mvModel.h"
+#include "mvHelper.h"
 
 extern LogHandler logger;
 

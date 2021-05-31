@@ -45,8 +45,11 @@ class MapHandler
     std::unique_ptr<vk::Buffer> indexBuffer;
     std::unique_ptr<vk::DeviceMemory> indexMemory;
 
-    std::unique_ptr<Image> defaultTexture;
-    vk::DescriptorSet terrainDescriptor;
+    std::unique_ptr<Image> terrainTexture;
+    vk::DescriptorSet terrainTextureDescriptor;
+
+    std::unique_ptr<Image> terrainNormal;
+    vk::DescriptorSet terrainNormalDescriptor;
 
     size_t vertexCount = 0;
     size_t indexCount = 0;
