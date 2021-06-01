@@ -248,6 +248,18 @@ Engine::go (void)
                                              swapchain.swapExtent.width,
                                              swapchain.swapExtent.height);
 
+  auto threadCount = std::thread::hardware_concurrency ();
+  do
+    {
+      if (mapHandler.indices.size () % threadCount == 0)
+        break;
+      threadCount--;
+    }
+  while (threadCount > 0);
+
+  std::cout << "Creating " << threadCount << " threads\n";
+  threadPool.resize (threadCount);
+
   auto renderStart = chrono::now ();
   auto renderStop = chrono::now ();
 
@@ -997,7 +1009,6 @@ Engine::preparePipeline (void)
 void
 Engine::recordCommandBuffer (uint32_t p_ImageIndex)
 {
-
   // FRUSTUM CULLING TESTING
 
   // Fetch view & projection matrices
@@ -1007,46 +1018,78 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
   // Combine them to get camera space
   auto cameraSpace = projMat * viewMat;
 
-  auto testPoint = glm::vec4 (0.0f, 0.0f, 0.0f, 1.0f);
+  // All reads so no sync primitives
+  std::mutex mtx;
+  size_t splitWidth = mapHandler.indices.size () / threadPool.size ();
 
-  // we will test with xyz point at origin
-  // -- Extract left plane --
-  // column major
-  glm::vec4 frustumLeft = { 0.0f, 0.0f, 0.0f, 0.0f };
-  glm::vec4 frustumRight = { 0.0f, 0.0f, 0.0f, 0.0f };
-  glm::vec4 frustumTop = { 0.0f, 0.0f, 0.0f, 0.0f };
-  glm::vec4 frustumBottom = { 0.0f, 0.0f, 0.0f, 0.0f };
+  auto ibegin = mapHandler.indices.begin ();
+  auto iend = std::next (ibegin, splitWidth);
+  auto ptrVertices = &mapHandler.vertices;
 
-  // left plane
-  frustumLeft.x = testPoint.x * (cameraSpace[0].w + cameraSpace[0].x);
-  frustumLeft.y = testPoint.y * (cameraSpace[1].w + cameraSpace[1].x);
-  frustumLeft.z = testPoint.z * (cameraSpace[2].w + cameraSpace[2].x);
-  frustumLeft.w = cameraSpace[3].w + cameraSpace[3].x;
+  auto job = [ptrVertices, cameraSpace, &mtx, this] (std::vector<uint32_t>::iterator ibegin,
+                                                     std::vector<uint32_t>::iterator iend) {
+    size_t c = 0;
+    for (; ibegin != iend; ibegin++)
+      {
+        // we will test with xyz point at origin
+        // -- Extract left plane --
+        // column major
+        glm::vec4 frustumLeft = { 0.0f, 0.0f, 0.0f, 0.0f };
+        glm::vec4 frustumRight = { 0.0f, 0.0f, 0.0f, 0.0f };
+        glm::vec4 frustumTop = { 0.0f, 0.0f, 0.0f, 0.0f };
+        glm::vec4 frustumBottom = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-  frustumRight.x = testPoint.x * (cameraSpace[0].w - cameraSpace[0].x);
-  frustumRight.y = testPoint.y * (cameraSpace[1].w - cameraSpace[1].x);
-  frustumRight.z = testPoint.z * (cameraSpace[2].w - cameraSpace[2].x);
-  frustumRight.w = cameraSpace[3].w - cameraSpace[3].x;
+        // left plane
+        // clang-format off
+        frustumLeft.x = ptrVertices->at (*ibegin).position.x * (cameraSpace[0].w + cameraSpace[0].x);
+        frustumLeft.y = ptrVertices->at (*ibegin).position.y * (cameraSpace[1].w + cameraSpace[1].x);
+        frustumLeft.z = ptrVertices->at (*ibegin).position.z * (cameraSpace[2].w + cameraSpace[2].x);
+        frustumLeft.w = cameraSpace[3].w + cameraSpace[3].x;
 
-  frustumTop.x = testPoint.x * (cameraSpace[0].w - cameraSpace[0].y);
-  frustumTop.y = testPoint.y * (cameraSpace[1].w - cameraSpace[1].y);
-  frustumTop.z = testPoint.z * (cameraSpace[2].w - cameraSpace[2].y);
-  frustumTop.w = cameraSpace[3].w - cameraSpace[3].y;
+        frustumRight.x = ptrVertices->at (*ibegin).position.x * (cameraSpace[0].w - cameraSpace[0].x);
+        frustumRight.y = ptrVertices->at (*ibegin).position.y * (cameraSpace[1].w - cameraSpace[1].x);
+        frustumRight.z = ptrVertices->at (*ibegin).position.z * (cameraSpace[2].w - cameraSpace[2].x);
+        frustumRight.w = cameraSpace[3].w - cameraSpace[3].x;
 
-  frustumBottom.x = testPoint.x * (cameraSpace[0].w + cameraSpace[0].y);
-  frustumBottom.y = testPoint.y * (cameraSpace[1].w + cameraSpace[1].y);
-  frustumBottom.z = testPoint.z * (cameraSpace[2].w + cameraSpace[2].y);
-  frustumBottom.w = cameraSpace[3].w + cameraSpace[3].y;
+        frustumTop.x = ptrVertices->at (*ibegin).position.x * (cameraSpace[0].w - cameraSpace[0].y);
+        frustumTop.y = ptrVertices->at (*ibegin).position.y * (cameraSpace[1].w - cameraSpace[1].y);
+        frustumTop.z = ptrVertices->at (*ibegin).position.z * (cameraSpace[2].w - cameraSpace[2].y);
+        frustumTop.w = cameraSpace[3].w - cameraSpace[3].y;
 
-  auto totalLeft = frustumLeft.x + frustumLeft.y + frustumLeft.z + frustumLeft.w;
-  auto totalRight = frustumRight.x + frustumRight.y + frustumRight.z + frustumRight.w;
-  auto totalTop = frustumTop.x + frustumTop.y + frustumTop.z + frustumTop.w;
-  auto totalBottom = frustumBottom.x + frustumBottom.y + frustumBottom.z + frustumBottom.w;
+        frustumBottom.x = ptrVertices->at (*ibegin).position.x * (cameraSpace[0].w + cameraSpace[0].y);
+        frustumBottom.y = ptrVertices->at (*ibegin).position.y * (cameraSpace[1].w + cameraSpace[1].y);
+        frustumBottom.z = ptrVertices->at (*ibegin).position.z * (cameraSpace[2].w + cameraSpace[2].y);
+        frustumBottom.w = cameraSpace[3].w + cameraSpace[3].y;
+        // clang-format on
 
-  if (totalLeft > -2.5f && totalRight > -2.5f && totalTop > -2.5f && totalBottom > -2.5f)
-    {
-      // draw
-    }
+        auto totalLeft = frustumLeft.x + frustumLeft.y + frustumLeft.z + frustumLeft.w;
+        auto totalRight = frustumRight.x + frustumRight.y + frustumRight.z + frustumRight.w;
+        auto totalTop = frustumTop.x + frustumTop.y + frustumTop.z + frustumTop.w;
+        auto totalBottom = frustumBottom.x + frustumBottom.y + frustumBottom.z + frustumBottom.w;
+
+        if (totalLeft > -2.5f && totalRight > -2.5f && totalTop > -2.5f && totalBottom > -2.5f)
+          {
+            // draw
+            c++;
+          }
+      }
+  };
+
+  auto start = std::chrono::high_resolution_clock::now ();
+  std::for_each (threadPool.begin (),
+                 threadPool.end (),
+                 [&job, &ibegin, &iend, splitWidth] (std::thread &thread) {
+                   thread = std::thread (job, ibegin, iend);
+                   ibegin = std::next (ibegin, splitWidth);
+                   iend = std::next (iend, splitWidth);
+                 });
+
+  std::for_each (
+      threadPool.begin (), threadPool.end (), [] (std::thread &thread) { thread.join (); });
+  auto end = std::chrono::high_resolution_clock::now ();
+  std::cout << "cull took "
+            << std::chrono::duration<double, std::ratio<1UL, 1000UL>> (end - start).count ()
+            << " MS\n";
 
   // END FRUSTUM CULLING TESTING
   // command buffer begin

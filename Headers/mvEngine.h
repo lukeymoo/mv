@@ -22,53 +22,61 @@ using namespace std::chrono_literals;
 
 class Engine : public Window
 {
-  public:
-    Engine(int w, int h, const char *title);
-    ~Engine();
+public:
+  Engine (int w, int h, const char *title);
+  ~Engine ();
 
-    // delete copy
-    Engine &operator=(const Engine &) = delete;
-    Engine(const Engine &) = delete;
+  // delete copy
+  Engine &operator= (const Engine &) = delete;
+  Engine (const Engine &) = delete;
 
-    Timer timer;
-    Timer fps;
+  std::vector<std::thread> threadPool;
 
-    Camera camera;                                 // camera manager(view/proj matrix handler)
-    MapHandler mapHandler;                         // Map related methods
-    std::unique_ptr<Allocator> allocator;          // descriptor pool/set manager
-    std::unique_ptr<Collection> collectionHandler; // model/obj manager
-    std::unique_ptr<GuiHandler> gui;               // ImGui manager
+  Timer timer;
+  Timer fps;
 
-    std::unordered_map<PipelineTypes, vk::Pipeline> pipelines;
-    std::unordered_map<PipelineTypes, vk::PipelineLayout> pipelineLayouts;
+  Camera camera;                                 // camera manager(view/proj matrix handler)
+  MapHandler mapHandler;                         // Map related methods
+  std::unique_ptr<Allocator> allocator;          // descriptor pool/set manager
+  std::unique_ptr<Collection> collectionHandler; // model/obj manager
+  std::unique_ptr<GuiHandler> gui;               // ImGui manager
 
-    PipelineTypes currentlyBound;
+  std::unordered_map<PipelineTypes, vk::Pipeline> pipelines;
+  std::unordered_map<PipelineTypes, vk::PipelineLayout> pipelineLayouts;
 
-    void addNewModel(Container *pool, const char *filename);
+  PipelineTypes currentlyBound;
 
-    void recreateSwapchain(void);
+  void addNewModel (Container *pool, const char *filename);
 
-    void go(void);
-    // all the initial descriptor allocator & collection handler calls
-    inline void goSetup(void);
-    void recordCommandBuffer(uint32_t imageIndex);
-    void draw(size_t &current_frame, uint32_t &current_image_index);
+  void recreateSwapchain (void);
 
-    // create buffer with Vulkan objects
-    void createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                      vk::DeviceSize p_DeviceSize, vk::Buffer *p_VkBuffer, vk::DeviceMemory *p_DeviceMemory,
-                      void *p_InitialData = nullptr) const;
+  void go (void);
+  // all the initial descriptor allocator & collection handler calls
+  inline void goSetup (void);
+  void recordCommandBuffer (uint32_t imageIndex);
+  void draw (size_t &current_frame, uint32_t &current_image_index);
 
-    // create buffer with custom Buffer interface
-    void createBuffer(vk::BufferUsageFlags p_BufferUsageFlags, vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                      MvBuffer *p_MvBuffer, vk::DeviceSize p_DeviceSize, void *p_InitialData = nullptr) const;
+  // create buffer with Vulkan objects
+  void createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
+                     vk::MemoryPropertyFlags p_MemoryPropertyFlags,
+                     vk::DeviceSize p_DeviceSize,
+                     vk::Buffer *p_VkBuffer,
+                     vk::DeviceMemory *p_DeviceMemory,
+                     void *p_InitialData = nullptr) const;
 
-  protected:
-    void prepareUniforms(void);
+  // create buffer with custom Buffer interface
+  void createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
+                     vk::MemoryPropertyFlags p_MemoryPropertyFlags,
+                     MvBuffer *p_MvBuffer,
+                     vk::DeviceSize p_DeviceSize,
+                     void *p_InitialData = nullptr) const;
 
-    void prepareLayouts(void);
+protected:
+  void prepareUniforms (void);
 
-    void preparePipeline(void);
+  void prepareLayouts (void);
 
-    void cleanupSwapchain(void);
+  void preparePipeline (void);
+
+  void cleanupSwapchain (void);
 };
