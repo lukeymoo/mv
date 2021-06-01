@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <any>
 #include <chrono>
-#include <concepts>
 #include <cxxabi.h>
 #include <filesystem>
 #include <iostream>
@@ -292,7 +291,6 @@ namespace gui
   auto &
   getModal (UMAP umap)
   {
-
     std::string modal_param_mangled = typeid (ModalEntry<T>).name ();
     std::string modal_param_demangled;
     modal_param_demangled.resize (modal_param_mangled.size () * 2);

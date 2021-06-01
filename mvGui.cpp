@@ -762,6 +762,7 @@ void
 showSaveDialog (GuiHandler *p_This)
 {
   p_This->ptrLogger->logMessage ("Not implemented yet");
+  p_This->releaseFocus ();
   return;
 }
 
@@ -1113,7 +1114,7 @@ GuiHandler::renderDebugModal (DebugMessageList p_DebugMessageList)
   else
     hover = false;
   ImGui::PopStyleVar ();
-  grabFocus (eNone);
+  // grabFocus (eNone);
   getModal<DebugModal> (GuiModals).isOpen = true;
 
   // Display all received debug messages
