@@ -286,7 +286,7 @@ void Engine::go(void)
                 // if drag enabled check for release
                 if (mouse.isDragging)
                 {
-                    camera.rotate({mouse.dragDeltaY, -mouse.dragDeltaX, 0.0f}, 1.0f);
+                    camera.rotate({-mouse.dragDeltaY, -mouse.dragDeltaX, 0.0f}, 1.0f);
 
                     mouse.storedOrbit = camera.orbitAngle;
                     mouse.storedPitch = camera.pitch;
@@ -658,9 +658,9 @@ void Engine::preparePipeline(void)
 
     vk::Viewport vp;
     vp.x = 0;
-    vp.y = windowHeight;
+    vp.y = 0;
     vp.width = static_cast<float>(windowWidth);
-    vp.height = -static_cast<float>(windowHeight);
+    vp.height = static_cast<float>(windowHeight);
     vp.minDepth = 0.0f;
     vp.maxDepth = 1.0f;
 
@@ -1249,7 +1249,7 @@ inline void Engine::goSetup(void)
     cameraParams.aspect = (float)swapchain.swapExtent.width / (float)swapchain.swapExtent.height;
     cameraParams.nearz = 0.1f;
     cameraParams.farz = 5000.0f;
-    cameraParams.position = glm::vec3(512.0f, -40.0f, 512.0f);
+    cameraParams.position = glm::vec3(512.0f, 40.0f, 512.0f);
     cameraParams.viewUniformObject = collectionHandler->viewUniform.get();
     cameraParams.projectionUniformObject = collectionHandler->projectionUniform.get();
 

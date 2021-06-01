@@ -67,6 +67,8 @@
         "codecvt": "cpp",
         "numbers": "cpp",
         "regex": "cpp",
-        "semaphore": "cpp"
+        "semaphore": "cpp",
+        "filesystem": "cpp",
+        "any": "cpp"
     }
 }

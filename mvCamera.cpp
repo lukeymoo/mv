@@ -373,27 +373,27 @@ void Camera::rotate(glm::vec3 p_Delta,
 
 void Camera::moveUp(void)
 {
-    position.y -= MOVESPEED * 1.5f;
+    position.y += MOVESPEED * 1.5f;
     return;
 }
 void Camera::moveUp(bool p_IsBoost)
 {
     if (p_IsBoost)
-        position.y -= MOVESPEED * 5.0f;
+        position.y += MOVESPEED * 5.0f;
     else
-        position.y -= MOVESPEED * 1.5f;
+        position.y += MOVESPEED * 3.0f;
 }
 void Camera::moveDown(void)
 {
-    position.y += MOVESPEED * 1.5f;
+    position.y -= MOVESPEED * 1.5f;
     return;
 }
 void Camera::moveDown(bool p_IsBoost)
 {
     if (p_IsBoost)
-        position.y += MOVESPEED * 5.0f;
+        position.y -= MOVESPEED * 5.0f;
     else
-        position.y += MOVESPEED * 1.5f;
+        position.y -= MOVESPEED * 3.0f;
 }
 void Camera::moveLeft(void)
 {

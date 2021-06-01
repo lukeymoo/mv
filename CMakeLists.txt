@@ -22,6 +22,7 @@ set(HEADERS
     Headers/mvMisc.h
     Headers/mvMap.h
     Headers/mvGui.h
+    Headers/mvGuiStructures.h
     Headers/mvHelper.h
     Headers/mvInput.h
     Headers/mvWindow.h
