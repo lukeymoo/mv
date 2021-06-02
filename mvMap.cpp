@@ -28,7 +28,7 @@ MapHandler::MapHandler (Engine *p_ParentEngine)
 MapHandler::~MapHandler () { return; }
 
 void
-MapHandler::cleanup (const vk::Device &p_LogicalDevice)
+MapHandler::cleanup (void)
 {
   if (terrainTexture)
     {
@@ -40,28 +40,18 @@ MapHandler::cleanup (const vk::Device &p_LogicalDevice)
       terrainNormal->destroy ();
       terrainNormal.reset ();
     }
-  if (vertexBuffer)
+  if (!ptrEngine)
+    return;
+  if (vertexData)
     {
-      p_LogicalDevice.destroyBuffer (*vertexBuffer);
-      vertexBuffer.reset ();
+      vertexData->destroy (ptrEngine->logicalDevice);
+      vertexData.reset ();
     }
 
-  if (vertexMemory)
+  if (indexData)
     {
-      p_LogicalDevice.freeMemory (*vertexMemory);
-      vertexMemory.reset ();
-    }
-
-  if (indexBuffer)
-    {
-      p_LogicalDevice.destroyBuffer (*indexBuffer);
-      indexBuffer.reset ();
-    }
-
-  if (indexMemory)
-    {
-      p_LogicalDevice.freeMemory (*indexMemory);
-      indexMemory.reset ();
+      indexData->destroy (ptrEngine->logicalDevice);
+      indexData.reset ();
     }
   return;
 }
@@ -157,6 +147,7 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
         throw std::runtime_error ("Failed to load map, empty vertices/indices");
 
       // get quads
+      quadContainer.clear ();
       getQuads (vertices, indices, quadContainer);
 
       // Assign uvs
@@ -305,10 +296,10 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
 
       // grab each chunk's edge vertices we tagged earlier
       size_t chunkidx = 0;
-      for (auto &m : splitValues) // for each chunk
+      for (auto &chunk : splitValues) // for each chunk
         {
           // iterate each vertex & find our tagged vertices
-          for (auto &v : m)
+          for (auto &v : chunk)
             {
               // left edge
               if (v.color == glm::vec4 (1.0f, 0.0f, 0.0f, 1.0f))
@@ -349,6 +340,16 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
                   chunks.at (chunkidx).br = &v;
                 }
             }
+
+          // validate chunk
+          if (chunks.at (chunkidx).tl->position == chunks.at (chunkidx).tr->position)
+            {
+              std::cout << "tl & tr same\n";
+            }
+          if (chunks.at (chunkidx).bl->position == chunks.at (chunkidx).br->position)
+            {
+              std::cout << "bl & br same\n";
+            }
           chunkidx++;
         }
 
@@ -365,11 +366,17 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
         stitches.clear (); // release mem
 
         // reset colors for all verts
-        std::for_each (splitValues.begin (), splitValues.end (), [] (std::vector<Vertex> &values) {
-          std::for_each (values.begin (), values.end (), [] (Vertex &vertex) {
-            vertex.color = { 1.0f, 1.0f, 1.0f, 1.0f };
-          });
-        });
+        std::for_each (splitValues.begin (),
+                       splitValues.end (),
+                       [xLength, zLength] (std::vector<Vertex> &values) {
+                         std::for_each (
+                             values.begin (), values.end (), [xLength, zLength] (Vertex &vertex) {
+                               vertex.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                               // place map width/height in uv.zw component
+                               vertex.uv.z = xLength;
+                               vertex.uv.w = zLength;
+                             });
+                       });
       }
 
       size_t tc = 0;
@@ -435,13 +442,12 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
         }
       splitValues.clear ();
 
-      std::vector<Vertex> vertices;
-      std::vector<uint32_t> indices;
-
       // concat vertices
       std::cout << "Rebinding chunks\n";
       for (auto &p : optimizedMesh)
         {
+          vertices.clear ();
+          indices.clear ();
           // vertexOffsets.push_back (vertices.size ());
           // indexOffsets.push_back ({ indices.size (), p.second.size () });
 
@@ -487,7 +493,7 @@ std::pair<std::vector<Vertex>, std::vector<uint32_t>>
 MapHandler::optimize (std::vector<Vertex> &p_Vertices)
 {
   std::vector<Vertex> uniques;
-  std::vector<uint32_t> indices;
+  std::vector<uint32_t> inds;
 
   // Iterate unsorted vertices
   bool start = true;
@@ -516,28 +522,28 @@ MapHandler::optimize (std::vector<Vertex> &p_Vertices)
                   && uniques.at (i).uv == unoptimized.uv)
                 {
                   isUnique = false;
-                  indices.push_back (i);
+                  inds.push_back (i);
                 }
             }
         }
       if (isUnique)
         {
           uniques.push_back (unoptimized);
-          indices.push_back (uniques.size () - 1);
+          inds.push_back (uniques.size () - 1);
         }
     }
 
-  return { uniques, indices };
+  return { uniques, inds };
 }
 
 void
 MapHandler::bindBuffer (vk::CommandBuffer &p_CommandBuffer)
 {
   // sanity check
-  if (!vertexBuffer || !vertexMemory)
-    throw std::runtime_error ("Attempted to bind buffer without creating them :: map handler");
-  p_CommandBuffer.bindVertexBuffers (0, *vertexBuffer, vk::DeviceSize{ 0 });
-  p_CommandBuffer.bindIndexBuffer (*indexBuffer, 0, vk::IndexType::eUint32);
+  if (!vertexData || !indexData)
+    throw std::runtime_error ("Attempted to bind buffers without creating them :: map handler");
+  p_CommandBuffer.bindVertexBuffers (0, vertexData->buffer, vk::DeviceSize{ 0 });
+  p_CommandBuffer.bindIndexBuffer (indexData->buffer, 0, vk::IndexType::eUint32);
   return;
 }
 
@@ -721,37 +727,23 @@ MapHandler::allocate (std::vector<Vertex> &p_VertexContainer,
       {
         ptrEngine->logicalDevice.waitIdle ();
         std::cout << "Map already loaded so cleaning up\n";
-        if (vertexBuffer)
+        if (vertexData && ptrEngine)
           {
-            ptrEngine->logicalDevice.destroyBuffer (*vertexBuffer);
-            vertexBuffer.reset ();
+            vertexData->destroy (ptrEngine->logicalDevice);
           }
-        if (vertexMemory)
+        vertexData.reset ();
+        if (indexData && ptrEngine)
           {
-            ptrEngine->logicalDevice.freeMemory (*vertexMemory);
-            vertexMemory.reset ();
+            indexData->destroy (ptrEngine->logicalDevice);
           }
-        if (indexBuffer)
-          {
-            ptrEngine->logicalDevice.destroyBuffer (*indexBuffer);
-            indexBuffer.reset ();
-          }
-        if (indexMemory)
-          {
-            ptrEngine->logicalDevice.freeMemory (*indexMemory);
-            indexMemory.reset ();
-          }
+        indexData.reset ();
       }
 
     // ensure vk objects allocated
-    if (!vertexBuffer)
-      vertexBuffer = std::make_unique<vk::Buffer> ();
-    if (!vertexMemory)
-      vertexMemory = std::make_unique<vk::DeviceMemory> ();
-    if (!indexBuffer)
-      indexBuffer = std::make_unique<vk::Buffer> ();
-    if (!indexMemory)
-      indexMemory = std::make_unique<vk::DeviceMemory> ();
+    if (!vertexData)
+      vertexData = std::make_unique<MvBuffer> ();
+    if (!indexData)
+      indexData = std::make_unique<MvBuffer> ();
   }
 
   {
@@ -762,20 +754,40 @@ MapHandler::allocate (std::vector<Vertex> &p_VertexContainer,
     using enum vk::MemoryPropertyFlagBits;
 
     // Create vertex buffer
-    ptrEngine->createBuffer (vk::BufferUsageFlagBits::eVertexBuffer,
-                             eHostCoherent | eHostVisible,
+    ptrEngine->createBuffer (vk::BufferUsageFlagBits::eVertexBuffer
+                                 | vk::BufferUsageFlagBits::eStorageBuffer
+                                 | vk::BufferUsageFlagBits::eTransferDst,
+                             eDeviceLocal,
+                             vertexData.get (),
                              p_VertexContainer.size () * sizeof (Vertex),
-                             vertexBuffer.get (),
-                             vertexMemory.get (),
                              p_VertexContainer.data ());
 
     // Create index buffer
-    ptrEngine->createBuffer (vk::BufferUsageFlagBits::eIndexBuffer,
-                             eHostCoherent | eHostVisible,
+    ptrEngine->createBuffer (vk::BufferUsageFlagBits::eIndexBuffer
+                                 | vk::BufferUsageFlagBits::eStorageBuffer
+                                 | vk::BufferUsageFlagBits::eTransferDst,
+                             eDeviceLocal,
+                             indexData.get (),
                              p_IndexContainer.size () * sizeof (uint32_t),
-                             indexBuffer.get (),
-                             indexMemory.get (),
                              p_IndexContainer.data ());
+
+    // reset descriptors
+    if (!vertexData->descriptor)
+      {
+        auto storageLayout = ptrEngine->allocator->getLayout (vk::DescriptorType::eStorageBuffer);
+        ptrEngine->allocator->allocateSet (storageLayout, vertexData->descriptor);
+      }
+    if (!indexData->descriptor)
+      {
+        auto storageLayout = ptrEngine->allocator->getLayout (vk::DescriptorType::eStorageBuffer);
+        ptrEngine->allocator->allocateSet (storageLayout, indexData->descriptor);
+      }
+
+    // update sets
+    ptrEngine->allocator->updateSet (
+        vertexData->bufferInfo, vertexData->descriptor, vk::DescriptorType::eStorageBuffer, 0);
+    ptrEngine->allocator->updateSet (
+        indexData->bufferInfo, indexData->descriptor, vk::DescriptorType::eStorageBuffer, 0);
   }
   return;
 }
@@ -783,7 +795,7 @@ MapHandler::allocate (std::vector<Vertex> &p_VertexContainer,
 std::vector<Vertex>
 MapHandler::generateMesh (size_t p_XLength, size_t p_ZLength, std::vector<Vertex> &p_HeightValues)
 {
-  std::vector<Vertex> vertices;
+  std::vector<Vertex> verts;
 
   // Generates terribly bloated & inefficient mesh data
   // Iterate image height
@@ -812,16 +824,16 @@ MapHandler::generateMesh (size_t p_XLength, size_t p_ZLength, std::vector<Vertex
           bottomLeft.normal = bottomLeft.uv;
           bottomRight.normal = bottomRight.uv;
 
-          vertices.push_back (topLeft);
-          vertices.push_back (bottomLeft);
-          vertices.push_back (bottomRight);
+          verts.push_back (topLeft);
+          verts.push_back (bottomLeft);
+          verts.push_back (bottomRight);
 
-          vertices.push_back (bottomRight);
-          vertices.push_back (topRight);
-          vertices.push_back (topLeft);
+          verts.push_back (bottomRight);
+          verts.push_back (topRight);
+          verts.push_back (topLeft);
         }
     }
-  return vertices;
+  return verts;
 }
 
 void
@@ -950,6 +962,17 @@ MapHandler::stitchCorner (Vertex *p_FirstCorner,
                           WindingStyle p_Style)
 {
   using enum WindingStyle;
+
+  // validate
+  if (!p_FirstCorner)
+    throw std::runtime_error ("first corner invalid");
+  if (!p_FirstEdgeVertex)
+    throw std::runtime_error ("first edge invalid");
+  if (!p_SecondCorner)
+    throw std::runtime_error ("second corner invalid");
+  if (!p_SecondEdgeVertex)
+    throw std::runtime_error ("second edge invalid");
+
   if (p_Style == eFirstCornerToFirstEdge)
     {
       auto tl = p_FirstCorner;
@@ -1038,25 +1061,24 @@ MapHandler::cleanAndStitch (std::vector<ChunkData> &p_Chunks, std::vector<Vertex
 {
   // clean edge before stitching
   cleanEdge (p_Chunks.at (0).rightEdge, false);
+  cleanEdge (p_Chunks.at (0).bottomEdge, true);
+
+  cleanEdge (p_Chunks.at (1).bottomEdge, true);
   cleanEdge (p_Chunks.at (1).leftEdge, false);
+
+  cleanEdge (p_Chunks.at (2).rightEdge, false);
+  cleanEdge (p_Chunks.at (2).topEdge, true);
+
+  cleanEdge (p_Chunks.at (3).leftEdge, false);
+  cleanEdge (p_Chunks.at (3).topEdge, true);
+
   // stitch tl -> tr
   stitchEdge (p_Chunks.at (0).rightEdge, p_Chunks.at (1).leftEdge, p_Stitches, true);
-
-  // prune dups
-  cleanEdge (p_Chunks.at (2).rightEdge, false);
-  cleanEdge (p_Chunks.at (3).leftEdge, false);
   // stitch bl -> br
   stitchEdge (p_Chunks.at (2).rightEdge, p_Chunks.at (3).leftEdge, p_Stitches, true);
 
-  // prune dups
-  cleanEdge (p_Chunks.at (0).bottomEdge, true);
-  cleanEdge (p_Chunks.at (2).topEdge, true);
   // stich tl -> bl
   stitchEdge (p_Chunks.at (0).bottomEdge, p_Chunks.at (2).topEdge, p_Stitches, false);
-
-  // prune dups
-  cleanEdge (p_Chunks.at (1).bottomEdge, true);
-  cleanEdge (p_Chunks.at (3).topEdge, true);
   // stitch tr -> br
   stitchEdge (p_Chunks.at (1).bottomEdge, p_Chunks.at (3).topEdge, p_Stitches, false);
 
@@ -1138,6 +1160,8 @@ MapHandler::loadPreoptimized (std::string p_Filename,
                               std::vector<Vertex> &p_Vertices,
                               std::vector<uint32_t> &p_Indices)
 {
+  p_Vertices.clear ();
+  p_Indices.clear ();
   std::mutex mtx_chunkContainer;
   std::vector<std::pair<std::vector<Vertex>, std::vector<uint32_t>>> chunks (4);
 
@@ -1278,22 +1302,23 @@ MapHandler::pngToVertices (size_t p_ImageLength,
     {
       for (size_t i = 0; i < p_ImageLength; i++)
         {
-          glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+          Vertex m;
+          m.color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
           // if left edge
           if (i == 0 || i == splitWidth)
             {
               if (j == 0 || j == splitWidth) // if top left
                 {
-                  color = { 1.0f, 1.0f, 0.0f, 1.0f };
+                  m.color = { 1.0f, 1.0f, 0.0f, 1.0f };
                 }
               else if (j == splitWidth - 1 || j == p_ImageLength - 1) // if bottom left
                 {
-                  color = { 1.0f, 0.5f, 0.5f, 1.0f };
+                  m.color = { 1.0f, 0.5f, 0.5f, 1.0f };
                 }
               else
                 {
-                  color = { 1.0f, 0.0f, 0.0f, 1.0f };
+                  m.color = { 1.0f, 0.0f, 0.0f, 1.0f };
                 }
             }
           // if top edge
@@ -1301,15 +1326,15 @@ MapHandler::pngToVertices (size_t p_ImageLength,
             {
               if (i == 0 || i == splitWidth) // top left
                 {
-                  color = { 1.0f, 1.0f, 0.0f, 1.0f };
+                  m.color = { 1.0f, 1.0f, 0.0f, 1.0f };
                 }
               else if (i == splitWidth - 1 || i == p_ImageLength - 1) // top right
                 {
-                  color = { 0.0f, 1.0f, 1.0f, 1.0f };
+                  m.color = { 0.0f, 1.0f, 1.0f, 1.0f };
                 }
               else
                 {
-                  color = { 0.0f, 1.0f, 0.0f, 1.0f };
+                  m.color = { 0.0f, 1.0f, 0.0f, 1.0f };
                 }
             }
           // right edge
@@ -1317,15 +1342,15 @@ MapHandler::pngToVertices (size_t p_ImageLength,
             {
               if (j == 0 || j == splitWidth) // top right
                 {
-                  color = { 0.0f, 1.0f, 1.0f, 1.0f };
+                  m.color = { 0.0f, 1.0f, 1.0f, 1.0f };
                 }
               else if (j == splitWidth - 1 || j == p_ImageLength - 1) // bottom right
                 {
-                  color = { 0.5f, 0.5f, 1.0f, 1.0f };
+                  m.color = { 0.5f, 0.5f, 1.0f, 1.0f };
                 }
               else
                 {
-                  color = { 0.0f, 0.0f, 1.0f, 1.0f };
+                  m.color = { 0.0f, 0.0f, 1.0f, 1.0f };
                 }
             }
           // bottom edge
@@ -1334,29 +1359,28 @@ MapHandler::pngToVertices (size_t p_ImageLength,
               // bottom left
               if (i == 0 || i == splitWidth)
                 {
-                  color = { 1.0f, 0.5f, 0.5f, 1.0f };
+                  m.color = { 1.0f, 0.5f, 0.5f, 1.0f };
                 }
               else if (i == splitWidth - 1 || i == p_ImageLength - 1) // bottom right
                 {
-                  color = { 0.5f, 0.5f, 1.0f, 1.0f };
+                  m.color = { 0.5f, 0.5f, 1.0f, 1.0f };
                 }
               else
                 {
-                  color = { 0.5f, 0.5f, 0.5f, 1.0f };
+                  m.color = { 0.5f, 0.5f, 0.5f, 1.0f };
                 }
             }
-          p_VertexContainer.push_back (Vertex{
-              {
-                  // pos
-                  static_cast<float> (i),
-                  static_cast<float> (p_RawImage.at (offset)) * -1.0f,
-                  static_cast<float> (j),
-                  1.0f,
-              },
-              { color.r, color.b, color.g, color.a },
-              { 0.0f, 0.0f, 0.0f, 0.0f }, // uv
-              { 0.0f, 0.0f, 0.0f, 0.0f }, // normal
-          });
+
+          m.position = {
+            // pos
+            static_cast<float> (i),
+            static_cast<float> (p_RawImage.at (offset)) * -1.0f,
+            static_cast<float> (j),
+            1.0f,
+          };
+          m.uv = { 0.0f, 0.0f, 0.0f, 0.0f };
+          m.normal = { 0.0f, 0.0f, 0.0f, 0.0f };
+          p_VertexContainer.push_back (m);
           offset += 4;
         }
     }
@@ -1368,8 +1392,9 @@ MapHandler::getQuads (std::vector<Vertex> &p_VertexContainer,
                       std::vector<uint32_t> &p_IndexContainer,
                       std::vector<Quad> &p_QuadContainer)
 {
+  constexpr uint32_t verticesPerQuad = 6;
   size_t idx = 0;
-  p_QuadContainer.reserve (p_IndexContainer.size () / 6);
+  p_QuadContainer.reserve (p_IndexContainer.size () / verticesPerQuad);
 
   Quad q;
   for (const auto &index : p_IndexContainer)

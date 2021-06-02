@@ -35,7 +35,7 @@ Engine::~Engine ()
     }
 
   // cleanup map handler
-  mapHandler.cleanup (logicalDevice);
+  mapHandler.cleanup ();
 
   // collection struct will handle cleanup of models & objs
   collectionHandler->cleanup ();
@@ -344,20 +344,25 @@ Engine::go (void)
       // modify to allow device local buffer creation
       // Create buffer for terrain vertices
       std::cout << "Creating storage buffer for compute\n";
-      createBuffer (vk::BufferUsageFlagBits::eStorageBuffer,
-                    vk::MemoryPropertyFlagBits::eHostCoherent
-                        | vk::MemoryPropertyFlagBits::eHostVisible,
+      createBuffer (vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+                    vk::MemoryPropertyFlagBits::eDeviceLocal,
                     collectionHandler->computeStorageBuffer.get (),
                     mapHandler.vertices.size () * sizeof (Vertex),
                     mapHandler.vertices.data ());
 
       // Compute shader descriptor set
-      auto storageLayout = allocator->getLayout (vk::DescriptorType::eStorageBuffer);
-      allocator->allocateSet (storageLayout, collectionHandler->computeStorageBuffer->descriptor);
-      allocator->updateSet (collectionHandler->computeStorageBuffer->bufferInfo,
-                            collectionHandler->computeStorageBuffer->descriptor,
-                            vk::DescriptorType::eStorageBuffer,
-                            0);
+      // auto storageLayout = allocator->getLayout (vk::DescriptorType::eStorageBuffer);
+      // allocator->allocateSet (storageLayout, mapHandler.vertexData->descriptor); // vertex buffer
+      // allocator->updateSet (mapHandler.vertexData->bufferInfo,
+      //                       mapHandler.vertexData->descriptor,
+      //                       vk::DescriptorType::eStorageBuffer,
+      //                       0);
+
+      // allocator->allocateSet (storageLayout, mapHandler.indexData->descriptor); // index buffer
+      // allocator->updateSet (mapHandler.indexData->bufferInfo,
+      //                       mapHandler.indexData->descriptor,
+      //                       vk::DescriptorType::eStorageBuffer,
+      //                       0);
     }
   catch (std::exception &e)
     {
@@ -811,9 +816,13 @@ Engine::prepareComputePipelines (void)
   cullStageInfo.pName = "main";
   cullStageInfo.pSpecializationInfo = nullptr;
 
-  auto testLayout = allocator->getLayout (vk::DescriptorType::eStorageBuffer);
+  auto storageBuffer = allocator->getLayout (vk::DescriptorType::eStorageBuffer);
+  auto uniformBuffer = allocator->getLayout (vk::DescriptorType::eUniformBuffer);
   std::vector<vk::DescriptorSetLayout> computeDescriptors = {
-    testLayout,
+    uniformBuffer, // projection matrix
+    uniformBuffer, // view matrix
+    storageBuffer, // vertex buffer
+    storageBuffer, // index buffer
   };
 
   vk::PipelineLayoutCreateInfo computeLayoutInfo;
@@ -1187,10 +1196,11 @@ Engine::computePass (uint32_t p_ImageIndex)
 {
   vk::CommandBufferBeginInfo beginInfo;
 
-  auto storageDescriptor = collectionHandler->computeStorageBuffer->descriptor;
-
   std::vector<vk::DescriptorSet> toBind = {
-    storageDescriptor,
+    collectionHandler->viewUniform->descriptor,
+    collectionHandler->projectionUniform->descriptor,
+    mapHandler.vertexData->descriptor, // vertex
+    mapHandler.indexData->descriptor,  // index
   };
 
   auto curCommandBuffer
@@ -1202,9 +1212,25 @@ Engine::computePass (uint32_t p_ImageIndex)
   curCommandBuffer.bindDescriptorSets (
       vk::PipelineBindPoint::eCompute, pipelineLayouts.at (eTerrainCompute), 0, toBind, nullptr);
 
-  curCommandBuffer.dispatch (mapHandler.vertices.size (), 0, 0);
+  auto gc = (mapHandler.indices.size () / 32) + 1;
+  curCommandBuffer.dispatch (static_cast<uint32_t> (gc), 1, 1);
 
   curCommandBuffer.end ();
+
+  auto computeQueue = commandQueues.at (vk::QueueFlagBits::eCompute).at (0);
+
+  vk::Semaphore signals[] = { semaphores.computeComplete };
+  vk::SubmitInfo submitInfo;
+  submitInfo.signalSemaphoreCount = 1;
+  submitInfo.pSignalSemaphores = signals;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &curCommandBuffer;
+
+  auto r = computeQueue.submit (1, &submitInfo, nullptr);
+  if (r != vk::Result::eSuccess)
+    {
+      throw std::runtime_error ("compute submit failed\n");
+    }
   return;
 }
 
@@ -1212,6 +1238,11 @@ void
 Engine::recordCommandBuffer (uint32_t p_ImageIndex)
 {
   computePass (p_ImageIndex);
+
+  // Fetch graphics command buffer
+  auto curGraphicsCommandBuffer = commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics)
+                                      .at (0) // for now only 1 pool for queue type, grab first one
+                                      .second.at (p_ImageIndex);
 
   // command buffer begin
   vk::CommandBufferBeginInfo beginInfo;
@@ -1231,11 +1262,6 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
   passInfo.renderArea.extent.height = swapchain.swapExtent.height;
   passInfo.clearValueCount = static_cast<uint32_t> (cls.size ());
   passInfo.pClearValues = cls.data ();
-
-  // Fetch graphics command buffer
-  auto curGraphicsCommandBuffer = commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics)
-                                      .at (0) // for now only 1 pool for queue type, grab first one
-                                      .second.at (p_ImageIndex);
 
   // begin recording
 
@@ -1391,11 +1417,17 @@ Engine::draw (size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
   waitFences.at (p_CurrentImageIndex) = inFlightFences.at (p_CurrentFrame);
 
   vk::SubmitInfo submitInfo;
-  vk::Semaphore waitSemaphores[] = { semaphores.presentComplete };
-  vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
-  submitInfo.waitSemaphoreCount = 1;
-  submitInfo.pWaitSemaphores = waitSemaphores;
-  submitInfo.pWaitDstStageMask = waitStages;
+  std::vector<vk::Semaphore> waitSemaphores = {
+    semaphores.presentComplete,
+    semaphores.computeComplete,
+  };
+  std::vector<vk::PipelineStageFlags> waitStages = {
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+  };
+  submitInfo.waitSemaphoreCount = static_cast<uint32_t> (waitSemaphores.size ());
+  submitInfo.pWaitSemaphores = waitSemaphores.data ();
+  submitInfo.pWaitDstStageMask = waitStages.data ();
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics)
                                     .at (0) // currently only 1 pool per queue type
@@ -1481,28 +1513,26 @@ Engine::draw (size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
 inline void
 Engine::goSetup (void)
 {
+  using enum vk::ShaderStageFlagBits;
   /*
-      INITIALIZE DESCRIPTOR HANDLER
+      init pool
   */
   allocator->allocatePool (2000);
 
   /*
-      MAT4 UNIFORM LAYOUT
+      uniform for vertex/compute
   */
-  allocator->createLayout (
-      vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, 0);
+  allocator->createLayout (vk::DescriptorType::eUniformBuffer, 1, eVertex | eCompute, 0);
 
   /*
-      TEXTURE SAMPLER LAYOUT
+      sampler
   */
-  allocator->createLayout (
-      vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, 0);
+  allocator->createLayout (vk::DescriptorType::eCombinedImageSampler, 1, eFragment, 0);
 
   /*
-    Compute shader layout
+    SSBO for compute
   */
-  allocator->createLayout (
-      vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, 0);
+  allocator->createLayout (vk::DescriptorType::eStorageBuffer, 1, eCompute, 0);
 
   /*
       INITIALIZE MODEL/OBJECT HANDLER
@@ -1516,6 +1546,7 @@ Engine::goSetup (void)
   allocator->allocateSet (uniformLayout, collectionHandler->viewUniform->descriptor);
   allocator->updateSet (collectionHandler->viewUniform->mvBuffer.bufferInfo,
                         collectionHandler->viewUniform->descriptor,
+                        vk::DescriptorType::eUniformBuffer,
                         0);
 
   /*
@@ -1524,6 +1555,7 @@ Engine::goSetup (void)
   allocator->allocateSet (uniformLayout, collectionHandler->projectionUniform->descriptor);
   allocator->updateSet (collectionHandler->projectionUniform->mvBuffer.bufferInfo,
                         collectionHandler->projectionUniform->descriptor,
+                        vk::DescriptorType::eUniformBuffer,
                         0);
 
   /*
@@ -1734,6 +1766,9 @@ Engine::createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
                       vk::DeviceSize p_DeviceSize,
                       void *p_InitialData) const
 {
+  // sanity check
+  if (static_cast<uint32_t> (p_DeviceSize) == 0)
+    throw std::runtime_error ("Invalid device size");
   logger.logMessage ("Allocating buffer of size => "
                      + std::to_string (static_cast<uint32_t> (p_DeviceSize)));
 
@@ -1766,15 +1801,114 @@ Engine::createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
 
   p_MvBuffer->setupBufferInfo ();
 
+  if (p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eHostCoherent
+      && p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eHostVisible)
+    p_MvBuffer->canMap = true;
+
   // copy if necessary
   if (p_InitialData != nullptr)
     {
-      p_MvBuffer->map (logicalDevice);
+      if (p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eHostCoherent
+          && p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eHostVisible)
+        {
 
-      memcpy (p_MvBuffer->mapped, p_InitialData, p_DeviceSize);
+          p_MvBuffer->map (logicalDevice);
 
-      p_MvBuffer->unmap (logicalDevice);
+          memcpy (p_MvBuffer->mapped, p_InitialData, p_DeviceSize);
+
+          p_MvBuffer->unmap (logicalDevice);
+        }
+      else
+        {
+          if (p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eDeviceLocal)
+            {
+              vk::Buffer stagingBuffer;
+              vk::DeviceMemory stagingMemory;
+              void *stagingMapped = nullptr;
+
+              // create staging buffer
+              createStagingBuffer (p_DeviceSize, stagingBuffer, stagingMemory);
+
+              // fill stage
+              stagingMapped = logicalDevice.mapMemory (stagingMemory, 0, p_DeviceSize);
+              memcpy (stagingMapped, p_InitialData, static_cast<size_t> (p_DeviceSize));
+              logicalDevice.unmapMemory (stagingMemory);
+
+              // copyto device local
+              auto pool = commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first;
+              auto cmdbuf = Helper::beginCommandBuffer (logicalDevice, pool);
+
+              {
+                vk::BufferCopy region;
+                region.srcOffset = 0;
+                region.dstOffset = 0;
+                region.size = p_DeviceSize;
+                cmdbuf.copyBuffer (stagingBuffer, p_MvBuffer->buffer, region);
+              }
+
+              // end, submit
+              endCommandBuffer (pool, cmdbuf);
+
+              logicalDevice.destroyBuffer (stagingBuffer);
+              logicalDevice.freeMemory (stagingMemory);
+            }
+        }
     }
 
+  return;
+}
+
+void
+Engine::createStagingBuffer (vk::DeviceSize &p_BufferSize,
+                             vk::Buffer &p_StagingBuffer,
+                             vk::DeviceMemory &p_StagingMemory) const
+{
+  vk::MemoryRequirements stagingReq;
+
+  vk::BufferCreateInfo bufferInfo;
+  bufferInfo.size = p_BufferSize;
+  bufferInfo.sharingMode = vk::SharingMode::eExclusive;
+  bufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
+
+  // create staging buffer
+  p_StagingBuffer = logicalDevice.createBuffer (bufferInfo);
+
+  // get memory requirements
+  stagingReq = logicalDevice.getBufferMemoryRequirements (p_StagingBuffer);
+
+  vk::MemoryAllocateInfo allocInfo;
+  allocInfo.allocationSize = stagingReq.size;
+  allocInfo.memoryTypeIndex = getMemoryType (stagingReq.memoryTypeBits,
+                                             vk::MemoryPropertyFlagBits::eHostVisible
+                                                 | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+  // allocate staging memory
+  p_StagingMemory = logicalDevice.allocateMemory (allocInfo);
+
+  // bind staging buffer & memory
+  logicalDevice.bindBufferMemory (p_StagingBuffer, p_StagingMemory, 0);
+  return;
+}
+
+void
+Engine::endCommandBuffer (const vk::CommandPool &p_CommandPool,
+                          vk::CommandBuffer p_CommandBuffer) const
+{
+
+  if (!p_CommandPool)
+    throw std::runtime_error ("Invalid command pool handle passed to image");
+
+  p_CommandBuffer.end ();
+
+  vk::SubmitInfo submitInfo;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &p_CommandBuffer;
+
+  auto queue = commandQueues.at (vk::QueueFlagBits::eGraphics).at (0);
+
+  queue.submit (submitInfo);
+  queue.waitIdle ();
+
+  logicalDevice.freeCommandBuffers (p_CommandPool, p_CommandBuffer);
   return;
 }

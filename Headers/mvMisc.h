@@ -30,3 +30,12 @@ enum PipelineTypes
 
   eTerrainCompute,
 };
+
+// This is used to determine stride for indirect draw calls
+struct IndirectDrawCommand
+{
+  uint32_t vertexCount;
+  uint32_t instanceCount;
+  uint32_t firstVertex;
+  uint32_t firstInstance;
+};

@@ -17,7 +17,7 @@ public:
               Camera *p_CameraHandler,
               const vk::Instance &p_Instance,
               const vk::PhysicalDevice &p_PhysicalDevice,
-              const vk::Device &p_LogicalDevice,
+              vk::Device &p_LogicalDevice,
               const Swap &p_MvSwap,
               const vk::CommandPool &p_CommandPool,
               const vk::Queue &p_GraphicsQueue,
@@ -61,6 +61,7 @@ public:
   LogHandler *ptrLogger = nullptr;
   Camera *ptrCamera = nullptr;
   MapHandler *ptrMapHandler = nullptr;
+  vk::Device *ptrLogicalDevice = nullptr;
 
   // holds data about current directory
   FileSystem fileSystem;

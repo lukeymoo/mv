@@ -69,6 +69,13 @@ public:
                      vk::DeviceSize p_DeviceSize,
                      void *p_InitialData = nullptr) const;
 
+  void createStagingBuffer (vk::DeviceSize &p_BufferSize,
+                            vk::Buffer &p_StagingBuffer,
+                            vk::DeviceMemory &p_StagingMemory) const;
+
+  void endCommandBuffer (const vk::CommandPool &p_CommandPool,
+                         vk::CommandBuffer p_CommandBuffer) const;
+
 protected:
   void prepareUniforms (void);
 

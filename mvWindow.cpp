@@ -140,6 +140,8 @@ Window::~Window ()
     logicalDevice.destroySemaphore (semaphores.presentComplete, nullptr);
   if (semaphores.renderComplete)
     logicalDevice.destroySemaphore (semaphores.renderComplete, nullptr);
+  if (semaphores.computeComplete)
+    logicalDevice.destroySemaphore (semaphores.computeComplete);
 
   if (depthStencil.image)
     {
@@ -337,6 +339,7 @@ Window::initVulkan (void)
   vk::SemaphoreCreateInfo semaphoreInfo;
   semaphores.presentComplete = logicalDevice.createSemaphore (semaphoreInfo);
   semaphores.renderComplete = logicalDevice.createSemaphore (semaphoreInfo);
+  semaphores.computeComplete = logicalDevice.createSemaphore (semaphoreInfo);
 
   return;
 }

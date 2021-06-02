@@ -6,6 +6,11 @@ MvBuffer::map (const vk::Device &p_LogicalDevice,
                vk::DeviceSize p_MemorySize,
                vk::DeviceSize p_MemoryOffset)
 {
+  if (!canMap)
+    {
+      std::cout << "MvBuffer is not capable of being mapped!\n";
+      return;
+    }
   mapped = p_LogicalDevice.mapMemory (memory, p_MemoryOffset, p_MemorySize);
   if (!mapped)
     throw std::runtime_error ("Failed to map memory :: buffer handler");
@@ -35,10 +40,12 @@ MvBuffer::bind (const vk::Device &p_LogicalDevice, vk::DeviceSize p_MemoryOffset
 }
 
 void
-MvBuffer::allocate (Allocator &p_DescriptorAllocator, vk::DescriptorSetLayout &p_Layout)
+MvBuffer::allocate (Allocator &p_DescriptorAllocator,
+                    vk::DescriptorSetLayout &p_Layout,
+                    vk::DescriptorType p_DescriptorType)
 {
   p_DescriptorAllocator.allocateSet (p_Layout, descriptor);
-  p_DescriptorAllocator.updateSet (bufferInfo, descriptor, 0);
+  p_DescriptorAllocator.updateSet (bufferInfo, descriptor, p_DescriptorType, 0);
   return;
 }
 
@@ -56,6 +63,13 @@ MvBuffer::setupBufferInfo (vk::DeviceSize p_MemorySize, vk::DeviceSize p_MemoryO
 void
 MvBuffer::copyFrom (void *p_SrcData, vk::DeviceSize p_MemoryCopySize)
 {
+  if (!canMap)
+    {
+      std::cout << "Cannot copy " << static_cast<uint32_t> (p_MemoryCopySize)
+                << " bytes from location [" << p_SrcData
+                << "] this MvBuffer is not capable of being mapped\n";
+      return;
+    }
   // TODO
   // Should do bounds checking to ensure we're not attempting to copy data
   // from Source that is larger than our own

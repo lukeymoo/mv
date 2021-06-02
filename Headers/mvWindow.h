@@ -158,6 +158,7 @@ public:
   {
     vk::Semaphore presentComplete;
     vk::Semaphore renderComplete;
+    vk::Semaphore computeComplete;
   } semaphores;
 
   // TODO

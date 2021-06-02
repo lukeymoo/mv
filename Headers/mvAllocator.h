@@ -94,7 +94,7 @@ public:
 
   void createLayout (vk::DescriptorType p_DescriptorType,
                      uint32_t p_Count,
-                     vk::ShaderStageFlagBits p_ShaderStageFlags,
+                     vk::ShaderStageFlags p_ShaderStageFlags,
                      uint32_t p_Binding);
 
   void createLayout (vk::DescriptorSetLayoutCreateInfo &p_CreateInfo);
@@ -120,9 +120,9 @@ public:
       Bind a buffer descriptor to a target descriptor set
       Automatically selects latest allocated pool
   */
-  void updateSet (vk::DescriptorBufferInfo &p_BufferDescriptor,
-                  vk::DescriptorSet &p_TargetDescriptorSet,
-                  uint32_t p_DestinationBinding);
+  // void updateSet (vk::DescriptorBufferInfo &p_BufferDescriptor,
+  // vk::DescriptorSet &p_TargetDescriptorSet,
+  // uint32_t p_DestinationBinding);
 
   /*
     Bind a buffer descriptor to target descriptor set

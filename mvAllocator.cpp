@@ -67,7 +67,7 @@ Allocator::getLayout (vk::DescriptorType p_LayoutType)
 void
 Allocator::createLayout (vk::DescriptorType p_DescriptorType,
                          uint32_t p_Count,
-                         vk::ShaderStageFlagBits p_ShaderStageFlags,
+                         vk::ShaderStageFlags p_ShaderStageFlags,
                          uint32_t p_Binding)
 {
   vk::DescriptorSetLayoutBinding bindInfo;
@@ -263,33 +263,33 @@ Allocator::retryAllocateSet (vk::DescriptorSetLayout p_DescriptorLayout,
   return newPool;
 }
 
-void
-Allocator::updateSet (vk::DescriptorBufferInfo &p_BufferDescriptor,
-                      vk::DescriptorSet &p_TargetDescriptorSet,
-                      uint32_t p_DestinationBinding)
-{
-  Container *poolContainer = &containers.at (currentPool);
+// void
+// Allocator::updateSet (vk::DescriptorBufferInfo &p_BufferDescriptor,
+//                       vk::DescriptorSet &p_TargetDescriptorSet,
+//                       uint32_t p_DestinationBinding)
+// {
+//   Container *poolContainer = &containers.at (currentPool);
 
-  if (!poolContainer)
-    throw std::runtime_error ("Failed to get current pool handle, updating "
-                              "set :: descriptor handler");
+//   if (!poolContainer)
+//     throw std::runtime_error ("Failed to get current pool handle, updating "
+//                               "set :: descriptor handler");
 
-  // ensure pool exist
-  if (!poolContainer->pool)
-    throw std::runtime_error ("No pool ever allocated, attempting to update "
-                              "descriptor set :: descriptor handler");
+//   // ensure pool exist
+//   if (!poolContainer->pool)
+//     throw std::runtime_error ("No pool ever allocated, attempting to update "
+//                               "descriptor set :: descriptor handler");
 
-  vk::WriteDescriptorSet updateInfo;
-  updateInfo.dstBinding = p_DestinationBinding;
-  updateInfo.dstSet = p_TargetDescriptorSet;
-  updateInfo.descriptorType = vk::DescriptorType::eUniformBuffer;
-  updateInfo.descriptorCount = 1;
-  updateInfo.pBufferInfo = &p_BufferDescriptor;
+//   vk::WriteDescriptorSet updateInfo;
+//   updateInfo.dstBinding = p_DestinationBinding;
+//   updateInfo.dstSet = p_TargetDescriptorSet;
+//   updateInfo.descriptorType = vk::DescriptorType::eUniformBuffer;
+//   updateInfo.descriptorCount = 1;
+//   updateInfo.pBufferInfo = &p_BufferDescriptor;
 
-  engine->logicalDevice.updateDescriptorSets (updateInfo, nullptr);
-  currentPool = poolContainer->index;
-  return;
-}
+//   engine->logicalDevice.updateDescriptorSets (updateInfo, nullptr);
+//   currentPool = poolContainer->index;
+//   return;
+// }
 
 void
 Allocator::updateSet (vk::DescriptorBufferInfo &p_BufferDescriptor,
@@ -523,6 +523,7 @@ Allocator::createObject (std::vector<Model> *p_Models, std::string p_ModelName)
   allocateSet (uniformLayout, p_Models->at (modelIndex).objects->back ().uniform.first);
   updateSet (p_Models->at (modelIndex).objects->back ().uniform.second.bufferInfo,
              p_Models->at (modelIndex).objects->back ().uniform.first,
+             vk::DescriptorType::eUniformBuffer,
              0);
   return;
 }

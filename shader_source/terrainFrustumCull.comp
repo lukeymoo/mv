@@ -1,6 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
 struct Vertex
 {
   vec4 position;
@@ -9,13 +11,27 @@ struct Vertex
   vec4 normal;
 };
 
-layout (set = 0, binding = 0) buffer TerrainVertexBuffer { Vertex vertices[]; }
+layout (set = 0, binding = 0) uniform ViewUniform { mat4 mat; }
+uboView;
+
+layout (set = 1, binding = 0) uniform ProjectionUniform { mat4 mat; }
+uboProj;
+
+layout (set = 2, binding = 0) buffer TerrainVertexBuffer { Vertex vertices[]; }
 terrainVertexBuffer;
+
+layout (set = 3, binding = 0) buffer TerrainIndexBuffer { uint indices[]; }
+terrainIndexBuffer;
 
 void
 main ()
 {
-  uint gID = gl_GlobalInvocationID.x;
-  terrainVertexBuffer.vertices[gID].position = vec4 (0.0f, 0.0f, 0.0f, 0.0f);
-  terrainVertexBuffer.vertices[gID].color = vec4 (1.0f, 0.0f, 0.0f, 0.0f);
+
+  // TODO
+  // Have the cpu send a pre combined proj*view
+  // place map width/height in uv.zw component
+  uint width = uint (terrainVertexBuffer.vertices[0].uv.z);
+  uint gID = (gl_GlobalInvocationID.y * width) + gl_GlobalInvocationID.x;
+
+  mat4 clipSpace = uboProj.mat * uboView.mat;
 }

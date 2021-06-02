@@ -26,7 +26,7 @@ GuiHandler::GuiHandler (GLFWwindow *p_GLFWwindow,
                         Camera *p_CameraHandler,
                         const vk::Instance &p_Instance,
                         const vk::PhysicalDevice &p_PhysicalDevice,
-                        const vk::Device &p_LogicalDevice,
+                        vk::Device &p_LogicalDevice,
                         const Swap &p_MvSwap,
                         const vk::CommandPool &p_CommandPool,
                         const vk::Queue &p_GraphicsQueue,
@@ -42,6 +42,7 @@ GuiHandler::GuiHandler (GLFWwindow *p_GLFWwindow,
   this->ptrLogger = &logger;
   this->ptrCamera = p_CameraHandler;
   this->ptrMapHandler = p_MapHandler;
+  this->ptrLogicalDevice = &p_LogicalDevice;
 
   // Explicitly initialize before others
   GuiModals = {

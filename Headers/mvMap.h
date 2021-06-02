@@ -15,6 +15,7 @@ class GuiHandler;
 struct Vertex;
 class Engine;
 class Image;
+class MvBuffer;
 
 class MapHandler
 {
@@ -59,11 +60,8 @@ public:
 
   std::string filename = "None";
 
-  std::unique_ptr<vk::Buffer> vertexBuffer;
-  std::unique_ptr<vk::DeviceMemory> vertexMemory;
-
-  std::unique_ptr<vk::Buffer> indexBuffer;
-  std::unique_ptr<vk::DeviceMemory> indexMemory;
+  std::unique_ptr<MvBuffer> vertexData;
+  std::unique_ptr<MvBuffer> indexData;
 
   std::unique_ptr<Image> terrainTexture;
   vk::DescriptorSet terrainTextureDescriptor;
@@ -90,7 +88,7 @@ public:
 
   void bindBuffer (vk::CommandBuffer &p_CommandBuffer);
 
-  void cleanup (const vk::Device &p_LogicalDevice);
+  void cleanup (void);
 
 private:
   // Populations vector of quads with vertex start positions
