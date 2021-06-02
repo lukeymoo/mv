@@ -106,10 +106,6 @@ private:
 
   std::pair<std::vector<Vertex>, std::vector<uint32_t>> optimize (std::vector<Vertex> &p_Vertices);
 
-  void writeRaw (std::string p_FilenameIndexAppended,
-                 std::vector<Vertex> &p_VertexContainer,
-                 std::vector<uint32_t> &p_IndexContainer);
-
   void writeVertexFile (std::string p_FilenameIndexAppended,
                         std::vector<Vertex> &p_VertexContainer);
 

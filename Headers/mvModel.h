@@ -186,6 +186,67 @@ struct Vertex
   glm::vec4 uv = { 0.0f, 0.0f, 0.0f, 0.0f };
   glm::vec4 normal = { 0.0f, 0.0f, 0.0f, 0.0f };
 
+  Vertex (){};
+  Vertex (Vertex &v)
+  {
+    this->position = v.position;
+    this->color = v.color;
+    this->uv = v.uv;
+    this->normal = v.normal;
+    return;
+  }
+  Vertex (const Vertex &v)
+  {
+    this->position = v.position;
+    this->color = v.color;
+    this->uv = v.uv;
+    this->normal = v.normal;
+    return;
+  }
+  template <typename T>
+  constexpr Vertex (std::initializer_list<T> p_Position,
+                    std::initializer_list<T> p_Color,
+                    std::initializer_list<T> p_UV,
+                    std::initializer_list<T> p_Normal)
+  {
+    assert (p_Position.size () >= 3 && p_Position.size () <= 4);
+    assert (p_Color.size () >= 3 && p_Color.size () <= 4);
+    assert (p_UV.size () >= 2 && p_UV.size () <= 4);
+    assert (p_Normal.size () >= 2 && p_Normal.size () <= 4);
+
+    std::vector<float> pos;
+    std::vector<float> color;
+    std::vector<float> uv;
+    std::vector<float> normal;
+
+    std::copy (p_Position.begin (), p_Position.end (), std::back_inserter (pos));
+    std::copy (p_Color.begin (), p_Color.end (), std::back_inserter (color));
+    std::copy (p_UV.begin (), p_UV.end (), std::back_inserter (uv));
+    std::copy (p_Normal.begin (), p_Normal.end (), std::back_inserter (normal));
+
+    this->position.x = pos.at (0);
+    this->position.y = pos.at (1);
+    this->position.z = pos.at (2);
+    this->position.w = (pos.size () > 3) ? pos.at (3) : 1.0f;
+
+    this->color.r = color.at (0);
+    this->color.g = color.at (1);
+    this->color.b = color.at (2);
+    this->color.a = (color.size () > 3) ? color.at (3) : 1.0f;
+
+    this->uv.x = uv.at (0);
+    this->uv.y = uv.at (1);
+    this->uv.z = (uv.size () > 2) ? uv.at (2) : 0.0f;
+    this->uv.w = (uv.size () > 3) ? uv.at (3) : 0.0f;
+
+    this->normal.x = normal.at (0);
+    this->normal.y = normal.at (1);
+    this->normal.z = (normal.size () > 2) ? normal.at (2) : 0.0f;
+    this->normal.w = (normal.size () > 3) ? normal.at (3) : 0.0f;
+    return;
+  }
+  ~Vertex (){};
+
   // For copying directly to/from file streams
   Vertex &
   operator= (Vertex &rhs)

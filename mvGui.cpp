@@ -556,7 +556,7 @@ GuiHandler::renderMapConfigModal (void)
 void
 GuiHandler::loadMapFile (std::string p_Path, std::string p_Filename)
 {
-  std::cout << "[+] User requested to load map file\n";
+  std::cout << "[+] User requested to load map file\n :: " + p_Path + p_Filename << "\n";
 
   // Clear modals
   hasFocus = false;
@@ -607,7 +607,7 @@ gui::ModalFunction::operator= (P *ptr)
 }
 
 void
-noShow (GuiHandler *p_This)
+noShow ([[maybe_unused]] GuiHandler *p_This)
 {
   return;
 }
@@ -1166,10 +1166,18 @@ GuiHandler::grabFocus (FocusModal p_WhichModal)
         getModal<FileMenu> (GuiModals).openModal.isOpen = true;
         break;
       }
+    case eSaveModal: // TODO
+      {
+        break;
+      }
     case eQuit:
       {
         hasFocus = true;
         getModal<FileMenu> (GuiModals).quitModal.isOpen = true;
+        break;
+      }
+    default: // do nothing
+      {
         break;
       }
     }

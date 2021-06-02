@@ -621,15 +621,6 @@ MapHandler::writeIndexFile (std::string p_FilenameIndexAppended,
 }
 
 void
-MapHandler::writeRaw (std::string p_FilenameIndexAppended,
-                      std::vector<Vertex> &p_VertexContainer,
-                      std::vector<uint32_t> &p_IndexContainer)
-{
-  std::cout << "All output operations complete\n";
-  return;
-}
-
-void
 MapHandler::readVertexFile (std::string p_FinalName, std::vector<Vertex> &p_VertexContainer)
 {
   std::ifstream file (p_FinalName);
@@ -1353,13 +1344,15 @@ MapHandler::pngToVertices (size_t p_ImageLength,
             }
           p_VertexContainer.push_back (Vertex{
               {
+                  // pos
                   static_cast<float> (i),
                   static_cast<float> (p_RawImage.at (offset)) * -1.0f,
                   static_cast<float> (j),
                   1.0f,
               },
-              color,
-              { 0.0f, 0.0f, 0.0f, 0.0f },
+              { color.r, color.b, color.g, color.a },
+              { 0.0f, 0.0f, 0.0f, 0.0f }, // uv
+              { 0.0f, 0.0f, 0.0f, 0.0f }, // normal
           });
           offset += 4;
         }

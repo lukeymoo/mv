@@ -8,7 +8,7 @@ set(CMAKE_C_COMPILER "gcc-11")
 set(CMAKE_CXX_COMPILER "g++-11")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS_DEBUG_INIT " -Wall -Wextra -g")
+set(CMAKE_CXX_FLAGS_DEBUG_INIT " ")
 set(CMAKE_CXX_FLAGS_RELEASE_INIT " ")
 
 find_package(Vulkan REQUIRED)
@@ -61,7 +61,7 @@ set(SOURCES
     mvWindow.cpp
     main.cpp)
 
-add_compile_options(-std=c++20 -m64 -O3)
+add_compile_options(-std=c++20 -m64 -O3 -pg -Wall -Wextra)
 
 add_executable(main ${HEADERS} ${SOURCES})
 

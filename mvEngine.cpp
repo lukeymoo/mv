@@ -14,7 +14,6 @@ Engine::Engine (int w, int h, const char *title) : Window (w, h, title), mapHand
 Engine::~Engine ()
 {
   logicalDevice.waitIdle ();
-
   if (!pipelines.empty ())
     {
       for (auto &pipeline : pipelines)
@@ -186,12 +185,9 @@ Engine::recreateSwapchain (void)
 
   setupDepthStencil ();
 
-  // create pipeline layout
-  // create pipeline
+  // create pipeline + pipeline layout
   preparePipeline ();
-  // create framebuffers
   setupFramebuffer ();
-  // create command buffers
   createCommandBuffers ();
 }
 
@@ -248,24 +244,11 @@ Engine::go (void)
                                              swapchain.swapExtent.width,
                                              swapchain.swapExtent.height);
 
-  auto threadCount = std::thread::hardware_concurrency ();
-  do
-    {
-      if (mapHandler.indices.size () % threadCount == 0)
-        break;
-      threadCount--;
-    }
-  while (threadCount > 0);
-
-  std::cout << "Creating " << threadCount << " threads\n";
-  threadPool.resize (threadCount);
-
   auto renderStart = chrono::now ();
   auto renderStop = chrono::now ();
 
 #ifndef NDEBUG
-  // FORCE TESTING SWAPCHAIN RECREATION TO ENSURE
-  // WE AREN'T MISSING REINITIALIZATION METHODS
+  // For debugging purposes
   recreateSwapchain ();
 
   try
@@ -278,6 +261,49 @@ Engine::go (void)
       std::exit (1);
     }
 #endif
+
+  // cameraSpace is just the projection * view matrix; the resulting matrix
+  // will be used to convert any point we wish to test into camera clip space
+
+  // glm::vec4 frustumLeft = { 0.0f, 0.0f, 0.0f, 0.0f };
+  // glm::vec4 frustumRight = { 0.0f, 0.0f, 0.0f, 0.0f };
+  // glm::vec4 frustumTop = { 0.0f, 0.0f, 0.0f, 0.0f };
+  // glm::vec4 frustumBottom = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+  // clang-format off
+
+  // // left plane
+  // frustumLeft.x = vertexContainer->at (*index).position.x * (cameraSpace[0].w + cameraSpace[0].x);
+  // frustumLeft.y = vertexContainer->at (*index).position.y * (cameraSpace[1].w + cameraSpace[1].x);
+  // frustumLeft.z = vertexContainer->at (*index).position.z * (cameraSpace[2].w + cameraSpace[2].x);
+  // frustumLeft.w = cameraSpace[3].w + cameraSpace[3].x;
+
+  // frustumRight.x = vertexContainer->at (*index).position.x * (cameraSpace[0].w - cameraSpace[0].x);
+  // frustumRight.y = vertexContainer->at (*index).position.y * (cameraSpace[1].w - cameraSpace[1].x);
+  // frustumRight.z = vertexContainer->at (*index).position.z * (cameraSpace[2].w - cameraSpace[2].x);
+  // frustumRight.w = cameraSpace[3].w - cameraSpace[3].x;
+
+  // frustumTop.x = vertexContainer->at (*index).position.x * (cameraSpace[0].w - cameraSpace[0].y);
+  // frustumTop.y = vertexContainer->at (*index).position.y * (cameraSpace[1].w - cameraSpace[1].y);
+  // frustumTop.z = vertexContainer->at (*index).position.z * (cameraSpace[2].w - cameraSpace[2].y);
+  // frustumTop.w = cameraSpace[3].w - cameraSpace[3].y;
+
+  // frustumBottom.x = vertexContainer->at (*index).position.x * (cameraSpace[0].w + cameraSpace[0].y);
+  // frustumBottom.y = vertexContainer->at (*index).position.y * (cameraSpace[1].w + cameraSpace[1].y);
+  // frustumBottom.z = vertexContainer->at (*index).position.z * (cameraSpace[2].w + cameraSpace[2].y);
+  // frustumBottom.w = cameraSpace[3].w + cameraSpace[3].y;
+
+  // clang-format on
+
+  // auto totalLeft = frustumLeft.x + frustumLeft.y + frustumLeft.z + frustumLeft.w;
+  // auto totalRight = frustumRight.x + frustumRight.y + frustumRight.z + frustumRight.w;
+  // auto totalTop = frustumTop.x + frustumTop.y + frustumTop.z + frustumTop.w;
+  // auto totalBottom = frustumBottom.x + frustumBottom.y + frustumBottom.z + frustumBottom.w;
+
+  // // draw
+  // if (totalLeft > -2.5f && totalRight > -2.5f && totalTop > -2.5f && totalBottom > -2.5f)
+  //   {
+  //   }
 
   while (!glfwWindowShouldClose (window))
     {
@@ -572,9 +598,10 @@ Engine::go (void)
       // Add alpha to render
       // Render
       renderStart = chrono::now ();
+
       draw (currentFrame, imageIndex);
       renderStop = chrono::now ();
-    }
+    } // end game loop
 
   gui->cleanup (logicalDevice);
 
@@ -1009,89 +1036,6 @@ Engine::preparePipeline (void)
 void
 Engine::recordCommandBuffer (uint32_t p_ImageIndex)
 {
-  // FRUSTUM CULLING TESTING
-
-  // Fetch view & projection matrices
-  auto viewMat = collectionHandler->viewUniform->matrix;
-  auto projMat = collectionHandler->projectionUniform->matrix;
-
-  // Combine them to get camera space
-  auto cameraSpace = projMat * viewMat;
-
-  // All reads so no sync primitives
-  std::mutex mtx;
-  size_t splitWidth = mapHandler.indices.size () / threadPool.size ();
-
-  auto ibegin = mapHandler.indices.begin ();
-  auto iend = std::next (ibegin, splitWidth);
-  auto ptrVertices = &mapHandler.vertices;
-
-  auto job = [ptrVertices, cameraSpace, &mtx, this] (std::vector<uint32_t>::iterator ibegin,
-                                                     std::vector<uint32_t>::iterator iend) {
-    size_t c = 0;
-    for (; ibegin != iend; ibegin++)
-      {
-        // we will test with xyz point at origin
-        // -- Extract left plane --
-        // column major
-        glm::vec4 frustumLeft = { 0.0f, 0.0f, 0.0f, 0.0f };
-        glm::vec4 frustumRight = { 0.0f, 0.0f, 0.0f, 0.0f };
-        glm::vec4 frustumTop = { 0.0f, 0.0f, 0.0f, 0.0f };
-        glm::vec4 frustumBottom = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-        // left plane
-        // clang-format off
-        frustumLeft.x = ptrVertices->at (*ibegin).position.x * (cameraSpace[0].w + cameraSpace[0].x);
-        frustumLeft.y = ptrVertices->at (*ibegin).position.y * (cameraSpace[1].w + cameraSpace[1].x);
-        frustumLeft.z = ptrVertices->at (*ibegin).position.z * (cameraSpace[2].w + cameraSpace[2].x);
-        frustumLeft.w = cameraSpace[3].w + cameraSpace[3].x;
-
-        frustumRight.x = ptrVertices->at (*ibegin).position.x * (cameraSpace[0].w - cameraSpace[0].x);
-        frustumRight.y = ptrVertices->at (*ibegin).position.y * (cameraSpace[1].w - cameraSpace[1].x);
-        frustumRight.z = ptrVertices->at (*ibegin).position.z * (cameraSpace[2].w - cameraSpace[2].x);
-        frustumRight.w = cameraSpace[3].w - cameraSpace[3].x;
-
-        frustumTop.x = ptrVertices->at (*ibegin).position.x * (cameraSpace[0].w - cameraSpace[0].y);
-        frustumTop.y = ptrVertices->at (*ibegin).position.y * (cameraSpace[1].w - cameraSpace[1].y);
-        frustumTop.z = ptrVertices->at (*ibegin).position.z * (cameraSpace[2].w - cameraSpace[2].y);
-        frustumTop.w = cameraSpace[3].w - cameraSpace[3].y;
-
-        frustumBottom.x = ptrVertices->at (*ibegin).position.x * (cameraSpace[0].w + cameraSpace[0].y);
-        frustumBottom.y = ptrVertices->at (*ibegin).position.y * (cameraSpace[1].w + cameraSpace[1].y);
-        frustumBottom.z = ptrVertices->at (*ibegin).position.z * (cameraSpace[2].w + cameraSpace[2].y);
-        frustumBottom.w = cameraSpace[3].w + cameraSpace[3].y;
-        // clang-format on
-
-        auto totalLeft = frustumLeft.x + frustumLeft.y + frustumLeft.z + frustumLeft.w;
-        auto totalRight = frustumRight.x + frustumRight.y + frustumRight.z + frustumRight.w;
-        auto totalTop = frustumTop.x + frustumTop.y + frustumTop.z + frustumTop.w;
-        auto totalBottom = frustumBottom.x + frustumBottom.y + frustumBottom.z + frustumBottom.w;
-
-        if (totalLeft > -2.5f && totalRight > -2.5f && totalTop > -2.5f && totalBottom > -2.5f)
-          {
-            // draw
-            c++;
-          }
-      }
-  };
-
-  auto start = std::chrono::high_resolution_clock::now ();
-  std::for_each (threadPool.begin (),
-                 threadPool.end (),
-                 [&job, &ibegin, &iend, splitWidth] (std::thread &thread) {
-                   thread = std::thread (job, ibegin, iend);
-                   ibegin = std::next (ibegin, splitWidth);
-                   iend = std::next (iend, splitWidth);
-                 });
-
-  std::for_each (
-      threadPool.begin (), threadPool.end (), [] (std::thread &thread) { thread.join (); });
-  auto end = std::chrono::high_resolution_clock::now ();
-  std::cout << "cull took "
-            << std::chrono::duration<double, std::ratio<1UL, 1000UL>> (end - start).count ()
-            << " MS\n";
-
-  // END FRUSTUM CULLING TESTING
   // command buffer begin
   vk::CommandBufferBeginInfo beginInfo;
 
@@ -1138,22 +1082,6 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
                                0,
                                toBind,
                                nullptr);
-
-      // for (const auto &vOffset : mapHandler.vertexOffsets)
-      //   {
-      //     // Index offset
-      //     // { index start, index count }
-      //     commandBuffers.at (p_ImageIndex)
-      //         .drawIndexed (mapHandler.indexOffsets
-      //                           .at (&vOffset -
-      //                           &mapHandler.vertexOffsets[0]) .second,
-      //                       1,
-      //                       mapHandler.indexOffsets
-      //                           .at (&vOffset -
-      //                           &mapHandler.vertexOffsets[0]) .first,
-      //                       vOffset, 0);
-      //   }
-      //   commandBuffers.at (p_ImageIndex).drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
       commandBuffers.at (p_ImageIndex).drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
     }
 
@@ -1426,7 +1354,8 @@ Engine::goSetup (void)
   */
   struct CameraInitStruct cameraParams = {};
   cameraParams.fov = 50.0f;
-  cameraParams.aspect = (float)swapchain.swapExtent.width / (float)swapchain.swapExtent.height;
+  cameraParams.aspect = static_cast<float> (swapchain.swapExtent.width)
+                        / static_cast<float> (swapchain.swapExtent.height);
   cameraParams.nearz = 0.1f;
   cameraParams.farz = 5000.0f;
   cameraParams.position = glm::vec3 (1, -10, 3.0f);

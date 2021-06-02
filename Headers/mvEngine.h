@@ -30,8 +30,6 @@ public:
   Engine &operator= (const Engine &) = delete;
   Engine (const Engine &) = delete;
 
-  std::vector<std::thread> threadPool;
-
   Timer timer;
   Timer fps;
 
