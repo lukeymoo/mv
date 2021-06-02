@@ -3,248 +3,275 @@
 // for msaa image method
 #include "mvImage.h"
 
-Window::Window(int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle)
+Window::Window (int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle)
 {
-    windowWidth = p_WindowWidth;
-    windowHeight = p_WindowHeight;
-    title = p_WindowTitle;
+  windowWidth = p_WindowWidth;
+  windowHeight = p_WindowHeight;
+  title = p_WindowTitle;
 
-    glfwInit();
+  glfwInit ();
 
-    uint32_t count = 0;
-    const char **extensions = glfwGetRequiredInstanceExtensions(&count);
-    if (!extensions)
-        throw std::runtime_error("Failed to get required instance extensions");
+  uint32_t count = 0;
+  const char **extensions = glfwGetRequiredInstanceExtensions (&count);
+  if (!extensions)
+    throw std::runtime_error ("Failed to get required instance extensions");
 
-    // Get our own list of requested extensions
-    for (const auto &req : requestedInstanceExtensions)
+  // Get our own list of requested extensions
+  for (const auto &req : requestedInstanceExtensions)
     {
-        instanceExtensions.push_back(req);
+      instanceExtensions.push_back (req);
     }
 
-    // Get GLFW requested extensions
-    std::vector<std::string> glfwRequested;
-    for (uint32_t i = 0; i < count; i++)
+  // Get GLFW requested extensions
+  std::vector<std::string> glfwRequested;
+  for (uint32_t i = 0; i < count; i++)
     {
-        glfwRequested.push_back(extensions[i]);
+      glfwRequested.push_back (extensions[i]);
     }
 
-    // temp container for missing extensions
-    std::vector<std::string> tmp;
+  // temp container for missing extensions
+  std::vector<std::string> tmp;
 
-    // iterate glfw requested
-    for (const auto &glfw_req : glfwRequested)
+  // iterate glfw requested
+  for (const auto &glfw_req : glfwRequested)
     {
-        bool found = false;
+      bool found = false;
 
-        // iterate already requested list
-        for (const auto &extensionName : instanceExtensions)
+      // iterate already requested list
+      for (const auto &extensionName : instanceExtensions)
         {
-            if (glfw_req == extensionName)
+          if (glfw_req == extensionName)
             {
-                found = true;
+              found = true;
             }
         }
 
-        // if not found, add to final list
-        if (!found)
-            instanceExtensions.push_back(glfw_req);
+      // if not found, add to final list
+      if (!found)
+        instanceExtensions.push_back (glfw_req);
     }
 
-    /*
-        Create window, windowed fullscreen
-    */
-    auto monitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode *videoMode = glfwGetVideoMode(monitor);
+  /*
+      Create window, windowed fullscreen
+  */
+  auto monitor = glfwGetPrimaryMonitor ();
+  const GLFWvidmode *videoMode = glfwGetVideoMode (monitor);
 
-    glfwWindowHint(GLFW_RED_BITS, videoMode->redBits);
-    glfwWindowHint(GLFW_GREEN_BITS, videoMode->greenBits);
-    glfwWindowHint(GLFW_BLUE_BITS, videoMode->blueBits);
-    glfwWindowHint(GLFW_REFRESH_RATE, videoMode->refreshRate);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window = glfwCreateWindow(videoMode->width, videoMode->height, title.c_str(), monitor, nullptr);
-    if (!window)
-        throw std::runtime_error("Failed to create window");
+  glfwWindowHint (GLFW_RED_BITS, videoMode->redBits);
+  glfwWindowHint (GLFW_GREEN_BITS, videoMode->greenBits);
+  glfwWindowHint (GLFW_BLUE_BITS, videoMode->blueBits);
+  glfwWindowHint (GLFW_REFRESH_RATE, videoMode->refreshRate);
+  glfwWindowHint (GLFW_RESIZABLE, GLFW_FALSE);
+  glfwWindowHint (GLFW_CLIENT_API, GLFW_NO_API);
+  window = glfwCreateWindow (videoMode->width, videoMode->height, title.c_str (), monitor, nullptr);
+  if (!window)
+    throw std::runtime_error ("Failed to create window");
 
-    auto rawMouseSupport = glfwRawMouseMotionSupported();
+  auto rawMouseSupport = glfwRawMouseMotionSupported ();
 
-    if (!rawMouseSupport)
-        throw std::runtime_error("Raw mouse motion not supported");
-    // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, true);
+  if (!rawMouseSupport)
+    throw std::runtime_error ("Raw mouse motion not supported");
+  // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, true);
 
-    // Set keyboard callback
-    glfwSetKeyCallback(window, keyCallback);
+  // Set keyboard callback
+  glfwSetKeyCallback (window, keyCallback);
 
-    // Set mouse motion callback
-    glfwSetCursorPosCallback(window, mouseMotionCallback);
+  // Set mouse motion callback
+  glfwSetCursorPosCallback (window, mouseMotionCallback);
 
-    // Set mouse button callback
-    glfwSetMouseButtonCallback(window, mouseButtonCallback);
+  // Set mouse button callback
+  glfwSetMouseButtonCallback (window, mouseButtonCallback);
 
-    // Set mouse wheel callback
-    glfwSetScrollCallback(window, mouseScrollCallback);
+  // Set mouse wheel callback
+  glfwSetScrollCallback (window, mouseScrollCallback);
 
-    // For imgui circular callback when recreating swap
-    glfwSetCharCallback(window, NULL);
+  // For imgui circular callback when recreating swap
+  glfwSetCharCallback (window, NULL);
 
-    // Add our base app class to glfw window for callbacks
-    glfwSetWindowUserPointer(window, this);
-    return;
+  // Add our base app class to glfw window for callbacks
+  glfwSetWindowUserPointer (window, this);
+  return;
 }
 
-Window::~Window()
+Window::~Window ()
 {
-    // ensure gpu not using any resources
-    logicalDevice.waitIdle();
+  // ensure gpu not using any resources
+  logicalDevice.waitIdle ();
 
-    swapchain.cleanup(instance, logicalDevice);
+  swapchain.cleanup (instance, logicalDevice);
 
-    // cleanup command buffers
-    if (!commandBuffers.empty() && commandPool)
+  // cleanup command buffers & command pools
+  if (!commandPoolsBuffers.empty ())
     {
-        logicalDevice.freeCommandBuffers(commandPool, commandBuffers);
-    }
-
-    // cleanup sync objects
-    if (!inFlightFences.empty())
-    {
-        for (auto &fence : inFlightFences)
+      for (const auto &pair : commandPoolsBuffers)
         {
-            if (fence)
+          auto poolBufferList = getPoolBufferList (pair.first);
+          if (!poolBufferList)
+            continue;
+
+          // cleanup
+          if (!poolBufferList->empty ())
             {
-                logicalDevice.destroyFence(fence, nullptr);
-            }
-        }
-    }
-    if (semaphores.presentComplete)
-        logicalDevice.destroySemaphore(semaphores.presentComplete, nullptr);
-    if (semaphores.renderComplete)
-        logicalDevice.destroySemaphore(semaphores.renderComplete, nullptr);
-
-    if (depthStencil.image)
-    {
-        logicalDevice.destroyImage(depthStencil.image, nullptr);
-    }
-    if (depthStencil.view)
-    {
-        logicalDevice.destroyImageView(depthStencil.view, nullptr);
-    }
-    if (depthStencil.mem)
-    {
-        logicalDevice.freeMemory(depthStencil.mem, nullptr);
-    }
-
-    if (!renderPasses.empty())
-    {
-        for (auto &pass : renderPasses)
-        {
-            if (pass.second)
-                logicalDevice.destroyRenderPass(pass.second, nullptr);
-        }
-    }
-
-    // core engine render framebuffers
-    if (!coreFramebuffers.empty())
-    {
-        for (auto &buffer : coreFramebuffers)
-        {
-            if (buffer)
-            {
-                logicalDevice.destroyFramebuffer(buffer, nullptr);
+              for (auto &poolBuffer : *poolBufferList)
+                {
+                  if (poolBuffer.first && !poolBuffer.second.empty ())
+                    {
+                      logicalDevice.freeCommandBuffers (poolBuffer.first, poolBuffer.second);
+                    }
+                }
             }
         }
     }
 
-    // ImGui framebuffers
-    if (!guiFramebuffers.empty())
+  // cleanup sync objects
+  if (!inFlightFences.empty ())
     {
-        for (auto &buffer : guiFramebuffers)
+      for (auto &fence : inFlightFences)
         {
-            if (buffer)
+          if (fence)
             {
-                logicalDevice.destroyFramebuffer(buffer, nullptr);
+              logicalDevice.destroyFence (fence, nullptr);
+            }
+        }
+      inFlightFences.clear ();
+    }
+  if (semaphores.presentComplete)
+    logicalDevice.destroySemaphore (semaphores.presentComplete, nullptr);
+  if (semaphores.renderComplete)
+    logicalDevice.destroySemaphore (semaphores.renderComplete, nullptr);
+
+  if (depthStencil.image)
+    {
+      logicalDevice.destroyImage (depthStencil.image, nullptr);
+    }
+  if (depthStencil.view)
+    {
+      logicalDevice.destroyImageView (depthStencil.view, nullptr);
+    }
+  if (depthStencil.mem)
+    {
+      logicalDevice.freeMemory (depthStencil.mem, nullptr);
+    }
+
+  if (!renderPasses.empty ())
+    {
+      for (auto &pass : renderPasses)
+        {
+          if (pass.second)
+            logicalDevice.destroyRenderPass (pass.second, nullptr);
+        }
+      renderPasses.clear ();
+    }
+
+  // cleanup framebuffers
+  if (!framebuffers.empty ())
+    {
+      for (auto &pair : framebuffers)
+        {
+          if (!pair.second.empty ())
+            {
+              for (auto &buffer : pair.second)
+                {
+                  logicalDevice.destroyFramebuffer (buffer);
+                }
+            }
+        }
+      framebuffers.clear ();
+    }
+
+  // cleanup command pools
+  for (auto &pair : commandPoolsBuffers)
+    {
+      auto list = getPoolBufferList (pair.first);
+      if (!list)
+        continue;
+      if (!list->empty ())
+        {
+          for (auto &pair : *list)
+            {
+              if (pair.first)
+                logicalDevice.destroyCommandPool (pair.first);
             }
         }
     }
+  commandPoolsBuffers.clear ();
 
-    if (commandPool)
-        logicalDevice.destroyCommandPool(commandPool);
-
-    if (logicalDevice)
-        logicalDevice.destroy();
+  if (logicalDevice)
+    logicalDevice.destroy ();
 
 #ifndef NDEBUG
-    pfn_vkDestroyDebugUtilsMessengerEXT(instance, static_cast<VkDebugUtilsMessengerEXT>(vulkanHandleDebugCallback),
-                                        nullptr);
+  pfn_vkDestroyDebugUtilsMessengerEXT (
+      instance, static_cast<VkDebugUtilsMessengerEXT> (vulkanHandleDebugCallback), nullptr);
 #endif
 
-    if (instance)
-        instance.destroy();
+  if (instance)
+    instance.destroy ();
 
-    if (window)
-        glfwDestroyWindow(window);
-    glfwTerminate();
-    return;
+  if (window)
+    glfwDestroyWindow (window);
+  glfwTerminate ();
+  return;
 }
 
-void Window::prepare(void)
+void
+Window::prepare (void)
 {
-    // creates...
-    // physical device
-    // logical device
-    // swapchain surface
-    initVulkan();
+  // creates...
+  // physical device
+  // logical device
+  // swapchain surface
+  initVulkan ();
 
-    std::cout << "[+] Initializing swapchain handler\n";
-    swapchain.init(window, instance, physicalDevice);
+  std::cout << "[+] Initializing swapchain handler\n";
+  swapchain.init (window, instance, physicalDevice);
 
-    // get depth format
-    swapchain.depthFormat = getSupportedDepthFormat();
+  // get depth format
+  swapchain.depthFormat = getSupportedDepthFormat ();
 
-    swapchain.create(physicalDevice, logicalDevice, windowWidth, windowHeight);
+  swapchain.create (physicalDevice, logicalDevice, windowWidth, windowHeight);
 
-    createCommandBuffers();
+  createCommandBuffers ();
 
-    createSynchronizationPrimitives();
+  createSynchronizationPrimitives ();
 
-    setupDepthStencil();
+  setupDepthStencil ();
 
-    setupRenderPass();
+  setupRenderPass ();
 
-    // create_pipeline_cache();
+  // create_pipeline_cache();
 
-    setupFramebuffer();
+  setupFramebuffers ();
 
-    // load device extension functions
-    pfn_vkCmdSetPrimitiveTopology = reinterpret_cast<PFN_vkCmdSetPrimitiveTopologyEXT>(
-        vkGetInstanceProcAddr(instance, "vkCmdSetPrimitiveTopologyEXT"));
-    if (!pfn_vkCmdSetPrimitiveTopology)
-        throw std::runtime_error("Failed to load extended dynamic state extensions");
-    return;
+  // load device extension functions
+  pfn_vkCmdSetPrimitiveTopology = reinterpret_cast<PFN_vkCmdSetPrimitiveTopologyEXT> (
+      vkGetInstanceProcAddr (instance, "vkCmdSetPrimitiveTopologyEXT"));
+  if (!pfn_vkCmdSetPrimitiveTopology)
+    throw std::runtime_error ("Failed to load extended dynamic state extensions");
+  return;
 }
 
-void Window::initVulkan(void)
+void
+Window::initVulkan (void)
 {
-    // creates vulkan instance with specified instance extensions/layers
-    createInstance();
+  // creates vulkan instance with specified instance extensions/layers
+  createInstance ();
 
-    // Load debug utility functions for persistent validation error reporting
+  // Load debug utility functions for persistent validation error reporting
 
-    std::vector<vk::PhysicalDevice> physicalDevices = instance.enumeratePhysicalDevices();
+  std::vector<vk::PhysicalDevice> physicalDevices = instance.enumeratePhysicalDevices ();
 
-    if (physicalDevices.size() < 1)
-        throw std::runtime_error("No physical devices found");
+  if (physicalDevices.size () < 1)
+    throw std::runtime_error ("No physical devices found");
 
-    std::cout << "[+] Fetching physical device " << physicalDevices.at(0) << "\n";
-    // Select device
-    physicalDevice = physicalDevices.at(0);
+  std::cout << "[+] Fetching physical device " << physicalDevices.at (0) << "\n";
+  // Select device
+  physicalDevice = physicalDevices.at (0);
 
-    // resize devices container
-    physicalDevices.erase(physicalDevices.begin());
+  // resize devices container
+  physicalDevices.erase (physicalDevices.begin ());
 
-    // clang-format off
+  // clang-format off
     physicalProperties                      = physicalDevice.getProperties();
     physicalMemoryProperties                = physicalDevice.getMemoryProperties();
     queueFamilyProperties                   = physicalDevice.getQueueFamilyProperties();
@@ -254,372 +281,477 @@ void Window::initVulkan(void)
     extendedFeatures.extendedDynamicState   = VK_TRUE;
     physicalFeatures.sampleRateShading      = VK_TRUE;
     physicalFeatures2.pNext                 = &extendedFeatures;
-    // clang-format on
+  // clang-format on
 
-    if (queueFamilyProperties.empty())
-        throw std::runtime_error("Failed to find any queue families");
+  if (queueFamilyProperties.empty ())
+    throw std::runtime_error ("Failed to find any queue families");
 
-    if (physicalDeviceExtensions.empty())
-        if (!requestedDeviceExtensions.empty())
-            throw std::runtime_error("Failed to find device extensions");
+  if (physicalDeviceExtensions.empty ())
+    if (!requestedDeviceExtensions.empty ())
+      throw std::runtime_error ("Failed to find device extensions");
 
-    // Add requestedDeviceExtensions to class member
-    // requestedLogicalDeviceExtensions
-    for (const auto &requested : requestedDeviceExtensions)
+  // Add requestedDeviceExtensions to class member
+  // requestedLogicalDeviceExtensions
+  for (const auto &requested : requestedDeviceExtensions)
     {
-        requestedLogicalDeviceExtensions.push_back(requested);
+      requestedLogicalDeviceExtensions.push_back (requested);
     }
 
-    auto checkIfSupported = [&, this](const std::string requested_ext) {
-        for (const auto &supportedExtension : physicalDeviceExtensions)
-        {
-            if (strcmp(supportedExtension.extensionName, requested_ext.c_str()) == 0)
-            {
-                return true;
-            }
-        }
-        std::cout << "Failed to find extension => " << requested_ext << "\n";
-        return false;
-    };
+  auto checkIfSupported = [&, this] (const std::string requested_ext) {
+    for (const auto &supportedExtension : physicalDeviceExtensions)
+      {
+        if (strcmp (supportedExtension.extensionName, requested_ext.c_str ()) == 0)
+          {
+            return true;
+          }
+      }
+    std::cout << "Failed to find extension => " << requested_ext << "\n";
+    return false;
+  };
 
-    bool haveAllExtensions =
-        std::all_of(requestedLogicalDeviceExtensions.begin(), requestedLogicalDeviceExtensions.end(), checkIfSupported);
+  bool haveAllExtensions = std::all_of (requestedLogicalDeviceExtensions.begin (),
+                                        requestedLogicalDeviceExtensions.end (),
+                                        checkIfSupported);
 
-    if (!haveAllExtensions)
-        throw std::runtime_error("Failed to find all requested device extensions");
+  if (!haveAllExtensions)
+    throw std::runtime_error ("Failed to find all requested device extensions");
 
-    std::vector<std::string> tmp;
-    for (const auto &extensionName : requestedDeviceExtensions)
+  std::vector<std::string> tmp;
+  for (const auto &extensionName : requestedDeviceExtensions)
     {
-        tmp.push_back(extensionName);
+      tmp.push_back (extensionName);
     }
 
-    // create logical device & graphics queue
-    createLogicalDevice();
+  // create logical device & graphics queue
+  createLogicalDevice ();
 
-    // get format
-    // depthFormat = getSupportedDepthFormat(*physicalDevice);
+  // get format
+  // depthFormat = getSupportedDepthFormat(*physicalDevice);
 
-    // no longer pass references to swapchain, pass reference on per function
-    // basis now swapchain->map(std::weak_ptr<vk::Instance>(instance),
-    //                std::weak_ptr<vk::PhysicalDevice>(physical_device),
-    //                std::weak_ptr<Device>(mvDevice));
+  // no longer pass references to swapchain, pass reference on per function
+  // basis now swapchain->map(std::weak_ptr<vk::Instance>(instance),
+  //                std::weak_ptr<vk::PhysicalDevice>(physical_device),
+  //                std::weak_ptr<Device>(mvDevice));
 
-    // Create synchronization objects
-    vk::SemaphoreCreateInfo semaphoreInfo;
-    semaphores.presentComplete = logicalDevice.createSemaphore(semaphoreInfo);
-    semaphores.renderComplete = logicalDevice.createSemaphore(semaphoreInfo);
+  // Create synchronization objects
+  vk::SemaphoreCreateInfo semaphoreInfo;
+  semaphores.presentComplete = logicalDevice.createSemaphore (semaphoreInfo);
+  semaphores.renderComplete = logicalDevice.createSemaphore (semaphoreInfo);
 
-    return;
+  return;
 }
 
-void Window::createInstance(void)
+void
+Window::createInstance (void)
 {
-    // Ensure we have validation layers
+  // Ensure we have validation layers
 #ifndef NDEBUG
-    checkValidationSupport();
+  checkValidationSupport ();
 #endif
 
-    // Ensure we have all requested instance extensions
-    checkInstanceExt();
+  // Ensure we have all requested instance extensions
+  checkInstanceExt ();
 
-    vk::ApplicationInfo appInfo;
-    appInfo.pApplicationName = "Bloody Day";
-    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "Moogin";
-    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion = VK_MAKE_VERSION(1, 2, 0);
+  vk::ApplicationInfo appInfo;
+  appInfo.pApplicationName = "Bloody Day";
+  appInfo.applicationVersion = VK_MAKE_VERSION (1, 0, 0);
+  appInfo.pEngineName = "Moogin";
+  appInfo.engineVersion = VK_MAKE_VERSION (1, 0, 0);
+  appInfo.apiVersion = VK_MAKE_VERSION (1, 2, 0);
 
 /* If debugging enabled */
 #ifndef NDEBUG
-    vk::DebugUtilsMessengerCreateInfoEXT debuggerSettings;
-    debuggerSettings.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
-                                       vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-                                       vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
-    debuggerSettings.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-                                   vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-                                   vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
-    debuggerSettings.pfnUserCallback = debug_message_processor;
-    debuggerSettings.pUserData = nullptr;
+  vk::DebugUtilsMessengerCreateInfoEXT debuggerSettings;
+  debuggerSettings.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose
+                                     | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
+                                     | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
+  debuggerSettings.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
+                                 | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
+                                 | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+  debuggerSettings.pfnUserCallback = debug_message_processor;
+  debuggerSettings.pUserData = nullptr;
 
-    // convert string request to const char*
-    std::vector<const char *> req_layers;
-    for (auto &layerName : requestedValidationLayers)
+  // convert string request to const char*
+  std::vector<const char *> req_layers;
+  for (auto &layerName : requestedValidationLayers)
     {
-        req_layers.push_back(layerName);
+      req_layers.push_back (layerName);
     }
-    std::vector<const char *> req_inst_ext;
-    for (auto &ext : instanceExtensions)
+  std::vector<const char *> req_inst_ext;
+  for (auto &ext : instanceExtensions)
     {
-        req_inst_ext.push_back(ext.c_str());
+      req_inst_ext.push_back (ext.c_str ());
     }
 
-    vk::InstanceCreateInfo createInfo;
-    createInfo.pNext = &debuggerSettings;
-    createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledLayerCount = static_cast<uint32_t>(req_layers.size());
-    createInfo.ppEnabledLayerNames = req_layers.data();
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
-    createInfo.ppEnabledExtensionNames = req_inst_ext.data();
+  vk::InstanceCreateInfo createInfo;
+  createInfo.pNext = &debuggerSettings;
+  createInfo.pApplicationInfo = &appInfo;
+  createInfo.enabledLayerCount = static_cast<uint32_t> (req_layers.size ());
+  createInfo.ppEnabledLayerNames = req_layers.data ();
+  createInfo.enabledExtensionCount = static_cast<uint32_t> (req_inst_ext.size ());
+  createInfo.ppEnabledExtensionNames = req_inst_ext.data ();
 #endif
 #ifdef NDEBUG /* Debugging disabled */
-    std::vector<const char *> req_inst_ext;
-    for (auto &ext : instanceExtensions)
+  std::vector<const char *> req_inst_ext;
+  for (auto &ext : instanceExtensions)
     {
-        req_inst_ext.push_back(ext.c_str());
+      req_inst_ext.push_back (ext.c_str ());
     }
 
-    vk::InstanceCreateInfo createInfo;
-    createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(req_inst_ext.size());
-    createInfo.ppEnabledExtensionNames = req_inst_ext.data();
+  vk::InstanceCreateInfo createInfo;
+  createInfo.pApplicationInfo = &appInfo;
+  createInfo.enabledExtensionCount = static_cast<uint32_t> (req_inst_ext.size ());
+  createInfo.ppEnabledExtensionNames = req_inst_ext.data ();
 #endif
 
-    std::cout << "[+] Creating instance\n";
-    instance = vk::createInstance(createInfo);
-    // double check instance(prob a triple check at this point)
-    if (!instance)
-        throw std::runtime_error("Failed to create vulkan instance");
+  std::cout << "[+] Creating instance\n";
+  instance = vk::createInstance (createInfo);
+  // double check instance(prob a triple check at this point)
+  if (!instance)
+    throw std::runtime_error ("Failed to create vulkan instance");
 
 #ifndef NDEBUG
-    // Load debug util function
-    pfn_vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
-    if (!pfn_vkCreateDebugUtilsMessengerEXT)
-        throw std::runtime_error("Failed to load debug messenger creation function");
+  // Load debug util function
+  pfn_vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT> (
+      vkGetInstanceProcAddr (instance, "vkCreateDebugUtilsMessengerEXT"));
+  if (!pfn_vkCreateDebugUtilsMessengerEXT)
+    throw std::runtime_error ("Failed to load debug messenger creation function");
 
-    pfn_vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
-    if (!pfn_vkDestroyDebugUtilsMessengerEXT)
-        throw std::runtime_error("Failed to load debug messenger destroy function");
+  pfn_vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT> (
+      vkGetInstanceProcAddr (instance, "vkDestroyDebugUtilsMessengerEXT"));
+  if (!pfn_vkDestroyDebugUtilsMessengerEXT)
+    throw std::runtime_error ("Failed to load debug messenger destroy function");
 
-    vk::DebugUtilsMessengerCreateInfoEXT debugCallbackInfo;
-    debugCallbackInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError |
-                                        vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
-                                        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
-    debugCallbackInfo.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-                                    vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-                                    vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
-    debugCallbackInfo.pfnUserCallback = generalDebugCallback;
+  vk::DebugUtilsMessengerCreateInfoEXT debugCallbackInfo;
+  debugCallbackInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
+                                      | vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo
+                                      | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+  debugCallbackInfo.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
+                                  | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
+                                  | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+  debugCallbackInfo.pfnUserCallback = generalDebugCallback;
 
-    VkResult result = pfn_vkCreateDebugUtilsMessengerEXT(
-        instance, reinterpret_cast<VkDebugUtilsMessengerCreateInfoEXT *>(&debugCallbackInfo), nullptr,
-        reinterpret_cast<VkDebugUtilsMessengerEXT *>(&vulkanHandleDebugCallback));
-    if (result != VK_SUCCESS)
-        throw std::runtime_error("Failed to create debug utils messenger");
+  VkResult result = pfn_vkCreateDebugUtilsMessengerEXT (
+      instance,
+      reinterpret_cast<VkDebugUtilsMessengerCreateInfoEXT *> (&debugCallbackInfo),
+      nullptr,
+      reinterpret_cast<VkDebugUtilsMessengerEXT *> (&vulkanHandleDebugCallback));
+  if (result != VK_SUCCESS)
+    throw std::runtime_error ("Failed to create debug utils messenger");
 #endif
 
-    return;
+  return;
 }
 
-void Window::createLogicalDevice(void)
+void
+Window::createLogicalDevice (void)
 {
-    std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
+  std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
 
-    constexpr float defaultQueuePriority = 0.0f;
+  constexpr float defaultQueuePriority = 0.0f;
 
-    // Look for graphics queue
-    queueIdx.graphics = getQueueFamilyIndex(vk::QueueFlagBits::eGraphics);
+  queueIdx.graphics = getQueueFamilyIndex (vk::QueueFlagBits::eGraphics);
+  queueIdx.compute = getQueueFamilyIndex (vk::QueueFlagBits::eCompute);
 
-    vk::DeviceQueueCreateInfo queueInfo;
-    queueInfo.queueCount = 1;
-    queueInfo.queueFamilyIndex = queueIdx.graphics;
-    queueInfo.pQueuePriorities = &defaultQueuePriority;
-
-    queueCreateInfos.push_back(queueInfo);
-
-    std::vector<const char *> enabledExtensions;
-    for (const auto &req : requestedLogicalDeviceExtensions)
+  // if compute is distinct from graphics
+  if (queueIdx.graphics == queueIdx.compute)
     {
-        enabledExtensions.push_back(req.c_str());
+      std::cout << "\t[-] Found queue with graphics, compute & present\n";
     }
-    vk::DeviceCreateInfo deviceCreateInfo;
-    deviceCreateInfo.pNext = &physicalFeatures2;
-    deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-    deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
-
-    // if pnext is phys features2, must be nullptr
-    // device_create_info.pEnabledFeatures = &physical_features;
-
-    deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
-    deviceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data();
-
-    // create logical device
-    logicalDevice = physicalDevice.createDevice(deviceCreateInfo);
-
-    // create command pool with graphics queue
-    commandPool = createCommandPool(queueIdx.graphics);
-
-    // retreive graphics queue
-    graphicsQueue = logicalDevice.getQueue(queueIdx.graphics, 0);
-    return;
-}
-
-void Window::createCommandBuffers(void)
-{
-    commandBuffers.resize(swapchain.buffers.size());
-
-    vk::CommandBufferAllocateInfo allocInfo;
-    allocInfo.commandPool = commandPool;
-    allocInfo.level = vk::CommandBufferLevel::ePrimary;
-    allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-
-    commandBuffers = logicalDevice.allocateCommandBuffers(allocInfo);
-
-    if (commandBuffers.size() < 1)
-        throw std::runtime_error("Failed to allocate command buffers");
-    return;
-}
-
-void Window::createSynchronizationPrimitives(void)
-{
-    vk::FenceCreateInfo fenceInfo;
-    fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
-
-    waitFences.resize(swapchain.buffers.size(), nullptr);
-    inFlightFences.resize(MAX_IN_FLIGHT);
-
-    for (auto &fence : inFlightFences)
+  else
     {
-        fence = logicalDevice.createFence(fenceInfo);
-    }
-    return;
-}
+      std::cout << "\t[-] Rolling separate queues for graphics/present & compute\n";
 
-void Window::setupDepthStencil(void)
-{
-    vk::ImageCreateInfo imageInfo;
-    imageInfo.imageType = vk::ImageType::e2D;
-    imageInfo.format = swapchain.depthFormat;
-    imageInfo.extent = vk::Extent3D{windowWidth, windowHeight, 1};
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.samples = swapchain.sampleCount;
-    imageInfo.tiling = vk::ImageTiling::eOptimal;
-    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+      vk::DeviceQueueCreateInfo computeQueueCreateInfo;
+      computeQueueCreateInfo.queueCount = 1;
+      computeQueueCreateInfo.queueFamilyIndex = queueIdx.compute;
+      computeQueueCreateInfo.pQueuePriorities = &defaultQueuePriority;
 
-    // create depth stencil testing image
-    depthStencil.image = logicalDevice.createImage(imageInfo);
-
-    // Allocate memory for image
-    vk::MemoryRequirements memReq;
-    memReq = logicalDevice.getImageMemoryRequirements(depthStencil.image);
-
-    vk::MemoryAllocateInfo allocInfo;
-    allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = getMemoryType(memReq.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    // allocate depth stencil image memory
-    depthStencil.mem = logicalDevice.allocateMemory(allocInfo);
-
-    // bind image and memory
-    logicalDevice.bindImageMemory(depthStencil.image, depthStencil.mem, 0);
-
-    // Create view into depth stencil testing image
-    vk::ImageViewCreateInfo viewInfo;
-    viewInfo.viewType = vk::ImageViewType::e2D;
-    viewInfo.image = depthStencil.image;
-    viewInfo.format = swapchain.depthFormat;
-    viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
-    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
-
-    // if physical device supports high enough format add stenciling
-    if (swapchain.depthFormat >= vk::Format::eD16UnormS8Uint)
-    {
-        viewInfo.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
+      queueCreateInfos.push_back (computeQueueCreateInfo);
     }
 
-    depthStencil.view = logicalDevice.createImageView(viewInfo);
-    return;
+  vk::DeviceQueueCreateInfo graphicsQueueCreateInfo;
+  graphicsQueueCreateInfo.queueCount = 1;
+  graphicsQueueCreateInfo.queueFamilyIndex = queueIdx.graphics;
+  graphicsQueueCreateInfo.pQueuePriorities = &defaultQueuePriority;
+
+  // save createinfos
+  queueCreateInfos.push_back (graphicsQueueCreateInfo);
+
+  std::vector<const char *> enabledExtensions;
+  for (const auto &req : requestedLogicalDeviceExtensions)
+    {
+      enabledExtensions.push_back (req.c_str ());
+    }
+  vk::DeviceCreateInfo deviceCreateInfo;
+  deviceCreateInfo.pNext = &physicalFeatures2;
+  deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t> (queueCreateInfos.size ());
+  deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data ();
+
+  // if pnext is phys features2, must be nullptr
+  // device_create_info.pEnabledFeatures = &physical_features;
+
+  deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t> (enabledExtensions.size ());
+  deviceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data ();
+
+  // create logical device
+  logicalDevice = physicalDevice.createDevice (deviceCreateInfo);
+
+  // clang-format off
+  
+  // { flag bits, vector{ {CommandPool, vector{ CommandBuffer }} } }
+
+  // clang-format on
+
+  // we know it doesnt exist but for correctness
+  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eGraphics))
+    {
+      std::cout << "no graphics pool, creating\n";
+      commandPoolsBuffers.insert ({
+          { vk::QueueFlagBits::eGraphics, { { createCommandPool (queueIdx.graphics), {} } } },
+      });
+      std::cout << "graphics pool is => "
+                << commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first << "\n";
+    }
+
+  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eCompute))
+    {
+      std::cout << "no compute pool, creating\n";
+      commandPoolsBuffers.insert ({
+          { vk::QueueFlagBits::eCompute, { { createCommandPool (queueIdx.compute), {} } } },
+      });
+      std::cout << "compute pool is => "
+                << commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).first << "\n";
+    }
+
+  // get queue handles
+  if (!commandQueues.contains (vk::QueueFlagBits::eGraphics))
+    {
+      std::cout << "[+] Retrieving graphics queue\n";
+      commandQueues.insert ({
+          { vk::QueueFlagBits::eGraphics, { { logicalDevice.getQueue (queueIdx.graphics, 0) } } },
+      });
+      std::cout << "graphics queue is => " << commandQueues.at (vk::QueueFlagBits::eGraphics).at (0)
+                << "\n";
+    }
+
+  if (!commandQueues.contains (vk::QueueFlagBits::eCompute))
+    {
+      std::cout << "[+] Retrieving compute queue\n";
+      commandQueues.insert ({
+          { vk::QueueFlagBits::eCompute, { { logicalDevice.getQueue (queueIdx.compute, 0) } } },
+      });
+      std::cout << "compute queue is => " << commandQueues.at (vk::QueueFlagBits::eCompute).at (0)
+                << "\n";
+    }
+  return;
 }
 
-void Window::setupRenderPass(void)
+void
+Window::createCommandBuffers (void)
 {
-    std::array<vk::AttachmentDescription, 3> coreAttachments;
-    // MSAA resolve target -> ImGui
-    coreAttachments[0].format = swapchain.colorFormat;
-    coreAttachments[0].samples = swapchain.sampleCount;
-    coreAttachments[0].loadOp = vk::AttachmentLoadOp::eClear;
-    coreAttachments[0].storeOp = vk::AttachmentStoreOp::eDontCare;
-    coreAttachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    coreAttachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    coreAttachments[0].initialLayout = vk::ImageLayout::eUndefined;
-    coreAttachments[0].finalLayout = vk::ImageLayout::eColorAttachmentOptimal; // passed to imgui
+  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eGraphics))
+    throw std::runtime_error (
+        "Failed to find existing graphics queue pending command buffer creation");
 
-    // Depth attachment
-    coreAttachments[1].format = swapchain.depthFormat;
-    coreAttachments[1].samples = swapchain.sampleCount;
-    coreAttachments[1].loadOp = vk::AttachmentLoadOp::eClear;
-    coreAttachments[1].storeOp = vk::AttachmentStoreOp::eDontCare;
-    coreAttachments[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    coreAttachments[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    coreAttachments[1].initialLayout = vk::ImageLayout::eUndefined;
-    coreAttachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eCompute))
+    throw std::runtime_error (
+        "Failed to find existing compute queue pending command buffer creation");
 
-    // Color attachment
-    coreAttachments[2].format = swapchain.colorFormat;
-    coreAttachments[2].samples = vk::SampleCountFlagBits::e1;
-    coreAttachments[2].loadOp = vk::AttachmentLoadOp::eClear;
-    coreAttachments[2].storeOp = vk::AttachmentStoreOp::eStore;
-    coreAttachments[2].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    coreAttachments[2].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    coreAttachments[2].initialLayout = vk::ImageLayout::eUndefined;
-    coreAttachments[2].finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
+  auto *graphicsList = getPoolBufferList (vk::QueueFlagBits::eGraphics);
+  auto *computeList = getPoolBufferList (vk::QueueFlagBits::eCompute);
+  if (!graphicsList)
+    throw std::runtime_error ("Failed to get handle to graphics pool/buffer container");
+  if (!computeList)
+    throw std::runtime_error ("Failed to get handle to compute pool/buffer container");
 
-    /*
-        Core render references
-    */
-    vk::AttachmentReference colorRef;
-    colorRef.attachment = 0;
-    colorRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
+  // For now we only create 1 pool per queue so grab first index
+  auto &graphicsPoolAndBuffers = graphicsList->at (0);
+  auto &computePoolAndBuffers = computeList->at (0);
 
-    vk::AttachmentReference depthRef;
-    depthRef.attachment = 1;
-    depthRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+  // resize buffers containers
+  graphicsPoolAndBuffers.second.resize (swapchain.buffers.size ());
+  computePoolAndBuffers.second.resize (swapchain.buffers.size ());
 
-    vk::AttachmentReference msaaRef;
-    msaaRef.attachment = 2;
-    msaaRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
+  vk::CommandBufferAllocateInfo graphicsAllocInfo;
+  graphicsAllocInfo.commandPool = graphicsPoolAndBuffers.first;
+  graphicsAllocInfo.level = vk::CommandBufferLevel::ePrimary;
+  graphicsAllocInfo.commandBufferCount
+      = static_cast<uint32_t> (graphicsPoolAndBuffers.second.size ());
 
-    // color attachment and depth testing subpass
-    vk::SubpassDescription corePass;
-    corePass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
-    corePass.colorAttachmentCount = 1;
-    corePass.pColorAttachments = &colorRef;
-    corePass.pDepthStencilAttachment = &depthRef;
-    corePass.pResolveAttachments = &msaaRef;
+  graphicsPoolAndBuffers.second = logicalDevice.allocateCommandBuffers (graphicsAllocInfo);
 
-    std::vector<vk::SubpassDescription> coreSubpasses = {corePass};
+  // Validate
+  if (graphicsPoolAndBuffers.second.size () < 1)
+    throw std::runtime_error ("Failed to allocate graphics command buffers");
 
-    std::array<vk::SubpassDependency, 1> coreDependencies;
-    // Color + depth subpass
-    coreDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    coreDependencies[0].dstSubpass = 0;
-    coreDependencies[0].srcStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
-    coreDependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    coreDependencies[0].srcAccessMask = vk::AccessFlagBits::eMemoryRead;
-    coreDependencies[0].dstAccessMask =
-        vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
-    coreDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
+  vk::CommandBufferAllocateInfo computeAllocInfo;
+  computeAllocInfo.commandPool = computePoolAndBuffers.first;
+  computeAllocInfo.level = vk::CommandBufferLevel::ePrimary;
+  computeAllocInfo.commandBufferCount
+      = static_cast<uint32_t> (computePoolAndBuffers.second.size ());
 
-    vk::RenderPassCreateInfo coreRenderPassInfo;
-    coreRenderPassInfo.attachmentCount = static_cast<uint32_t>(coreAttachments.size());
-    coreRenderPassInfo.pAttachments = coreAttachments.data();
-    coreRenderPassInfo.subpassCount = static_cast<uint32_t>(coreSubpasses.size());
-    coreRenderPassInfo.pSubpasses = coreSubpasses.data();
-    coreRenderPassInfo.dependencyCount = static_cast<uint32_t>(coreDependencies.size());
-    coreRenderPassInfo.pDependencies = coreDependencies.data();
+  computePoolAndBuffers.second = logicalDevice.allocateCommandBuffers (computeAllocInfo);
 
-    vk::RenderPass tempCore = logicalDevice.createRenderPass(coreRenderPassInfo);
+  // validate
+  if (computePoolAndBuffers.second.size () < 1)
+    throw std::runtime_error ("Failed to allocate compute command buffers");
+  return;
+}
 
-    renderPasses.insert({
-        eCore,
-        std::move(tempCore),
-    });
-    return;
+void
+Window::createSynchronizationPrimitives (void)
+{
+  vk::FenceCreateInfo fenceInfo;
+  fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
+
+  waitFences.resize (swapchain.buffers.size (), nullptr);
+  inFlightFences.resize (MAX_IN_FLIGHT);
+
+  for (auto &fence : inFlightFences)
+    {
+      fence = logicalDevice.createFence (fenceInfo);
+    }
+  return;
+}
+
+void
+Window::setupDepthStencil (void)
+{
+  vk::ImageCreateInfo imageInfo;
+  imageInfo.imageType = vk::ImageType::e2D;
+  imageInfo.format = swapchain.depthFormat;
+  imageInfo.extent = vk::Extent3D{ windowWidth, windowHeight, 1 };
+  imageInfo.mipLevels = 1;
+  imageInfo.arrayLayers = 1;
+  imageInfo.samples = swapchain.sampleCount;
+  imageInfo.tiling = vk::ImageTiling::eOptimal;
+  imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+
+  // create depth stencil testing image
+  depthStencil.image = logicalDevice.createImage (imageInfo);
+
+  // Allocate memory for image
+  vk::MemoryRequirements memReq;
+  memReq = logicalDevice.getImageMemoryRequirements (depthStencil.image);
+
+  vk::MemoryAllocateInfo allocInfo;
+  allocInfo.allocationSize = memReq.size;
+  allocInfo.memoryTypeIndex
+      = getMemoryType (memReq.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+  // allocate depth stencil image memory
+  depthStencil.mem = logicalDevice.allocateMemory (allocInfo);
+
+  // bind image and memory
+  logicalDevice.bindImageMemory (depthStencil.image, depthStencil.mem, 0);
+
+  // Create view into depth stencil testing image
+  vk::ImageViewCreateInfo viewInfo;
+  viewInfo.viewType = vk::ImageViewType::e2D;
+  viewInfo.image = depthStencil.image;
+  viewInfo.format = swapchain.depthFormat;
+  viewInfo.subresourceRange.baseMipLevel = 0;
+  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.baseArrayLayer = 0;
+  viewInfo.subresourceRange.layerCount = 1;
+  viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+
+  // if physical device supports high enough format add stenciling
+  if (swapchain.depthFormat >= vk::Format::eD16UnormS8Uint)
+    {
+      viewInfo.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
+    }
+
+  depthStencil.view = logicalDevice.createImageView (viewInfo);
+  return;
+}
+
+void
+Window::setupRenderPass (void)
+{
+  std::array<vk::AttachmentDescription, 3> coreAttachments;
+  // MSAA resolve target -> ImGui
+  coreAttachments[0].format = swapchain.colorFormat;
+  coreAttachments[0].samples = swapchain.sampleCount;
+  coreAttachments[0].loadOp = vk::AttachmentLoadOp::eClear;
+  coreAttachments[0].storeOp = vk::AttachmentStoreOp::eDontCare;
+  coreAttachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+  coreAttachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+  coreAttachments[0].initialLayout = vk::ImageLayout::eUndefined;
+  coreAttachments[0].finalLayout = vk::ImageLayout::eColorAttachmentOptimal; // passed to imgui
+
+  // Depth attachment
+  coreAttachments[1].format = swapchain.depthFormat;
+  coreAttachments[1].samples = swapchain.sampleCount;
+  coreAttachments[1].loadOp = vk::AttachmentLoadOp::eClear;
+  coreAttachments[1].storeOp = vk::AttachmentStoreOp::eDontCare;
+  coreAttachments[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+  coreAttachments[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+  coreAttachments[1].initialLayout = vk::ImageLayout::eUndefined;
+  coreAttachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+
+  // Color attachment
+  coreAttachments[2].format = swapchain.colorFormat;
+  coreAttachments[2].samples = vk::SampleCountFlagBits::e1;
+  coreAttachments[2].loadOp = vk::AttachmentLoadOp::eClear;
+  coreAttachments[2].storeOp = vk::AttachmentStoreOp::eStore;
+  coreAttachments[2].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+  coreAttachments[2].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+  coreAttachments[2].initialLayout = vk::ImageLayout::eUndefined;
+  coreAttachments[2].finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
+
+  /*
+      Core render references
+  */
+  vk::AttachmentReference colorRef;
+  colorRef.attachment = 0;
+  colorRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
+
+  vk::AttachmentReference depthRef;
+  depthRef.attachment = 1;
+  depthRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+
+  vk::AttachmentReference msaaRef;
+  msaaRef.attachment = 2;
+  msaaRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
+
+  // color attachment and depth testing subpass
+  vk::SubpassDescription corePass;
+  corePass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
+  corePass.colorAttachmentCount = 1;
+  corePass.pColorAttachments = &colorRef;
+  corePass.pDepthStencilAttachment = &depthRef;
+  corePass.pResolveAttachments = &msaaRef;
+
+  std::vector<vk::SubpassDescription> coreSubpasses = { corePass };
+
+  std::array<vk::SubpassDependency, 1> coreDependencies;
+  // Color + depth subpass
+  coreDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+  coreDependencies[0].dstSubpass = 0;
+  coreDependencies[0].srcStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
+  coreDependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+  coreDependencies[0].srcAccessMask = vk::AccessFlagBits::eMemoryRead;
+  coreDependencies[0].dstAccessMask
+      = vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
+  coreDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
+
+  vk::RenderPassCreateInfo coreRenderPassInfo;
+  coreRenderPassInfo.attachmentCount = static_cast<uint32_t> (coreAttachments.size ());
+  coreRenderPassInfo.pAttachments = coreAttachments.data ();
+  coreRenderPassInfo.subpassCount = static_cast<uint32_t> (coreSubpasses.size ());
+  coreRenderPassInfo.pSubpasses = coreSubpasses.data ();
+  coreRenderPassInfo.dependencyCount = static_cast<uint32_t> (coreDependencies.size ());
+  coreRenderPassInfo.pDependencies = coreDependencies.data ();
+
+  vk::RenderPass tempCore = logicalDevice.createRenderPass (coreRenderPassInfo);
+
+  renderPasses.insert ({
+      eCore,
+      std::move (tempCore),
+  });
+  return;
 }
 
 // TODO
@@ -632,341 +764,386 @@ void Window::setupRenderPass(void)
 //     return;
 // }
 
-void Window::setupFramebuffer(void)
+void
+Window::setupFramebuffers (void)
 {
-    // Attachments for core engine rendering
-    std::array<vk::ImageView, 3> coreAttachments;
+  std::cout << "[+] Creating core framebuffers\n";
+  // Attachments for core engine rendering
+  std::array<vk::ImageView, 3> coreAttachments;
 
-    if (!depthStencil.view)
-        throw std::runtime_error("Depth stencil view is nullptr");
+  if (!depthStencil.view)
+    throw std::runtime_error ("Depth stencil view is nullptr");
 
-    // each frame buffer uses same depth image
-    coreAttachments[1] = depthStencil.view;
+  // each frame buffer uses same depth image
+  coreAttachments[1] = depthStencil.view;
 
-    // core engine render will use color attachment buffer & depth buffer
-    vk::FramebufferCreateInfo coreFrameInfo;
-    coreFrameInfo.renderPass = renderPasses.at(eCore);
-    coreFrameInfo.attachmentCount = static_cast<uint32_t>(coreAttachments.size());
-    coreFrameInfo.pAttachments = coreAttachments.data();
-    coreFrameInfo.width = swapchain.swapExtent.width;
-    coreFrameInfo.height = swapchain.swapExtent.height;
-    coreFrameInfo.layers = 1;
+  // core engine render will use color attachment buffer & depth buffer
+  vk::FramebufferCreateInfo coreFrameInfo;
+  coreFrameInfo.renderPass = renderPasses.at (eCore);
+  coreFrameInfo.attachmentCount = static_cast<uint32_t> (coreAttachments.size ());
+  coreFrameInfo.pAttachments = coreAttachments.data ();
+  coreFrameInfo.width = swapchain.swapExtent.width;
+  coreFrameInfo.height = swapchain.swapExtent.height;
+  coreFrameInfo.layers = 1;
 
-    // Framebuffer per swap image
-    coreFramebuffers.resize(static_cast<uint32_t>(swapchain.buffers.size()));
-    for (size_t i = 0; i < coreFramebuffers.size(); i++)
+  // Framebuffer per swap image
+  if (!framebuffers.contains (eCoreFramebuffer))
     {
-        if (!swapchain.buffers.at(i).image)
-            throw std::runtime_error("Swapchain buffer at index " + std::to_string(i) + " has nullptr image");
-        if (!swapchain.buffers.at(i).view)
-            throw std::runtime_error("Swapchain buffer at index " + std::to_string(i) + " has nullptr view");
-        // Assign msaa buffer -- main target
-        coreAttachments[0] = swapchain.buffers.at(i).msaaImage->imageView;
-        // Assign each swapchain image to a frame buffer
-        coreAttachments[2] = swapchain.buffers.at(i).view;
-
-        coreFramebuffers.at(i) = logicalDevice.createFramebuffer(coreFrameInfo);
+      framebuffers.insert ({
+          { eCoreFramebuffer, { {} } },
+      });
     }
-    return;
+  framebuffers.at (eCoreFramebuffer).resize (static_cast<uint32_t> (swapchain.buffers.size ()));
+  for (size_t i = 0; i < framebuffers.at (eCoreFramebuffer).size (); i++)
+    {
+      if (!swapchain.buffers.at (i).image)
+        throw std::runtime_error ("Swapchain buffer at index " + std::to_string (i)
+                                  + " has nullptr image");
+      if (!swapchain.buffers.at (i).view)
+        throw std::runtime_error ("Swapchain buffer at index " + std::to_string (i)
+                                  + " has nullptr view");
+      // Assign msaa buffer -- main target
+      coreAttachments[0] = swapchain.buffers.at (i).msaaImage->imageView;
+      // Assign each swapchain image to a frame buffer
+      coreAttachments[2] = swapchain.buffers.at (i).view;
+
+      framebuffers.at (eCoreFramebuffer).at (i) = logicalDevice.createFramebuffer (coreFrameInfo);
+      std::cout << "Created core frame buffer => " << framebuffers.at (eCoreFramebuffer).at (i)
+                << "\n";
+    }
+  return;
 }
 
-void Window::checkValidationSupport(void)
+void
+Window::checkValidationSupport (void)
 {
-    std::vector<vk::LayerProperties> enumeratedInstLayers = vk::enumerateInstanceLayerProperties();
+  std::vector<vk::LayerProperties> enumeratedInstLayers = vk::enumerateInstanceLayerProperties ();
 
-    if (enumeratedInstLayers.size() == 0 && !requestedValidationLayers.empty())
-        throw std::runtime_error("No supported validation layers found");
+  if (enumeratedInstLayers.size () == 0 && !requestedValidationLayers.empty ())
+    throw std::runtime_error ("No supported validation layers found");
 
-    // look for missing requested layers
-    std::string prelude = "The following instance layers were not found...\n";
-    std::string failed;
-    for (const auto &reqLayerName : requestedValidationLayers)
+  // look for missing requested layers
+  std::string prelude = "The following instance layers were not found...\n";
+  std::string failed;
+  for (const auto &reqLayerName : requestedValidationLayers)
     {
-        bool match = false;
-        for (const auto &layer : enumeratedInstLayers)
+      bool match = false;
+      for (const auto &layer : enumeratedInstLayers)
         {
-            if (strcmp(reqLayerName, layer.layerName) == 0)
+          if (strcmp (reqLayerName, layer.layerName) == 0)
             {
-                match = true;
-                break;
+              match = true;
+              break;
             }
         }
-        if (!match)
+      if (!match)
         {
-            failed += reqLayerName;
-            failed += "\n";
+          failed += reqLayerName;
+          failed += "\n";
         }
     }
 
-    // report missing layers if necessary
-    if (!failed.empty())
+  // report missing layers if necessary
+  if (!failed.empty ())
     {
-        throw std::runtime_error(prelude + failed);
+      throw std::runtime_error (prelude + failed);
     }
-    else
+  else
     {
-        std::cout << "System supports all requested validation layers\n";
+      std::cout << "System supports all requested validation layers\n";
     }
-    return;
+  return;
 }
 
-void Window::checkInstanceExt(void)
+void
+Window::checkInstanceExt (void)
 {
-    std::vector<vk::ExtensionProperties> enumeratedInstExtensions = vk::enumerateInstanceExtensionProperties();
+  std::vector<vk::ExtensionProperties> enumeratedInstExtensions
+      = vk::enumerateInstanceExtensionProperties ();
 
-    // use f_req vector for instance extensions
-    if (enumeratedInstExtensions.size() < 1 && !requestedInstanceExtensions.empty())
-        throw std::runtime_error("No instance extensions found");
+  // use f_req vector for instance extensions
+  if (enumeratedInstExtensions.size () < 1 && !requestedInstanceExtensions.empty ())
+    throw std::runtime_error ("No instance extensions found");
 
-    std::string prelude = "The following instance extensions were not found...\n";
-    std::string failed;
-    for (const auto &reqInstExtensionName : requestedInstanceExtensions)
+  std::string prelude = "The following instance extensions were not found...\n";
+  std::string failed;
+  for (const auto &reqInstExtensionName : requestedInstanceExtensions)
     {
-        bool match = false;
-        for (const auto &availableExtension : enumeratedInstExtensions)
+      bool match = false;
+      for (const auto &availableExtension : enumeratedInstExtensions)
         {
-            if (strcmp(reqInstExtensionName, availableExtension.extensionName) == 0)
+          if (strcmp (reqInstExtensionName, availableExtension.extensionName) == 0)
             {
-                match = true;
-                break;
+              match = true;
+              break;
             }
         }
-        if (!match)
+      if (!match)
         {
-            failed += reqInstExtensionName;
-            failed += "\n";
+          failed += reqInstExtensionName;
+          failed += "\n";
         }
     }
 
-    if (!failed.empty())
+  if (!failed.empty ())
     {
-        throw std::runtime_error(prelude + failed);
+      throw std::runtime_error (prelude + failed);
     }
 
-    return;
+  return;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debug_message_processor(VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
-                                                       [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
-                                                       const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
-                                                       [[maybe_unused]] void *p_UserData)
+VKAPI_ATTR VkBool32 VKAPI_CALL
+debug_message_processor (VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
+                         [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
+                         const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
+                         [[maybe_unused]] void *p_UserData)
 {
-    if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+  if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
     {
-        std::ostringstream oss;
-        oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
-            << p_CallbackData->pMessageIdName << "\n"
-            << p_CallbackData->pMessage << "\n\n";
-        std::cout << oss.str();
+      std::ostringstream oss;
+      oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
+          << p_CallbackData->pMessageIdName << "\n"
+          << p_CallbackData->pMessage << "\n\n";
+      std::cout << oss.str ();
     }
-    if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+  if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
-        std::ostringstream oss;
-        oss << std::endl
-            << "Warning: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
-            << p_CallbackData->pMessage << "\n\n";
-        std::cout << oss.str();
+      std::ostringstream oss;
+      oss << std::endl
+          << "Warning: " << p_CallbackData->messageIdNumber << ", "
+          << p_CallbackData->pMessageIdName << "\n"
+          << p_CallbackData->pMessage << "\n\n";
+      std::cout << oss.str ();
     }
-    // else if (p_MessageSeverity &
-    // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
-    // {
-    //     // Disabled by the impossible statement
-    //     std::ostringstream oss;
-    //     oss << std::endl
-    //         << "Verbose message : " << p_CallbackData->messageIdNumber << ",
-    //         " << p_CallbackData->pMessageIdName
-    //         << std::endl
-    //         << p_CallbackData->pMessage << "\n\n";
-    //     std::cout << oss.str();
-    // }
-    else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+  // else if (p_MessageSeverity &
+  // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
+  // {
+  //     // Disabled by the impossible statement
+  //     std::ostringstream oss;
+  //     oss << std::endl
+  //         << "Verbose message : " << p_CallbackData->messageIdNumber << ",
+  //         " << p_CallbackData->pMessageIdName
+  //         << std::endl
+  //         << p_CallbackData->pMessage << "\n\n";
+  //     std::cout << oss.str();
+  // }
+  else if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
     {
-        std::ostringstream oss;
-        oss << std::endl
-            << "Error: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
-            << p_CallbackData->pMessage << "\n\n";
-        std::cout << oss.str();
+      std::ostringstream oss;
+      oss << std::endl
+          << "Error: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName
+          << "\n"
+          << p_CallbackData->pMessage << "\n\n";
+      std::cout << oss.str ();
     }
-    // else if (p_MessageSeverity &
-    // VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
-    // {
-    //     std::ostringstream oss;
-    //     oss << std::endl
-    //         << "Info: " << p_CallbackData->messageIdNumber << ", " <<
-    //         p_CallbackData->pMessageIdName << "\n"
-    //         << p_CallbackData->pMessage << "\n\n";
-    //     std::cout << oss.str();
-    // }
-    return false;
+  // else if (p_MessageSeverity &
+  // VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+  // {
+  //     std::ostringstream oss;
+  //     oss << std::endl
+  //         << "Info: " << p_CallbackData->messageIdNumber << ", " <<
+  //         p_CallbackData->pMessageIdName << "\n"
+  //         << p_CallbackData->pMessage << "\n\n";
+  //     std::cout << oss.str();
+  // }
+  return false;
 }
 VKAPI_ATTR
-VkBool32 VKAPI_CALL generalDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
-                                         [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
-                                         const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
-                                         [[maybe_unused]] void *p_UserData)
+VkBool32 VKAPI_CALL
+generalDebugCallback (VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
+                      [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
+                      const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
+                      [[maybe_unused]] void *p_UserData)
 {
-    if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+  if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
     {
-        std::ostringstream oss;
-        oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
-            << p_CallbackData->pMessageIdName << "\n"
-            << p_CallbackData->pMessage << "\n\n";
-        std::cout << oss.str();
+      std::ostringstream oss;
+      oss << "Vulkan Performance Validation => " << p_CallbackData->messageIdNumber << ", "
+          << p_CallbackData->pMessageIdName << "\n"
+          << p_CallbackData->pMessage << "\n\n";
+      std::cout << oss.str ();
     }
-    if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+  if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {
-        std::ostringstream oss;
-        oss << std::endl
-            << "Warning: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
-            << p_CallbackData->pMessage << "\n\n";
-        std::cout << oss.str();
+      std::ostringstream oss;
+      oss << std::endl
+          << "Warning: " << p_CallbackData->messageIdNumber << ", "
+          << p_CallbackData->pMessageIdName << "\n"
+          << p_CallbackData->pMessage << "\n\n";
+      std::cout << oss.str ();
     }
-    if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+  if (p_MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
     {
-        std::ostringstream oss;
-        oss << std::endl
-            << "Error: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName << "\n"
-            << p_CallbackData->pMessage << "\n\n";
-        std::cout << oss.str();
-        throw std::runtime_error("Vulkan error");
+      std::ostringstream oss;
+      oss << std::endl
+          << "Error: " << p_CallbackData->messageIdNumber << ", " << p_CallbackData->pMessageIdName
+          << "\n"
+          << p_CallbackData->pMessage << "\n\n";
+      std::cout << oss.str ();
+      // throw std::runtime_error ("Vulkan error");
     }
-    return false;
+  return false;
 }
 
-std::vector<char> Window::readFile(std::string p_Filename)
+std::vector<char>
+Window::readFile (std::string p_Filename)
 {
-    size_t fileSize;
-    std::ifstream file;
-    std::vector<char> buffer;
+  size_t fileSize;
+  std::ifstream file;
+  std::vector<char> buffer;
 
-    // check if file exists
-    try
+  // check if file exists
+  try
     {
-        if (!std::filesystem::exists(p_Filename))
-            throw std::runtime_error("Shader file " + p_Filename + " does not exist");
+      if (!std::filesystem::exists (p_Filename))
+        throw std::runtime_error ("Shader file " + p_Filename + " does not exist");
 
-        file.open(p_Filename, std::ios::ate | std::ios::binary);
+      file.open (p_Filename, std::ios::ate | std::ios::binary);
 
-        if (!file.is_open())
+      if (!file.is_open ())
         {
-            std::ostringstream oss;
-            oss << "Failed to open file " << p_Filename;
-            throw std::runtime_error(oss.str());
+          std::ostringstream oss;
+          oss << "Failed to open file " << p_Filename;
+          throw std::runtime_error (oss.str ());
         }
 
-        // prepare buffer to hold shader bytecode
-        fileSize = (size_t)file.tellg();
-        buffer.resize(fileSize);
+      // prepare buffer to hold shader bytecode
+      fileSize = (size_t)file.tellg ();
+      buffer.resize (fileSize);
 
-        // go back to beginning of file and read in
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-        file.close();
+      // go back to beginning of file and read in
+      file.seekg (0);
+      file.read (buffer.data (), fileSize);
+      file.close ();
     }
-    catch (std::filesystem::filesystem_error &e)
+  catch (std::filesystem::filesystem_error &e)
     {
-        std::ostringstream oss;
-        oss << "Filesystem Exception : " << e.what() << std::endl;
-        throw std::runtime_error(oss.str());
+      std::ostringstream oss;
+      oss << "Filesystem Exception : " << e.what () << std::endl;
+      throw std::runtime_error (oss.str ());
     }
-    catch (std::exception &e)
+  catch (std::exception &e)
     {
-        std::ostringstream oss;
-        oss << "Standard Exception : " << e.what();
-        throw std::runtime_error(oss.str());
+      std::ostringstream oss;
+      oss << "Standard Exception : " << e.what ();
+      throw std::runtime_error (oss.str ());
     }
-    catch (...)
+  catch (...)
     {
-        throw std::runtime_error("Unhandled exception while loading a file");
-    }
-
-    if (buffer.empty())
-    {
-        throw std::runtime_error("File reading operation returned empty buffer :: shaders?");
+      throw std::runtime_error ("Unhandled exception while loading a file");
     }
 
-    return buffer;
+  if (buffer.empty ())
+    {
+      throw std::runtime_error ("File reading operation returned empty buffer :: shaders?");
+    }
+
+  return buffer;
 }
 
-vk::ShaderModule Window::createShaderModule(const std::vector<char> &p_ShaderCharBuffer)
+vk::ShaderModule
+Window::createShaderModule (const std::vector<char> &p_ShaderCharBuffer)
 {
-    vk::ShaderModuleCreateInfo moduleInfo;
-    moduleInfo.codeSize = p_ShaderCharBuffer.size();
-    moduleInfo.pCode = reinterpret_cast<const uint32_t *>(p_ShaderCharBuffer.data());
+  vk::ShaderModuleCreateInfo moduleInfo;
+  moduleInfo.codeSize = p_ShaderCharBuffer.size ();
+  moduleInfo.pCode = reinterpret_cast<const uint32_t *> (p_ShaderCharBuffer.data ());
 
-    vk::ShaderModule module = logicalDevice.createShaderModule(moduleInfo);
+  vk::ShaderModule module = logicalDevice.createShaderModule (moduleInfo);
 
-    return module;
+  return module;
 }
 
-vk::CommandPool Window::createCommandPool(uint32_t p_QueueIndex, vk::CommandPoolCreateFlags p_CreateFlags)
+vk::CommandPool
+Window::createCommandPool (uint32_t p_QueueIndex, vk::CommandPoolCreateFlags p_CreateFlags)
 {
-    vk::CommandPoolCreateInfo poolInfo;
-    poolInfo.flags = p_CreateFlags;
-    poolInfo.queueFamilyIndex = p_QueueIndex;
+  vk::CommandPoolCreateInfo poolInfo;
+  poolInfo.flags = p_CreateFlags;
+  poolInfo.queueFamilyIndex = p_QueueIndex;
 
-    return logicalDevice.createCommandPool(poolInfo);
+  return logicalDevice.createCommandPool (poolInfo);
 }
 
-vk::Format Window::getSupportedDepthFormat(void) const
+vk::Format
+Window::getSupportedDepthFormat (void) const
 {
-    std::vector<vk::Format> depthFormats = {
-        vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat, vk::Format::eD24UnormS8Uint,
-        vk::Format::eD16UnormS8Uint,  vk::Format::eD16Unorm,
-    };
+  std::vector<vk::Format> depthFormats = {
+    vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat, vk::Format::eD24UnormS8Uint,
+    vk::Format::eD16UnormS8Uint,  vk::Format::eD16Unorm,
+  };
 
-    for (auto &format : depthFormats)
+  for (auto &format : depthFormats)
     {
-        vk::FormatProperties formatProperties = physicalDevice.getFormatProperties(format);
-        if (formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
+      vk::FormatProperties formatProperties = physicalDevice.getFormatProperties (format);
+      if (formatProperties.optimalTilingFeatures
+          & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
         {
-            if (!(formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage))
-                continue;
+          if (!(formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage))
+            continue;
         }
-        return format;
+      return format;
     }
-    throw std::runtime_error("Failed to find good format");
+  throw std::runtime_error ("Failed to find good format");
 }
 
-uint32_t Window::getMemoryType(uint32_t p_MemoryTypeBits, vk::MemoryPropertyFlags p_MemoryProperties,
-                               vk::Bool32 *p_IsMemoryTypeFound) const
+uint32_t
+Window::getMemoryType (uint32_t p_MemoryTypeBits,
+                       vk::MemoryPropertyFlags p_MemoryProperties,
+                       vk::Bool32 *p_IsMemoryTypeFound) const
 {
-    for (uint32_t i = 0; i < physicalMemoryProperties.memoryTypeCount; i++)
+  for (uint32_t i = 0; i < physicalMemoryProperties.memoryTypeCount; i++)
     {
-        if ((p_MemoryTypeBits & 1) == 1)
+      if ((p_MemoryTypeBits & 1) == 1)
         {
-            if ((physicalMemoryProperties.memoryTypes[i].propertyFlags & p_MemoryProperties))
+          if ((physicalMemoryProperties.memoryTypes[i].propertyFlags & p_MemoryProperties))
             {
-                if (p_IsMemoryTypeFound)
+              if (p_IsMemoryTypeFound)
                 {
-                    *p_IsMemoryTypeFound = true;
+                  *p_IsMemoryTypeFound = true;
                 }
-                return i;
+              return i;
             }
         }
-        p_MemoryTypeBits >>= 1;
+      p_MemoryTypeBits >>= 1;
     }
 
-    if (p_IsMemoryTypeFound)
+  if (p_IsMemoryTypeFound)
     {
-        *p_IsMemoryTypeFound = false;
-        return 0;
+      *p_IsMemoryTypeFound = false;
+      return 0;
     }
-    else
+  else
     {
-        throw std::runtime_error("Could not find a matching memory type");
+      throw std::runtime_error ("Could not find a matching memory type");
     }
 }
 
-uint32_t Window::getQueueFamilyIndex(vk::QueueFlagBits p_QueueFlagBits) const
+uint32_t
+Window::getQueueFamilyIndex (vk::QueueFlagBits p_QueueFlagBits) const
 {
-    for (const auto &queueProperty : queueFamilyProperties)
+  for (const auto &queueProperty : queueFamilyProperties)
     {
-        if ((queueProperty.queueFlags & p_QueueFlagBits))
+      if ((queueProperty.queueFlags & p_QueueFlagBits))
         {
-            return (&queueProperty - &queueFamilyProperties[0]);
+          return (&queueProperty - &queueFamilyProperties[0]);
         }
     }
 
-    throw std::runtime_error("Could not find requested queue family");
+  throw std::runtime_error ("Could not find requested queue family :: "
+                            + std::to_string (static_cast<uint32_t> (p_QueueFlagBits)));
+}
+
+std::vector<std::pair<vk::CommandPool, std::vector<vk::CommandBuffer>>> *
+Window::getPoolBufferList (vk::QueueFlagBits p_QueueType)
+{
+  for (auto &pair : commandPoolsBuffers)
+    {
+      if (pair.first == p_QueueType)
+        {
+          return &pair.second;
+        }
+    }
+  std::cout << "[+] Failed to find command pools belonging to queue type :: "
+            << std::to_string (static_cast<uint32_t> (p_QueueType)) << "\n";
+  return nullptr;
 }

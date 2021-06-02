@@ -105,10 +105,13 @@ MapHandler::readHeightMap (GuiHandler *p_Gui, std::string p_Filename, bool p_For
 
       try
         {
+          auto graphicsQueue = ptrEngine->commandQueues.at (vk::QueueFlagBits::eGraphics).at (0);
+          auto graphicsCommandPool
+              = ptrEngine->commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first;
           terrainTexture->create (ptrEngine->physicalDevice,
                                   ptrEngine->logicalDevice,
-                                  ptrEngine->commandPool,
-                                  ptrEngine->graphicsQueue,
+                                  graphicsCommandPool,
+                                  graphicsQueue,
                                   textureCreateInfo,
                                   "terrain/crackedMud.png");
 
@@ -119,8 +122,8 @@ MapHandler::readHeightMap (GuiHandler *p_Gui, std::string p_Filename, bool p_For
 
           terrainNormal->create (ptrEngine->physicalDevice,
                                  ptrEngine->logicalDevice,
-                                 ptrEngine->commandPool,
-                                 ptrEngine->graphicsQueue,
+                                 graphicsCommandPool,
+                                 graphicsQueue,
                                  normalCreateInfo,
                                  "terrain/crackedMudNormal.png");
 

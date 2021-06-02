@@ -21,6 +21,7 @@ Engine::~Engine ()
           if (pipeline.second)
             logicalDevice.destroyPipeline (pipeline.second);
         }
+      pipelines.clear ();
     }
 
   if (!pipelineLayouts.empty ())
@@ -30,6 +31,7 @@ Engine::~Engine ()
           if (layout.second)
             logicalDevice.destroyPipelineLayout (layout.second);
         }
+      pipelineLayouts.clear ();
     }
 
   // cleanup map handler
@@ -43,32 +45,45 @@ Engine::~Engine ()
 void
 Engine::cleanupSwapchain (void)
 {
+  std::cout << "--cleaning up swap chain--\n";
   // destroy command buffers
-  if (!commandBuffers.empty ())
+  if (!commandPoolsBuffers.empty ())
     {
-      logicalDevice.freeCommandBuffers (commandPool, commandBuffers);
+      for (const auto &pair : commandPoolsBuffers)
+        {
+          auto poolBufferList = getPoolBufferList (pair.first);
+          if (!poolBufferList)
+            continue;
+
+          // cleanup
+          if (!poolBufferList->empty ())
+            {
+              for (auto &poolBuffer : *poolBufferList)
+                {
+                  if (poolBuffer.first && !poolBuffer.second.empty ())
+                    {
+                      logicalDevice.freeCommandBuffers (poolBuffer.first, poolBuffer.second);
+                    }
+                }
+            }
+        }
     }
 
   // destroy framebuffers
-  if (!coreFramebuffers.empty ())
+  // cleanup framebuffers
+  if (!framebuffers.empty ())
     {
-      for (auto &buffer : coreFramebuffers)
+      for (auto &pair : framebuffers)
         {
-          if (buffer)
-            logicalDevice.destroyFramebuffer (buffer, nullptr);
+          if (!pair.second.empty ())
+            {
+              for (auto &buffer : pair.second)
+                {
+                  logicalDevice.destroyFramebuffer (buffer);
+                }
+            }
         }
-      coreFramebuffers.clear ();
-    }
-
-  // destroy gui framebuffers
-  if (!guiFramebuffers.empty ())
-    {
-      for (auto &buffer : guiFramebuffers)
-        {
-          if (buffer)
-            logicalDevice.destroyFramebuffer (buffer, nullptr);
-        }
-      guiFramebuffers.clear ();
+      framebuffers.clear ();
     }
 
   if (depthStencil.image)
@@ -117,11 +132,22 @@ Engine::cleanupSwapchain (void)
       renderPasses.clear ();
     }
 
-  // cleanup command pool
-  if (commandPool)
+  // cleanup command pools
+  for (auto &pair : commandPoolsBuffers)
     {
-      logicalDevice.destroyCommandPool (commandPool);
+      auto list = getPoolBufferList (pair.first);
+      if (!list)
+        continue;
+      if (!list->empty ())
+        {
+          for (auto &pair : *list)
+            {
+              if (pair.first)
+                logicalDevice.destroyCommandPool (pair.first);
+            }
+        }
     }
+  commandPoolsBuffers.clear ();
 
   // cleanup swapchain
   swapchain.cleanup (instance, logicalDevice, false);
@@ -140,7 +166,42 @@ Engine::recreateSwapchain (void)
   // Cleanup
   cleanupSwapchain ();
 
-  commandPool = createCommandPool (queueIdx.graphics);
+  // recreate pools
+
+  // graphics
+  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eGraphics))
+    {
+      std::cout << "no graphics pool, creating\n";
+      commandPoolsBuffers.insert ({
+          { vk::QueueFlagBits::eGraphics, { { createCommandPool (queueIdx.graphics), {} } } },
+      });
+      std::cout << "graphics pool is => "
+                << commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first << "\n";
+    }
+  else
+    {
+      std::cout << "graphics pool exists\n";
+      commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).second = { {} };
+      std::cout << "graphics pool is => "
+                << commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first << "\n";
+    }
+  // compute
+  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eCompute))
+    {
+      std::cout << "no compute pool, creating\n";
+      commandPoolsBuffers.insert ({
+          { vk::QueueFlagBits::eCompute, { { createCommandPool (queueIdx.compute), {} } } },
+      });
+      std::cout << "compute pool created, => "
+                << commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).first << "\n";
+    }
+  else
+    {
+      std::cout << "compute pool exists\n";
+      commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).second = { {} };
+      std::cout << "compute pool created, => "
+                << commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).first << "\n";
+    }
 
   // create swapchain
   swapchain.create (physicalDevice, logicalDevice, windowWidth, windowHeight);
@@ -164,30 +225,42 @@ Engine::recreateSwapchain (void)
       glfwSetCharCallback (window, NULL);
       // Add our base app class to glfw window for callbacks
       glfwSetWindowUserPointer (window, this);
-      gui = std::make_unique<GuiHandler> (window,
-                                          &mapHandler,
-                                          &camera,
-                                          instance,
-                                          physicalDevice,
-                                          logicalDevice,
-                                          swapchain,
-                                          commandPool,
-                                          graphicsQueue,
-                                          renderPasses,
-                                          allocator->get ()->pool);
+      gui = std::make_unique<GuiHandler> (
+          window,
+          &mapHandler,
+          &camera,
+          instance,
+          physicalDevice,
+          logicalDevice,
+          swapchain,
+          commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first,
+          commandQueues.at (vk::QueueFlagBits::eGraphics).at (0),
+          renderPasses,
+          allocator->get ()->pool);
 
-      guiFramebuffers = gui->createFramebuffers (logicalDevice,
-                                                 renderPasses.at (eImGui),
-                                                 swapchain.buffers,
-                                                 swapchain.swapExtent.width,
-                                                 swapchain.swapExtent.height);
+      if (!framebuffers.contains (eImGuiFramebuffer))
+        {
+          framebuffers.insert ({ eImGuiFramebuffer, { {} } });
+        }
+      framebuffers.at (eImGuiFramebuffer) = gui->createFramebuffers (logicalDevice,
+                                                                     renderPasses.at (eImGui),
+                                                                     swapchain.buffers,
+                                                                     swapchain.swapExtent.width,
+                                                                     swapchain.swapExtent.height);
+      std::cout << "Created gui frame buffers, size => "
+                << framebuffers.at (eImGuiFramebuffer).size () << "\n";
+      for (const auto &buf : framebuffers.at (eImGuiFramebuffer))
+        {
+          std::cout << "gui buffer => " << buf << "\n";
+        }
     }
 
   setupDepthStencil ();
 
-  // create pipeline + pipeline layout
-  preparePipeline ();
-  setupFramebuffer ();
+  // create graphics pipeline + pipeline layout
+  prepareGraphicsPipelines ();
+  prepareComputePipelines ();
+  setupFramebuffers ();
   createCommandBuffers ();
 }
 
@@ -206,7 +279,8 @@ Engine::go (void)
   goSetup ();
 
   prepareLayouts ();
-  preparePipeline ();
+  prepareGraphicsPipelines ();
+  prepareComputePipelines ();
 
   uint32_t imageIndex = 0;
   size_t currentFrame = 0;
@@ -226,23 +300,35 @@ Engine::go (void)
       Create and initialize ImGui handler
       Will create render pass & perform pre game loop ImGui initialization
   */
-  gui = std::make_unique<GuiHandler> (window,
-                                      &mapHandler,
-                                      &camera,
-                                      instance,
-                                      physicalDevice,
-                                      logicalDevice,
-                                      swapchain,
-                                      commandPool,
-                                      graphicsQueue,
-                                      renderPasses,
-                                      allocator->get ()->pool);
+  gui = std::make_unique<GuiHandler> (
+      window,
+      &mapHandler,
+      &camera,
+      instance,
+      physicalDevice,
+      logicalDevice,
+      swapchain,
+      commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first,
+      commandQueues.at (vk::QueueFlagBits::eGraphics).at (0),
+      renderPasses,
+      allocator->get ()->pool);
 
-  guiFramebuffers = gui->createFramebuffers (logicalDevice,
-                                             renderPasses.at (eImGui),
-                                             swapchain.buffers,
-                                             swapchain.swapExtent.width,
-                                             swapchain.swapExtent.height);
+  if (!framebuffers.contains (eImGuiFramebuffer))
+    {
+      framebuffers.insert ({ eImGuiFramebuffer, { {} } });
+    }
+
+  framebuffers.at (eImGuiFramebuffer) = gui->createFramebuffers (logicalDevice,
+                                                                 renderPasses.at (eImGui),
+                                                                 swapchain.buffers,
+                                                                 swapchain.swapExtent.width,
+                                                                 swapchain.swapExtent.height);
+  std::cout << "Created gui frame buffers, size => " << framebuffers.at (eImGuiFramebuffer).size ()
+            << "\n";
+  for (const auto &buf : framebuffers.at (eImGuiFramebuffer))
+    {
+      std::cout << "gui buffer => " << buf << "\n";
+    }
 
   auto renderStart = chrono::now ();
   auto renderStop = chrono::now ();
@@ -254,6 +340,24 @@ Engine::go (void)
   try
     {
       mapHandler.readHeightMap (gui.get (), "heightmaps/scaled.png");
+      // TODO
+      // modify to allow device local buffer creation
+      // Create buffer for terrain vertices
+      std::cout << "Creating storage buffer for compute\n";
+      createBuffer (vk::BufferUsageFlagBits::eStorageBuffer,
+                    vk::MemoryPropertyFlagBits::eHostCoherent
+                        | vk::MemoryPropertyFlagBits::eHostVisible,
+                    collectionHandler->computeStorageBuffer.get (),
+                    mapHandler.vertices.size () * sizeof (Vertex),
+                    mapHandler.vertices.data ());
+
+      // Compute shader descriptor set
+      auto storageLayout = allocator->getLayout (vk::DescriptorType::eStorageBuffer);
+      allocator->allocateSet (storageLayout, collectionHandler->computeStorageBuffer->descriptor);
+      allocator->updateSet (collectionHandler->computeStorageBuffer->bufferInfo,
+                            collectionHandler->computeStorageBuffer->descriptor,
+                            vk::DescriptorType::eStorageBuffer,
+                            0);
     }
   catch (std::exception &e)
     {
@@ -693,11 +797,56 @@ Engine::prepareLayouts (void)
   return;
 }
 
+// creation of all compute related pipelines
+void
+Engine::prepareComputePipelines (void)
+{
+  auto terrainFrustumShaderFile = readFile ("shaders/terrainFrustumCull.spv");
+
+  vk::ShaderModule terrainFrustumModule = createShaderModule (terrainFrustumShaderFile);
+
+  vk::PipelineShaderStageCreateInfo cullStageInfo;
+  cullStageInfo.stage = vk::ShaderStageFlagBits::eCompute;
+  cullStageInfo.module = terrainFrustumModule;
+  cullStageInfo.pName = "main";
+  cullStageInfo.pSpecializationInfo = nullptr;
+
+  auto testLayout = allocator->getLayout (vk::DescriptorType::eStorageBuffer);
+  std::vector<vk::DescriptorSetLayout> computeDescriptors = {
+    testLayout,
+  };
+
+  vk::PipelineLayoutCreateInfo computeLayoutInfo;
+  computeLayoutInfo.setLayoutCount = static_cast<uint32_t> (computeDescriptors.size ());
+  computeLayoutInfo.pSetLayouts = computeDescriptors.data ();
+
+  pipelineLayouts.insert ({
+      PipelineTypes::eTerrainCompute,
+      logicalDevice.createPipelineLayout (computeLayoutInfo),
+  });
+  std::cout << "[+] Created compute layout\n";
+
+  vk::ComputePipelineCreateInfo terrainFrustumComputeInfo;
+  terrainFrustumComputeInfo.stage = cullStageInfo;
+  terrainFrustumComputeInfo.layout = pipelineLayouts.at (eTerrainCompute);
+
+  auto r = logicalDevice.createComputePipeline (nullptr, terrainFrustumComputeInfo);
+  if (r.result != vk::Result::eSuccess)
+    throw std::runtime_error ("Failed to create compute pipeline");
+
+  pipelines.insert ({ eTerrainCompute, r.value });
+  std::cout << "[+] Created compute pipeline\n";
+
+  logicalDevice.destroyShaderModule (terrainFrustumModule);
+
+  return;
+}
+
 /*
   Creation of all the graphics pipelines
 */
 void
-Engine::preparePipeline (void)
+Engine::prepareGraphicsPipelines (void)
 {
   auto bindingDescription = Vertex::getBindingDescription ();
   auto attributeDescriptions = Vertex::getAttributeDescriptions ();
@@ -1034,8 +1183,36 @@ Engine::preparePipeline (void)
 }
 
 void
+Engine::computePass (uint32_t p_ImageIndex)
+{
+  vk::CommandBufferBeginInfo beginInfo;
+
+  auto storageDescriptor = collectionHandler->computeStorageBuffer->descriptor;
+
+  std::vector<vk::DescriptorSet> toBind = {
+    storageDescriptor,
+  };
+
+  auto curCommandBuffer
+      = commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).second.at (p_ImageIndex);
+
+  curCommandBuffer.begin (beginInfo);
+
+  curCommandBuffer.bindPipeline (vk::PipelineBindPoint::eCompute, pipelines.at (eTerrainCompute));
+  curCommandBuffer.bindDescriptorSets (
+      vk::PipelineBindPoint::eCompute, pipelineLayouts.at (eTerrainCompute), 0, toBind, nullptr);
+
+  curCommandBuffer.dispatch (mapHandler.vertices.size (), 0, 0);
+
+  curCommandBuffer.end ();
+  return;
+}
+
+void
 Engine::recordCommandBuffer (uint32_t p_ImageIndex)
 {
+  computePass (p_ImageIndex);
+
   // command buffer begin
   vk::CommandBufferBeginInfo beginInfo;
 
@@ -1047,7 +1224,7 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
 
   vk::RenderPassBeginInfo passInfo;
   passInfo.renderPass = renderPasses.at (eCore);
-  passInfo.framebuffer = coreFramebuffers.at (p_ImageIndex);
+  passInfo.framebuffer = framebuffers.at (eCoreFramebuffer).at (p_ImageIndex);
   passInfo.renderArea.offset.x = 0;
   passInfo.renderArea.offset.y = 0;
   passInfo.renderArea.extent.width = swapchain.swapExtent.width;
@@ -1055,19 +1232,25 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
   passInfo.clearValueCount = static_cast<uint32_t> (cls.size ());
   passInfo.pClearValues = cls.data ();
 
+  // Fetch graphics command buffer
+  auto curGraphicsCommandBuffer = commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics)
+                                      .at (0) // for now only 1 pool for queue type, grab first one
+                                      .second.at (p_ImageIndex);
+
   // begin recording
-  commandBuffers.at (p_ImageIndex).begin (beginInfo);
+
+  curGraphicsCommandBuffer.begin (beginInfo);
 
   // start render pass
-  commandBuffers.at (p_ImageIndex).beginRenderPass (passInfo, vk::SubpassContents::eInline);
+  curGraphicsCommandBuffer.beginRenderPass (passInfo, vk::SubpassContents::eInline);
 
   // Render heightmap
   if (mapHandler.isMapLoaded)
     {
-      mapHandler.bindBuffer (commandBuffers.at (p_ImageIndex));
+      mapHandler.bindBuffer (curGraphicsCommandBuffer);
 
-      commandBuffers.at (p_ImageIndex)
-          .bindPipeline (vk::PipelineBindPoint::eGraphics, pipelines.at (eVPWSampler));
+      curGraphicsCommandBuffer.bindPipeline (vk::PipelineBindPoint::eGraphics,
+                                             pipelines.at (eVPWSampler));
       currentlyBound = eVPWSampler;
 
       std::vector<vk::DescriptorSet> toBind = {
@@ -1076,13 +1259,9 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
         mapHandler.terrainTextureDescriptor,
         mapHandler.terrainNormalDescriptor,
       };
-      commandBuffers.at (p_ImageIndex)
-          .bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
-                               pipelineLayouts.at (eVPWSampler),
-                               0,
-                               toBind,
-                               nullptr);
-      commandBuffers.at (p_ImageIndex).drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
+      curGraphicsCommandBuffer.bindDescriptorSets (
+          vk::PipelineBindPoint::eGraphics, pipelineLayouts.at (eVPWSampler), 0, toBind, nullptr);
+      curGraphicsCommandBuffer.drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
     }
 
   for (auto &model : *collectionHandler->models)
@@ -1090,19 +1269,19 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
       // for each model select the appropriate pipeline
       if (model.hasTexture && currentlyBound != eMVPWSampler)
         {
-          commandBuffers.at (p_ImageIndex)
-              .bindPipeline (vk::PipelineBindPoint::eGraphics, pipelines.at (eMVPWSampler));
+          curGraphicsCommandBuffer.bindPipeline (vk::PipelineBindPoint::eGraphics,
+                                                 pipelines.at (eMVPWSampler));
           currentlyBound = eMVPWSampler;
         }
       else if (!model.hasTexture && currentlyBound != eMVPNoSampler)
         {
-          commandBuffers.at (p_ImageIndex)
-              .bindPipeline (vk::PipelineBindPoint::eGraphics, pipelines.at (eMVPNoSampler));
+          curGraphicsCommandBuffer.bindPipeline (vk::PipelineBindPoint::eGraphics,
+                                                 pipelines.at (eMVPNoSampler));
           currentlyBound = eMVPNoSampler;
         }
 
       // Bind vertex & index buffer for model
-      model.bindBuffers (commandBuffers.at (p_ImageIndex));
+      model.bindBuffers (curGraphicsCommandBuffer);
 
       // For each object
       for (auto &object : *model.objects)
@@ -1119,46 +1298,43 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
               if (offset.first.second >= 0)
                 {
                   toBind.push_back (model.textureDescriptors.at (offset.first.second).first);
-                  commandBuffers.at (p_ImageIndex)
-                      .bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
-                                           pipelineLayouts.at (eMVPWSampler),
-                                           0,
-                                           toBind,
-                                           nullptr);
+                  curGraphicsCommandBuffer.bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
+                                                               pipelineLayouts.at (eMVPWSampler),
+                                                               0,
+                                                               toBind,
+                                                               nullptr);
                 }
               else
                 {
-                  commandBuffers.at (p_ImageIndex)
-                      .bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
-                                           pipelineLayouts.at (eMVPNoSampler),
-                                           0,
-                                           toBind,
-                                           nullptr);
+                  curGraphicsCommandBuffer.bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
+                                                               pipelineLayouts.at (eMVPNoSampler),
+                                                               0,
+                                                               toBind,
+                                                               nullptr);
                 }
 
               // { { vertex offset, Texture index }, { Index start, Index count
               // } }
-              commandBuffers.at (p_ImageIndex)
-                  .drawIndexed (
-                      offset.second.second, 1, offset.second.first, offset.first.first, 0);
+              curGraphicsCommandBuffer.drawIndexed (
+                  offset.second.second, 1, offset.second.first, offset.first.first, 0);
             }
         }
     }
 
-  commandBuffers.at (p_ImageIndex).endRenderPass ();
+  curGraphicsCommandBuffer.endRenderPass ();
 
   /*
    IMGUI RENDER
   */
   gui->doRenderPass (renderPasses.at (eImGui),
-                     guiFramebuffers.at (p_ImageIndex),
-                     commandBuffers.at (p_ImageIndex),
+                     framebuffers.at (eImGuiFramebuffer).at (p_ImageIndex),
+                     curGraphicsCommandBuffer,
                      swapchain.swapExtent);
   /*
     END IMGUI RENDER
   */
 
-  commandBuffers.at (p_ImageIndex).end ();
+  curGraphicsCommandBuffer.end ();
 
   return;
 }
@@ -1221,14 +1397,18 @@ Engine::draw (size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
   submitInfo.pWaitSemaphores = waitSemaphores;
   submitInfo.pWaitDstStageMask = waitStages;
   submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffers.at (p_CurrentImageIndex);
+  submitInfo.pCommandBuffers = &commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics)
+                                    .at (0) // currently only 1 pool per queue type
+                                    .second.at (p_CurrentImageIndex);
   vk::Semaphore renderSemaphores[] = { semaphores.renderComplete };
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = renderSemaphores;
 
   logicalDevice.resetFences (inFlightFences.at (p_CurrentFrame));
 
-  result = graphicsQueue.submit (1, &submitInfo, inFlightFences.at (p_CurrentFrame));
+  result = commandQueues.at (vk::QueueFlagBits::eGraphics)
+               .at (0) // currently only 1 queue per family
+               .submit (1, &submitInfo, inFlightFences.at (p_CurrentFrame));
 
   switch (result)
     {
@@ -1263,7 +1443,9 @@ Engine::draw (size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
   presentInfo.pImageIndices = &p_CurrentImageIndex;
   presentInfo.pResults = nullptr;
 
-  result = graphicsQueue.presentKHR (&presentInfo);
+  result = commandQueues.at (vk::QueueFlagBits::eGraphics)
+               .at (0) // currently only 1 queue per family
+               .presentKHR (&presentInfo);
 
   switch (result)
     {
@@ -1317,11 +1499,17 @@ Engine::goSetup (void)
       vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, 0);
 
   /*
+    Compute shader layout
+  */
+  allocator->createLayout (
+      vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, 0);
+
+  /*
       INITIALIZE MODEL/OBJECT HANDLER
       CREATES BUFFERS FOR VIEW & PROJECTION MATRICES
   */
 
-  vk::DescriptorSetLayout uniformLayout = allocator->getLayout (vk::DescriptorType::eUniformBuffer);
+  auto uniformLayout = allocator->getLayout (vk::DescriptorType::eUniformBuffer);
   /*
       VIEW MATRIX UNIFORM OBJECT
   */

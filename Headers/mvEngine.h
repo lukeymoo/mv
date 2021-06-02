@@ -74,7 +74,11 @@ protected:
 
   void prepareLayouts (void);
 
-  void preparePipeline (void);
+  void prepareGraphicsPipelines (void);
+
+  void prepareComputePipelines (void);
+
+  void computePass (uint32_t p_ImageIndex);
 
   void cleanupSwapchain (void);
 };

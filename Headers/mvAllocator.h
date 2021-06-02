@@ -42,8 +42,7 @@ public:
 
     // references
     Allocator *parentAllocator = nullptr;
-    std::vector<Container> *poolContainersArray
-        = nullptr; // pointer to container for all pools
+    std::vector<Container> *poolContainersArray = nullptr; // pointer to container for all pools
 
     // infos
     uint32_t index = 0;      // index to self in pools_array
@@ -93,7 +92,8 @@ public:
 
   Container *allocatePool (uint32_t p_Count);
 
-  void createLayout (vk::DescriptorType p_DescriptorType, uint32_t p_Count,
+  void createLayout (vk::DescriptorType p_DescriptorType,
+                     uint32_t p_Count,
                      vk::ShaderStageFlagBits p_ShaderStageFlags,
                      uint32_t p_Binding);
 
@@ -122,6 +122,16 @@ public:
   */
   void updateSet (vk::DescriptorBufferInfo &p_BufferDescriptor,
                   vk::DescriptorSet &p_TargetDescriptorSet,
+                  uint32_t p_DestinationBinding);
+
+  /*
+    Bind a buffer descriptor to target descriptor set
+    Allows for manual selection of descriptorType
+    Automatically selects latest allocated pool
+  */
+  void updateSet (vk::DescriptorBufferInfo &p_BufferDescriptor,
+                  vk::DescriptorSet &p_TargetDescriptorSet,
+                  vk::DescriptorType p_DescriptorType,
                   uint32_t p_DestinationBinding);
 
   /*

@@ -255,10 +255,13 @@ Model::loadMaterialTextures (Engine *p_Engine,
               = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
 
           // load texture
+          auto graphicsCommandPool
+              = p_Engine->commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first;
+          auto graphicsQueue = p_Engine->commandQueues.at (vk::QueueFlagBits::eGraphics).at (0);
           tex.mvImage.create (p_Engine->physicalDevice,
                               p_Engine->logicalDevice,
-                              p_Engine->commandPool,
-                              p_Engine->graphicsQueue,
+                              graphicsCommandPool,
+                              graphicsQueue,
                               createInfo,
                               filename);
           // add to vector for return
