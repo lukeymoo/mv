@@ -11,17 +11,14 @@ struct Vertex
   vec4 normal;
 };
 
-layout (set = 0, binding = 0) uniform ViewUniform { mat4 mat; }
-uboView;
+layout (set = 0, binding = 0) uniform ClipSpace { mat4 mat; }
+uboClipSpace;
 
-layout (set = 1, binding = 0) uniform ProjectionUniform { mat4 mat; }
-uboProj;
+layout (set = 1, binding = 0) buffer TerrainVertexBuffer { Vertex vertices[]; }
+vertexBuffer;
 
-layout (set = 2, binding = 0) buffer TerrainVertexBuffer { Vertex vertices[]; }
-terrainVertexBuffer;
-
-layout (set = 3, binding = 0) buffer TerrainIndexBuffer { uint indices[]; }
-terrainIndexBuffer;
+layout (set = 2, binding = 0) buffer TerrainIndexBuffer { uint indices[]; }
+indexBuffer;
 
 void
 main ()
@@ -30,8 +27,54 @@ main ()
   // TODO
   // Have the cpu send a pre combined proj*view
   // place map width/height in uv.zw component
-  uint width = uint (terrainVertexBuffer.vertices[0].uv.z);
+  uint width = uint (vertexBuffer.vertices[0].uv.z);
   uint gID = (gl_GlobalInvocationID.y * width) + gl_GlobalInvocationID.x;
+  mat4 clipSpace = uboClipSpace.mat;
 
-  mat4 clipSpace = uboProj.mat * uboView.mat;
+  vec4 frustumLeft = vec4 (0.0f, 0.0f, 0.0f, 0.0f);
+  vec4 frustumRight = vec4 (0.0f, 0.0f, 0.0f, 0.0f);
+  vec4 frustumTop = vec4 (0.0f, 0.0f, 0.0f, 0.0f);
+  vec4 frustumBottom = vec4 (0.0f, 0.0f, 0.0f, 0.0f);
+
+  float baseX = vertexBuffer.vertices[indexBuffer.indices[gID]].position.x;
+  float baseY = vertexBuffer.vertices[indexBuffer.indices[gID]].position.y;
+  float baseZ = vertexBuffer.vertices[indexBuffer.indices[gID]].position.z;
+
+  frustumLeft.x = baseX * (clipSpace[0].w + clipSpace[0].x);
+  frustumLeft.y = baseY * (clipSpace[1].w + clipSpace[1].x);
+  frustumLeft.z = baseZ * (clipSpace[2].w + clipSpace[2].x);
+  frustumLeft.w = clipSpace[3].w + clipSpace[3].x;
+
+  frustumRight.x = baseX * (clipSpace[0].w - clipSpace[0].x);
+  frustumRight.y = baseY * (clipSpace[1].w - clipSpace[1].x);
+  frustumRight.z = baseZ * (clipSpace[2].w - clipSpace[2].x);
+  frustumRight.w = clipSpace[3].w - clipSpace[3].x;
+
+  frustumTop.x = baseX * (clipSpace[0].w - clipSpace[0].y);
+  frustumTop.y = baseY * (clipSpace[1].w - clipSpace[1].y);
+  frustumTop.z = baseZ * (clipSpace[2].w - clipSpace[2].y);
+  frustumTop.w = clipSpace[3].w - clipSpace[3].y;
+
+  frustumBottom.x = baseX * (clipSpace[0].w + clipSpace[0].y);
+  frustumBottom.y = baseY * (clipSpace[1].w + clipSpace[1].y);
+  frustumBottom.z = baseZ * (clipSpace[2].w + clipSpace[2].y);
+  frustumBottom.w = clipSpace[3].w + clipSpace[3].y;
+
+  float totalLeft = frustumLeft.x + frustumLeft.y + frustumLeft.z + frustumLeft.w;
+  float totalRight = frustumRight.x + frustumRight.y + frustumRight.z + frustumRight.w;
+  float totalTop = frustumTop.x + frustumTop.y + frustumTop.z + frustumTop.w;
+  float totalBottom = frustumBottom.x + frustumBottom.y + frustumBottom.z + frustumBottom.w;
+
+  if (totalLeft > -20.0 && totalRight > -20.0 && totalTop > -20.0 && totalBottom > -20.0)
+    {
+      vertexBuffer.vertices[indexBuffer.indices[gID]].color.r = 1.0;
+      vertexBuffer.vertices[indexBuffer.indices[gID]].color.g = 0.5;
+      vertexBuffer.vertices[indexBuffer.indices[gID]].color.b = 0.0;
+    }
+  else
+    {
+      vertexBuffer.vertices[indexBuffer.indices[gID]].color.r = 0.1;
+      vertexBuffer.vertices[indexBuffer.indices[gID]].color.g = 0.1;
+      vertexBuffer.vertices[indexBuffer.indices[gID]].color.b = 0.1;
+    }
 }

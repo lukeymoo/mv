@@ -22,13 +22,27 @@ Collection::Collection (Engine *p_Engine)
   viewUniform = std::make_unique<UniformObject> ();
   projectionUniform = std::make_unique<UniformObject> ();
 
+  {
+    using enum vk::ShaderStageFlagBits;
+    std::cout << "Creating layout uniform\n";
+    engine->allocator->createLayout (vk::DescriptorType::eUniformBuffer, 1, eVertex | eCompute, 0);
+  }
+
+  std::cout << "Creating collection buffers\n";
+
   // create uniform buffer for view matrix
   engine->createBuffer (vk::BufferUsageFlagBits::eUniformBuffer,
                         vk::MemoryPropertyFlagBits::eHostVisible
                             | vk::MemoryPropertyFlagBits::eHostCoherent,
                         &viewUniform->mvBuffer,
                         sizeof (UniformObject));
-  viewUniform->mvBuffer.map (p_Engine->logicalDevice);
+
+  auto uniformLayout = engine->allocator->getLayout (vk::DescriptorType::eUniformBuffer);
+
+  viewUniform->mvBuffer.allocate (
+      *(engine->allocator), uniformLayout, vk::DescriptorType::eUniformBuffer);
+
+  viewUniform->mvBuffer.map (engine->logicalDevice);
 
   // create uniform buffer for projection matrix
   p_Engine->createBuffer (vk::BufferUsageFlagBits::eUniformBuffer,
@@ -36,7 +50,11 @@ Collection::Collection (Engine *p_Engine)
                               | vk::MemoryPropertyFlagBits::eHostCoherent,
                           &projectionUniform->mvBuffer,
                           sizeof (UniformObject));
-  projectionUniform->mvBuffer.map (p_Engine->logicalDevice);
+
+  projectionUniform->mvBuffer.map (engine->logicalDevice);
+
+  projectionUniform->mvBuffer.allocate (
+      *(engine->allocator), uniformLayout, vk::DescriptorType::eUniformBuffer);
 }
 
 Collection::~Collection () {}

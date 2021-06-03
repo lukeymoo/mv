@@ -13,13 +13,24 @@
 #include "mvTimer.h"
 #include "mvWindow.h"
 
+constexpr vk::QueueFlags REQUESTED_COMMAND_QUEUES
+    = vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics;
+
 class Allocator;
 struct Collection;
 class Container;
 class MvBuffer;
+class Renderer;
 
-using namespace std::chrono_literals;
+void keyCallback (GLFWwindow *window, int key, int scancode, int action, int mods);
+void mouseMotionCallback (GLFWwindow *window, double xpos, double ypos);
+void mouseScrollCallback (GLFWwindow *p_GLFWwindow, double p_XOffset, double p_YOffset);
+void mouseButtonCallback (GLFWwindow *window, int button, int action, int mods);
+void glfwErrCallback (int error, const char *desc);
 
+/*
+  Game state manager
+*/
 class Engine : public Window
 {
 public:
@@ -33,59 +44,18 @@ public:
   Timer timer;
   Timer fps;
 
-  Camera camera;                                 // camera manager(view/proj matrix handler)
-  MapHandler mapHandler;                         // Map related methods
-  std::unique_ptr<Allocator> allocator;          // descriptor pool/set manager
-  std::unique_ptr<Collection> collectionHandler; // model/obj manager
-  std::unique_ptr<GuiHandler> gui;               // ImGui manager
-
-  std::unordered_map<PipelineTypes, vk::Pipeline> pipelines;
-  std::unordered_map<PipelineTypes, vk::PipelineLayout> pipelineLayouts;
-
-  PipelineTypes currentlyBound;
-
-  void addNewModel (Container *pool, const char *filename);
+  std::unique_ptr<Camera> camera;         // camera manager(view/proj matrix handler)
+  std::unique_ptr<MapHandler> scene;      // Map related methods
+  std::unique_ptr<Allocator> allocator;   // descriptor pool/set manager
+  std::unique_ptr<Collection> collection; // model/obj manager
+  std::unique_ptr<GuiHandler> gui;        // ImGui manager
+  std::unique_ptr<Renderer> render;       // Manages pipeline, presentation, compute
 
   void recreateSwapchain (void);
 
+  void goSetup (void);
   void go (void);
-  // all the initial descriptor allocator & collection handler calls
-  inline void goSetup (void);
-  void recordCommandBuffer (uint32_t imageIndex);
-  void draw (size_t &current_frame, uint32_t &current_image_index);
 
-  // create buffer with Vulkan objects
-  void createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
-                     vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                     vk::DeviceSize p_DeviceSize,
-                     vk::Buffer *p_VkBuffer,
-                     vk::DeviceMemory *p_DeviceMemory,
-                     void *p_InitialData = nullptr) const;
-
-  // create buffer with custom Buffer interface
-  void createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
-                     vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                     MvBuffer *p_MvBuffer,
-                     vk::DeviceSize p_DeviceSize,
-                     void *p_InitialData = nullptr) const;
-
-  void createStagingBuffer (vk::DeviceSize &p_BufferSize,
-                            vk::Buffer &p_StagingBuffer,
-                            vk::DeviceMemory &p_StagingMemory) const;
-
-  void endCommandBuffer (const vk::CommandPool &p_CommandPool,
-                         vk::CommandBuffer p_CommandBuffer) const;
-
-protected:
-  void prepareUniforms (void);
-
-  void prepareLayouts (void);
-
-  void prepareGraphicsPipelines (void);
-
-  void prepareComputePipelines (void);
-
-  void computePass (uint32_t p_ImageIndex);
-
+private:
   void cleanupSwapchain (void);
 };

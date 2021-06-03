@@ -36,8 +36,8 @@ public:
                  vk::DescriptorType p_DescriptorType);
 
   void map (const vk::Device &p_LogicalDevice,
-            vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE,
-            vk::DeviceSize p_MemoryStartOffset = 0);
+            vk::DeviceSize p_MemoryStartOffset = 0,
+            vk::DeviceSize p_MemorySize = VK_WHOLE_SIZE);
 
   void unmap (const vk::Device &p_LogicalDevice);
 
@@ -59,5 +59,4 @@ struct UniformObject
 {
   alignas (16) glm::mat4 matrix = glm::mat4 (1.0f);
   MvBuffer mvBuffer;
-  vk::DescriptorSet descriptor;
 };

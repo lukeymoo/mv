@@ -682,6 +682,33 @@ mvModel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvModel.cpp.s
 .PHONY : mvModel.cpp.s
 
+mvRender.o: mvRender.cpp.o
+
+.PHONY : mvRender.o
+
+# target to build an object file
+mvRender.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvRender.cpp.o
+.PHONY : mvRender.cpp.o
+
+mvRender.i: mvRender.cpp.i
+
+.PHONY : mvRender.i
+
+# target to preprocess a source file
+mvRender.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvRender.cpp.i
+.PHONY : mvRender.cpp.i
+
+mvRender.s: mvRender.cpp.s
+
+.PHONY : mvRender.s
+
+# target to generate assembly for a file
+mvRender.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/mvRender.cpp.s
+.PHONY : mvRender.cpp.s
+
 mvSwap.o: mvSwap.cpp.o
 
 .PHONY : mvSwap.o
@@ -832,6 +859,9 @@ help:
 	@echo "... mvModel.o"
 	@echo "... mvModel.i"
 	@echo "... mvModel.s"
+	@echo "... mvRender.o"
+	@echo "... mvRender.i"
+	@echo "... mvRender.s"
 	@echo "... mvSwap.o"
 	@echo "... mvSwap.i"
 	@echo "... mvSwap.s"

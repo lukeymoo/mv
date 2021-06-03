@@ -16,6 +16,7 @@ struct Vertex;
 class Engine;
 class Image;
 class MvBuffer;
+struct UniformObject;
 
 class MapHandler
 {
@@ -51,6 +52,9 @@ public:
     // BR -> TR -> TL
     Triangle rightHalf;
   };
+
+  bool freezeCull = false;
+  std::unique_ptr<UniformObject> clipSpace;
 
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
@@ -90,6 +94,9 @@ public:
 
   void cleanup (void);
 
+  // update descriptors with current view/proj matrix values
+  void update (void);
+
 private:
   // Populations vector of quads with vertex start positions
   void getQuads (std::vector<Vertex> &p_VertexContainer,
@@ -98,7 +105,7 @@ private:
 
   // Generates array of quads from array of xyz points
   std::vector<Vertex>
-  generateMesh (size_t p_XLength, size_t p_ZLength, std::vector<Vertex> &p_HeightValues);
+  generateMesh (size_t p_XLength, size_t p_ZLength, std::vector<Vertex> p_HeightValues);
 
   void cleanAndStitch (std::vector<ChunkData> &p_Chunks, std::vector<Vertex> &p_Stitches);
 

@@ -3,8 +3,8 @@
 // Maps vulkan buffer/memory to member variable void* mapped
 void
 MvBuffer::map (const vk::Device &p_LogicalDevice,
-               vk::DeviceSize p_MemorySize,
-               vk::DeviceSize p_MemoryOffset)
+               vk::DeviceSize p_MemoryOffset,
+               vk::DeviceSize p_MemorySize)
 {
   if (!canMap)
     {

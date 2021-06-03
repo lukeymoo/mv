@@ -16,12 +16,16 @@
 // For createBuffer methods & access to vk::Device
 #include "mvEngine.h"
 
+// for UniformObject
+#include "mvCollection.h"
+
 MapHandler::MapHandler (Engine *p_ParentEngine)
 {
   if (!p_ParentEngine)
     throw std::runtime_error ("Invalid core engine handler passed to map handler");
 
   this->ptrEngine = p_ParentEngine;
+  clipSpace = std::make_unique<UniformObject> ();
   return;
 }
 
@@ -30,6 +34,10 @@ MapHandler::~MapHandler () { return; }
 void
 MapHandler::cleanup (void)
 {
+  if (clipSpace)
+    {
+      clipSpace->mvBuffer.destroy (ptrEngine->logicalDevice);
+    }
   if (terrainTexture)
     {
       terrainTexture->destroy ();
@@ -131,6 +139,29 @@ MapHandler::readHeightMap (GuiHandler *p_Gui, std::string p_Filename, bool p_For
       std::cout << "Loaded terrain texture\n";
     }
 
+  if (!clipSpace->mvBuffer.mapped)
+    {
+      std::cout << "Created maphandlers projection uniform buffer\n";
+      ptrEngine->createBuffer (vk::BufferUsageFlagBits::eUniformBuffer,
+                               vk::MemoryPropertyFlagBits::eHostVisible
+                                   | vk::MemoryPropertyFlagBits::eHostCoherent,
+                               &clipSpace->mvBuffer,
+                               sizeof (UniformObject));
+      clipSpace->mvBuffer.map (ptrEngine->logicalDevice);
+      if (!clipSpace->mvBuffer.mapped)
+        throw std::runtime_error ("Failed to map projection uniform buffer for terrain\n");
+    }
+
+  if (!clipSpace->mvBuffer.descriptor)
+    {
+      std::cout << "Allocated descriptor set for map handler view uniform\n";
+      auto uniformLayout = ptrEngine->allocator->getLayout (vk::DescriptorType::eUniformBuffer);
+      clipSpace->mvBuffer.allocate (
+          *(ptrEngine->allocator), uniformLayout, vk::DescriptorType::eUniformBuffer);
+    }
+
+  std::cout << "Configured terrain descriptors\n";
+
   return;
 }
 
@@ -179,6 +210,9 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
       // Check if file exists
       if (!std::filesystem::exists (p_Filename))
         throw std::runtime_error ("File " + p_Filename + " does not exist");
+
+      vertices.clear ();
+      indices.clear ();
 
       size_t xLength = 0;
       size_t zLength = 0;
@@ -276,15 +310,9 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
           threads.end (),
           [&mtx_splitValues, &splitValues, &idx, splitWidth, this] (std::thread &thread) {
             thread = std::thread ([&mtx_splitValues, &splitValues, idx, splitWidth, this] () {
-              std::vector<Vertex> tmp;
-              { // copy vertices
+              { // copy vertices + generate & replace
                 std::lock_guard<std::mutex> lock{ mtx_splitValues };
-                tmp = splitValues.at (idx);
-              }
-              tmp = generateMesh (splitWidth, splitWidth, tmp);
-              { // store result
-                std::lock_guard<std::mutex> lock{ mtx_splitValues };
-                splitValues.at (idx) = tmp;
+                splitValues.at (idx) = generateMesh (splitWidth, splitWidth, splitValues.at (idx));
               }
             });
             idx++;
@@ -410,26 +438,38 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
                                               p_Filename,
                                               idx,
                                               this] () {
-                         // tmp container for vertices
-                         std::vector<Vertex> cpy;
                          std::pair<std::vector<Vertex>, std::vector<uint32_t>> pair;
-                         { // copy vertices
-                           std::lock_guard<std::mutex> lock{ mtx_splitValues };
-                           cpy = splitValues.at (idx);
+                         { // copy vertices + optimize
+                           pair = optimize (splitValues.at (idx));
                          }
-                         { // optimize
-                           pair = optimize (cpy);
-                           cpy.clear (); // release cpy
+                         {
                            // write files
                            auto baseFilename = getBaseFilename (p_Filename);
+                           {
+                             std::lock_guard<std::mutex>{ mtx_splitValues };
+                             std::cout << "Writing vertices\n";
+                           }
                            writeVertexFile (baseFilename + std::to_string (idx), pair.first);
+                           {
+                             std::lock_guard<std::mutex>{ mtx_splitValues };
+                             std::cout << "Writing indices\n";
+                           }
                            writeIndexFile (baseFilename + std::to_string (idx), pair.second);
+                           {
+                             std::lock_guard<std::mutex>{ mtx_splitValues };
+                             std::cout << "Done writing vertices, indices\n";
+                           }
                          }
                          { // place in optimizedMesh
                            std::lock_guard<std::mutex> lock{ mtx_optimizedMesh };
                            optimizedMesh.at (idx) = pair;
+                           pair.first.clear ();
+                           pair.second.clear ();
                          }
                        });
+
+                       // one thread at a time
+                       //  thread.join ();
                        idx++;
                      });
 
@@ -444,10 +484,10 @@ MapHandler::readHeightMap (std::string p_Filename, bool p_ForceReload)
 
       // concat vertices
       std::cout << "Rebinding chunks\n";
+      vertices.clear ();
+      indices.clear ();
       for (auto &p : optimizedMesh)
         {
-          vertices.clear ();
-          indices.clear ();
           // vertexOffsets.push_back (vertices.size ());
           // indexOffsets.push_back ({ indices.size (), p.second.size () });
 
@@ -506,9 +546,9 @@ MapHandler::optimize (std::vector<Vertex> &p_Vertices)
         {
           if (!start)
             {
-              if (uniques.size () % 5000 == 0)
+              if (uniques.size () % 2000 == 0)
                 {
-                  startIndex += 5000;
+                  startIndex += 2000;
                 }
             }
           else
@@ -793,7 +833,7 @@ MapHandler::allocate (std::vector<Vertex> &p_VertexContainer,
 }
 
 std::vector<Vertex>
-MapHandler::generateMesh (size_t p_XLength, size_t p_ZLength, std::vector<Vertex> &p_HeightValues)
+MapHandler::generateMesh (size_t p_XLength, size_t p_ZLength, std::vector<Vertex> p_HeightValues)
 {
   std::vector<Vertex> verts;
 
@@ -1374,7 +1414,7 @@ MapHandler::pngToVertices (size_t p_ImageLength,
           m.position = {
             // pos
             static_cast<float> (i),
-            static_cast<float> (p_RawImage.at (offset)) * -1.0f,
+            static_cast<float> (p_RawImage.at (offset)),
             static_cast<float> (j),
             1.0f,
           };
@@ -1434,5 +1474,13 @@ MapHandler::getQuads (std::vector<Vertex> &p_VertexContainer,
 
       idx++;
     }
+  return;
+}
+
+void
+MapHandler::update (void)
+{
+  // clip space matrix
+  memcpy (clipSpace->mvBuffer.mapped, &clipSpace->matrix, sizeof (UniformObject));
   return;
 }

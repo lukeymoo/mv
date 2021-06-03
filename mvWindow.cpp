@@ -3,11 +3,18 @@
 // for msaa image method
 #include "mvImage.h"
 
+#include "mvHelper.h"
+
 Window::Window (int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle)
 {
   windowWidth = p_WindowWidth;
   windowHeight = p_WindowHeight;
   title = p_WindowTitle;
+
+  instance = std::make_unique<vk::Instance> ();
+  physicalDevice = std::make_unique<vk::PhysicalDevice> ();
+  logicalDevice = std::make_unique<vk::Device> ();
+  swapchain = std::make_unique<Swap> ();
 
   glfwInit ();
 
@@ -51,9 +58,7 @@ Window::Window (int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle
         instanceExtensions.push_back (glfw_req);
     }
 
-  /*
-      Create window, windowed fullscreen
-  */
+  // Create window, windowed fullscreen
   auto monitor = glfwGetPrimaryMonitor ();
   const GLFWvidmode *videoMode = glfwGetVideoMode (monitor);
 
@@ -66,152 +71,35 @@ Window::Window (int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle
   window = glfwCreateWindow (videoMode->width, videoMode->height, title.c_str (), monitor, nullptr);
   if (!window)
     throw std::runtime_error ("Failed to create window");
-
-  auto rawMouseSupport = glfwRawMouseMotionSupported ();
-
-  if (!rawMouseSupport)
-    throw std::runtime_error ("Raw mouse motion not supported");
-  // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-  // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, true);
-
-  // Set keyboard callback
-  glfwSetKeyCallback (window, keyCallback);
-
-  // Set mouse motion callback
-  glfwSetCursorPosCallback (window, mouseMotionCallback);
-
-  // Set mouse button callback
-  glfwSetMouseButtonCallback (window, mouseButtonCallback);
-
-  // Set mouse wheel callback
-  glfwSetScrollCallback (window, mouseScrollCallback);
-
-  // For imgui circular callback when recreating swap
-  glfwSetCharCallback (window, NULL);
-
-  // Add our base app class to glfw window for callbacks
-  glfwSetWindowUserPointer (window, this);
   return;
 }
 
 Window::~Window ()
 {
   // ensure gpu not using any resources
-  logicalDevice.waitIdle ();
+  if (!logicalDevice)
+    return;
 
-  swapchain.cleanup (instance, logicalDevice);
+  logicalDevice->waitIdle ();
 
-  // cleanup command buffers & command pools
-  if (!commandPoolsBuffers.empty ())
-    {
-      for (const auto &pair : commandPoolsBuffers)
-        {
-          auto poolBufferList = getPoolBufferList (pair.first);
-          if (!poolBufferList)
-            continue;
-
-          // cleanup
-          if (!poolBufferList->empty ())
-            {
-              for (auto &poolBuffer : *poolBufferList)
-                {
-                  if (poolBuffer.first && !poolBuffer.second.empty ())
-                    {
-                      logicalDevice.freeCommandBuffers (poolBuffer.first, poolBuffer.second);
-                    }
-                }
-            }
-        }
-    }
-
-  // cleanup sync objects
-  if (!inFlightFences.empty ())
-    {
-      for (auto &fence : inFlightFences)
-        {
-          if (fence)
-            {
-              logicalDevice.destroyFence (fence, nullptr);
-            }
-        }
-      inFlightFences.clear ();
-    }
-  if (semaphores.presentComplete)
-    logicalDevice.destroySemaphore (semaphores.presentComplete, nullptr);
-  if (semaphores.renderComplete)
-    logicalDevice.destroySemaphore (semaphores.renderComplete, nullptr);
-  if (semaphores.computeComplete)
-    logicalDevice.destroySemaphore (semaphores.computeComplete);
-
-  if (depthStencil.image)
-    {
-      logicalDevice.destroyImage (depthStencil.image, nullptr);
-    }
-  if (depthStencil.view)
-    {
-      logicalDevice.destroyImageView (depthStencil.view, nullptr);
-    }
-  if (depthStencil.mem)
-    {
-      logicalDevice.freeMemory (depthStencil.mem, nullptr);
-    }
-
-  if (!renderPasses.empty ())
-    {
-      for (auto &pass : renderPasses)
-        {
-          if (pass.second)
-            logicalDevice.destroyRenderPass (pass.second, nullptr);
-        }
-      renderPasses.clear ();
-    }
-
-  // cleanup framebuffers
-  if (!framebuffers.empty ())
-    {
-      for (auto &pair : framebuffers)
-        {
-          if (!pair.second.empty ())
-            {
-              for (auto &buffer : pair.second)
-                {
-                  logicalDevice.destroyFramebuffer (buffer);
-                }
-            }
-        }
-      framebuffers.clear ();
-    }
-
-  // cleanup command pools
-  for (auto &pair : commandPoolsBuffers)
-    {
-      auto list = getPoolBufferList (pair.first);
-      if (!list)
-        continue;
-      if (!list->empty ())
-        {
-          for (auto &pair : *list)
-            {
-              if (pair.first)
-                logicalDevice.destroyCommandPool (pair.first);
-            }
-        }
-    }
-  commandPoolsBuffers.clear ();
+  if (swapchain)
+    swapchain->cleanup (*instance, *logicalDevice);
 
   if (logicalDevice)
-    logicalDevice.destroy ();
+    logicalDevice->destroy ();
 
 #ifndef NDEBUG
-  pfn_vkDestroyDebugUtilsMessengerEXT (
-      instance, static_cast<VkDebugUtilsMessengerEXT> (vulkanHandleDebugCallback), nullptr);
+  if (instance)
+    pfn_vkDestroyDebugUtilsMessengerEXT (
+        *instance, static_cast<VkDebugUtilsMessengerEXT> (vulkanHandleDebugCallback), nullptr);
 #endif
 
   if (instance)
-    instance.destroy ();
+    instance->destroy ();
 
   if (window)
     glfwDestroyWindow (window);
+
   glfwTerminate ();
   return;
 }
@@ -222,32 +110,17 @@ Window::prepare (void)
   // creates...
   // physical device
   // logical device
-  // swapchain surface
+  // surface
   initVulkan ();
 
   std::cout << "[+] Initializing swapchain handler\n";
-  swapchain.init (window, instance, physicalDevice);
+  swapchain->init (window, *instance, *physicalDevice);
 
-  // get depth format
-  swapchain.depthFormat = getSupportedDepthFormat ();
-
-  swapchain.create (physicalDevice, logicalDevice, windowWidth, windowHeight);
-
-  createCommandBuffers ();
-
-  createSynchronizationPrimitives ();
-
-  setupDepthStencil ();
-
-  setupRenderPass ();
-
-  // create_pipeline_cache();
-
-  setupFramebuffers ();
+  swapchain->create (*physicalDevice, *logicalDevice, windowWidth, windowHeight);
 
   // load device extension functions
   pfn_vkCmdSetPrimitiveTopology = reinterpret_cast<PFN_vkCmdSetPrimitiveTopologyEXT> (
-      vkGetInstanceProcAddr (instance, "vkCmdSetPrimitiveTopologyEXT"));
+      vkGetInstanceProcAddr (*instance, "vkCmdSetPrimitiveTopologyEXT"));
   if (!pfn_vkCmdSetPrimitiveTopology)
     throw std::runtime_error ("Failed to load extended dynamic state extensions");
   return;
@@ -261,25 +134,22 @@ Window::initVulkan (void)
 
   // Load debug utility functions for persistent validation error reporting
 
-  std::vector<vk::PhysicalDevice> physicalDevices = instance.enumeratePhysicalDevices ();
+  std::vector<vk::PhysicalDevice> physicalDevices = instance->enumeratePhysicalDevices ();
 
   if (physicalDevices.size () < 1)
     throw std::runtime_error ("No physical devices found");
 
   std::cout << "[+] Fetching physical device " << physicalDevices.at (0) << "\n";
   // Select device
-  physicalDevice = physicalDevices.at (0);
-
-  // resize devices container
-  physicalDevices.erase (physicalDevices.begin ());
+  *physicalDevice = physicalDevices.at (0);
 
   // clang-format off
-    physicalProperties                      = physicalDevice.getProperties();
-    physicalMemoryProperties                = physicalDevice.getMemoryProperties();
-    queueFamilyProperties                   = physicalDevice.getQueueFamilyProperties();
-    physicalFeatures                        = physicalDevice.getFeatures();
-    physicalFeatures2                       = physicalDevice.getFeatures2();
-    physicalDeviceExtensions                = physicalDevice.enumerateDeviceExtensionProperties();
+    physicalProperties                      = physicalDevice->getProperties();
+    physicalMemoryProperties                = physicalDevice->getMemoryProperties();
+    queueFamilyProperties                   = physicalDevice->getQueueFamilyProperties();
+    physicalFeatures                        = physicalDevice->getFeatures();
+    physicalFeatures2                       = physicalDevice->getFeatures2();
+    physicalDeviceExtensions                = physicalDevice->enumerateDeviceExtensionProperties();
     extendedFeatures.extendedDynamicState   = VK_TRUE;
     physicalFeatures.sampleRateShading      = VK_TRUE;
     physicalFeatures2.pNext                 = &extendedFeatures;
@@ -325,21 +195,7 @@ Window::initVulkan (void)
     }
 
   // create logical device & graphics queue
-  createLogicalDevice ();
-
-  // get format
-  // depthFormat = getSupportedDepthFormat(*physicalDevice);
-
-  // no longer pass references to swapchain, pass reference on per function
-  // basis now swapchain->map(std::weak_ptr<vk::Instance>(instance),
-  //                std::weak_ptr<vk::PhysicalDevice>(physical_device),
-  //                std::weak_ptr<Device>(mvDevice));
-
-  // Create synchronization objects
-  vk::SemaphoreCreateInfo semaphoreInfo;
-  semaphores.presentComplete = logicalDevice.createSemaphore (semaphoreInfo);
-  semaphores.renderComplete = logicalDevice.createSemaphore (semaphoreInfo);
-  semaphores.computeComplete = logicalDevice.createSemaphore (semaphoreInfo);
+  createLogicalDevice (vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics);
 
   return;
 }
@@ -371,7 +227,7 @@ Window::createInstance (void)
   debuggerSettings.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
                                  | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
                                  | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
-  debuggerSettings.pfnUserCallback = debug_message_processor;
+  debuggerSettings.pfnUserCallback = initialDebugProcessor;
   debuggerSettings.pUserData = nullptr;
 
   // convert string request to const char*
@@ -408,7 +264,7 @@ Window::createInstance (void)
 #endif
 
   std::cout << "[+] Creating instance\n";
-  instance = vk::createInstance (createInfo);
+  *instance = vk::createInstance (createInfo);
   // double check instance(prob a triple check at this point)
   if (!instance)
     throw std::runtime_error ("Failed to create vulkan instance");
@@ -416,12 +272,12 @@ Window::createInstance (void)
 #ifndef NDEBUG
   // Load debug util function
   pfn_vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT> (
-      vkGetInstanceProcAddr (instance, "vkCreateDebugUtilsMessengerEXT"));
+      vkGetInstanceProcAddr (*instance, "vkCreateDebugUtilsMessengerEXT"));
   if (!pfn_vkCreateDebugUtilsMessengerEXT)
     throw std::runtime_error ("Failed to load debug messenger creation function");
 
   pfn_vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT> (
-      vkGetInstanceProcAddr (instance, "vkDestroyDebugUtilsMessengerEXT"));
+      vkGetInstanceProcAddr (*instance, "vkDestroyDebugUtilsMessengerEXT"));
   if (!pfn_vkDestroyDebugUtilsMessengerEXT)
     throw std::runtime_error ("Failed to load debug messenger destroy function");
 
@@ -435,7 +291,7 @@ Window::createInstance (void)
   debugCallbackInfo.pfnUserCallback = generalDebugCallback;
 
   VkResult result = pfn_vkCreateDebugUtilsMessengerEXT (
-      instance,
+      *instance,
       reinterpret_cast<VkDebugUtilsMessengerCreateInfoEXT *> (&debugCallbackInfo),
       nullptr,
       reinterpret_cast<VkDebugUtilsMessengerEXT *> (&vulkanHandleDebugCallback));
@@ -447,39 +303,45 @@ Window::createInstance (void)
 }
 
 void
-Window::createLogicalDevice (void)
+Window::createLogicalDevice (vk::QueueFlags p_RequestedQueueFlags)
 {
   std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
 
   constexpr float defaultQueuePriority = 0.0f;
 
-  queueIdx.graphics = getQueueFamilyIndex (vk::QueueFlagBits::eGraphics);
-  queueIdx.compute = getQueueFamilyIndex (vk::QueueFlagBits::eCompute);
-
-  // if compute is distinct from graphics
-  if (queueIdx.graphics == queueIdx.compute)
+  if (p_RequestedQueueFlags & vk::QueueFlagBits::eGraphics)
     {
-      std::cout << "\t[-] Found queue with graphics, compute & present\n";
+      queueIdx.graphics = Helper::getQueueFamilyIndex (vk::QueueFlagBits::eGraphics);
+      vk::DeviceQueueCreateInfo graphicsQueueCreateInfo;
+      graphicsQueueCreateInfo.queueCount = 1;
+      graphicsQueueCreateInfo.queueFamilyIndex = queueIdx.graphics;
+      graphicsQueueCreateInfo.pQueuePriorities = &defaultQueuePriority;
+      queueCreateInfos.push_back (graphicsQueueCreateInfo);
     }
-  else
+  if (p_RequestedQueueFlags & vk::QueueFlagBits::eCompute)
     {
-      std::cout << "\t[-] Rolling separate queues for graphics/present & compute\n";
+      queueIdx.compute = Helper::getQueueFamilyIndex (vk::QueueFlagBits::eCompute);
 
-      vk::DeviceQueueCreateInfo computeQueueCreateInfo;
-      computeQueueCreateInfo.queueCount = 1;
-      computeQueueCreateInfo.queueFamilyIndex = queueIdx.compute;
-      computeQueueCreateInfo.pQueuePriorities = &defaultQueuePriority;
+      // check if queue index already requested
+      bool exists = false;
+      for (const auto &createInfo : queueCreateInfos)
+        {
+          if (createInfo.queueFamilyIndex == queueIdx.compute)
+            {
+              exists = true;
+              break;
+            }
+        }
+      if (!exists)
+        {
+          vk::DeviceQueueCreateInfo computeQueueCreateInfo;
+          computeQueueCreateInfo.queueCount = 1;
+          computeQueueCreateInfo.queueFamilyIndex = queueIdx.compute;
+          computeQueueCreateInfo.pQueuePriorities = &defaultQueuePriority;
 
-      queueCreateInfos.push_back (computeQueueCreateInfo);
+          queueCreateInfos.push_back (computeQueueCreateInfo);
+        }
     }
-
-  vk::DeviceQueueCreateInfo graphicsQueueCreateInfo;
-  graphicsQueueCreateInfo.queueCount = 1;
-  graphicsQueueCreateInfo.queueFamilyIndex = queueIdx.graphics;
-  graphicsQueueCreateInfo.pQueuePriorities = &defaultQueuePriority;
-
-  // save createinfos
-  queueCreateInfos.push_back (graphicsQueueCreateInfo);
 
   std::vector<const char *> enabledExtensions;
   for (const auto &req : requestedLogicalDeviceExtensions)
@@ -490,330 +352,11 @@ Window::createLogicalDevice (void)
   deviceCreateInfo.pNext = &physicalFeatures2;
   deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t> (queueCreateInfos.size ());
   deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data ();
-
-  // if pnext is phys features2, must be nullptr
-  // device_create_info.pEnabledFeatures = &physical_features;
-
   deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t> (enabledExtensions.size ());
   deviceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data ();
 
   // create logical device
-  logicalDevice = physicalDevice.createDevice (deviceCreateInfo);
-
-  // clang-format off
-  
-  // { flag bits, vector{ {CommandPool, vector{ CommandBuffer }} } }
-
-  // clang-format on
-
-  // we know it doesnt exist but for correctness
-  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eGraphics))
-    {
-      std::cout << "no graphics pool, creating\n";
-      commandPoolsBuffers.insert ({
-          { vk::QueueFlagBits::eGraphics, { { createCommandPool (queueIdx.graphics), {} } } },
-      });
-      std::cout << "graphics pool is => "
-                << commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first << "\n";
-    }
-
-  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eCompute))
-    {
-      std::cout << "no compute pool, creating\n";
-      commandPoolsBuffers.insert ({
-          { vk::QueueFlagBits::eCompute, { { createCommandPool (queueIdx.compute), {} } } },
-      });
-      std::cout << "compute pool is => "
-                << commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).first << "\n";
-    }
-
-  // get queue handles
-  if (!commandQueues.contains (vk::QueueFlagBits::eGraphics))
-    {
-      std::cout << "[+] Retrieving graphics queue\n";
-      commandQueues.insert ({
-          { vk::QueueFlagBits::eGraphics, { { logicalDevice.getQueue (queueIdx.graphics, 0) } } },
-      });
-      std::cout << "graphics queue is => " << commandQueues.at (vk::QueueFlagBits::eGraphics).at (0)
-                << "\n";
-    }
-
-  if (!commandQueues.contains (vk::QueueFlagBits::eCompute))
-    {
-      std::cout << "[+] Retrieving compute queue\n";
-      commandQueues.insert ({
-          { vk::QueueFlagBits::eCompute, { { logicalDevice.getQueue (queueIdx.compute, 0) } } },
-      });
-      std::cout << "compute queue is => " << commandQueues.at (vk::QueueFlagBits::eCompute).at (0)
-                << "\n";
-    }
-  return;
-}
-
-void
-Window::createCommandBuffers (void)
-{
-  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eGraphics))
-    throw std::runtime_error (
-        "Failed to find existing graphics queue pending command buffer creation");
-
-  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eCompute))
-    throw std::runtime_error (
-        "Failed to find existing compute queue pending command buffer creation");
-
-  auto *graphicsList = getPoolBufferList (vk::QueueFlagBits::eGraphics);
-  auto *computeList = getPoolBufferList (vk::QueueFlagBits::eCompute);
-  if (!graphicsList)
-    throw std::runtime_error ("Failed to get handle to graphics pool/buffer container");
-  if (!computeList)
-    throw std::runtime_error ("Failed to get handle to compute pool/buffer container");
-
-  // For now we only create 1 pool per queue so grab first index
-  auto &graphicsPoolAndBuffers = graphicsList->at (0);
-  auto &computePoolAndBuffers = computeList->at (0);
-
-  // resize buffers containers
-  graphicsPoolAndBuffers.second.resize (swapchain.buffers.size ());
-  computePoolAndBuffers.second.resize (swapchain.buffers.size ());
-
-  vk::CommandBufferAllocateInfo graphicsAllocInfo;
-  graphicsAllocInfo.commandPool = graphicsPoolAndBuffers.first;
-  graphicsAllocInfo.level = vk::CommandBufferLevel::ePrimary;
-  graphicsAllocInfo.commandBufferCount
-      = static_cast<uint32_t> (graphicsPoolAndBuffers.second.size ());
-
-  graphicsPoolAndBuffers.second = logicalDevice.allocateCommandBuffers (graphicsAllocInfo);
-
-  // Validate
-  if (graphicsPoolAndBuffers.second.size () < 1)
-    throw std::runtime_error ("Failed to allocate graphics command buffers");
-
-  vk::CommandBufferAllocateInfo computeAllocInfo;
-  computeAllocInfo.commandPool = computePoolAndBuffers.first;
-  computeAllocInfo.level = vk::CommandBufferLevel::ePrimary;
-  computeAllocInfo.commandBufferCount
-      = static_cast<uint32_t> (computePoolAndBuffers.second.size ());
-
-  computePoolAndBuffers.second = logicalDevice.allocateCommandBuffers (computeAllocInfo);
-
-  // validate
-  if (computePoolAndBuffers.second.size () < 1)
-    throw std::runtime_error ("Failed to allocate compute command buffers");
-  return;
-}
-
-void
-Window::createSynchronizationPrimitives (void)
-{
-  vk::FenceCreateInfo fenceInfo;
-  fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
-
-  waitFences.resize (swapchain.buffers.size (), nullptr);
-  inFlightFences.resize (MAX_IN_FLIGHT);
-
-  for (auto &fence : inFlightFences)
-    {
-      fence = logicalDevice.createFence (fenceInfo);
-    }
-  return;
-}
-
-void
-Window::setupDepthStencil (void)
-{
-  vk::ImageCreateInfo imageInfo;
-  imageInfo.imageType = vk::ImageType::e2D;
-  imageInfo.format = swapchain.depthFormat;
-  imageInfo.extent = vk::Extent3D{ windowWidth, windowHeight, 1 };
-  imageInfo.mipLevels = 1;
-  imageInfo.arrayLayers = 1;
-  imageInfo.samples = swapchain.sampleCount;
-  imageInfo.tiling = vk::ImageTiling::eOptimal;
-  imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
-
-  // create depth stencil testing image
-  depthStencil.image = logicalDevice.createImage (imageInfo);
-
-  // Allocate memory for image
-  vk::MemoryRequirements memReq;
-  memReq = logicalDevice.getImageMemoryRequirements (depthStencil.image);
-
-  vk::MemoryAllocateInfo allocInfo;
-  allocInfo.allocationSize = memReq.size;
-  allocInfo.memoryTypeIndex
-      = getMemoryType (memReq.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-  // allocate depth stencil image memory
-  depthStencil.mem = logicalDevice.allocateMemory (allocInfo);
-
-  // bind image and memory
-  logicalDevice.bindImageMemory (depthStencil.image, depthStencil.mem, 0);
-
-  // Create view into depth stencil testing image
-  vk::ImageViewCreateInfo viewInfo;
-  viewInfo.viewType = vk::ImageViewType::e2D;
-  viewInfo.image = depthStencil.image;
-  viewInfo.format = swapchain.depthFormat;
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
-  viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = 1;
-  viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
-
-  // if physical device supports high enough format add stenciling
-  if (swapchain.depthFormat >= vk::Format::eD16UnormS8Uint)
-    {
-      viewInfo.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
-    }
-
-  depthStencil.view = logicalDevice.createImageView (viewInfo);
-  return;
-}
-
-void
-Window::setupRenderPass (void)
-{
-  std::array<vk::AttachmentDescription, 3> coreAttachments;
-  // MSAA resolve target -> ImGui
-  coreAttachments[0].format = swapchain.colorFormat;
-  coreAttachments[0].samples = swapchain.sampleCount;
-  coreAttachments[0].loadOp = vk::AttachmentLoadOp::eClear;
-  coreAttachments[0].storeOp = vk::AttachmentStoreOp::eDontCare;
-  coreAttachments[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-  coreAttachments[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-  coreAttachments[0].initialLayout = vk::ImageLayout::eUndefined;
-  coreAttachments[0].finalLayout = vk::ImageLayout::eColorAttachmentOptimal; // passed to imgui
-
-  // Depth attachment
-  coreAttachments[1].format = swapchain.depthFormat;
-  coreAttachments[1].samples = swapchain.sampleCount;
-  coreAttachments[1].loadOp = vk::AttachmentLoadOp::eClear;
-  coreAttachments[1].storeOp = vk::AttachmentStoreOp::eDontCare;
-  coreAttachments[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-  coreAttachments[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-  coreAttachments[1].initialLayout = vk::ImageLayout::eUndefined;
-  coreAttachments[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
-
-  // Color attachment
-  coreAttachments[2].format = swapchain.colorFormat;
-  coreAttachments[2].samples = vk::SampleCountFlagBits::e1;
-  coreAttachments[2].loadOp = vk::AttachmentLoadOp::eClear;
-  coreAttachments[2].storeOp = vk::AttachmentStoreOp::eStore;
-  coreAttachments[2].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-  coreAttachments[2].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-  coreAttachments[2].initialLayout = vk::ImageLayout::eUndefined;
-  coreAttachments[2].finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
-
-  /*
-      Core render references
-  */
-  vk::AttachmentReference colorRef;
-  colorRef.attachment = 0;
-  colorRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
-
-  vk::AttachmentReference depthRef;
-  depthRef.attachment = 1;
-  depthRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
-
-  vk::AttachmentReference msaaRef;
-  msaaRef.attachment = 2;
-  msaaRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
-
-  // color attachment and depth testing subpass
-  vk::SubpassDescription corePass;
-  corePass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
-  corePass.colorAttachmentCount = 1;
-  corePass.pColorAttachments = &colorRef;
-  corePass.pDepthStencilAttachment = &depthRef;
-  corePass.pResolveAttachments = &msaaRef;
-
-  std::vector<vk::SubpassDescription> coreSubpasses = { corePass };
-
-  std::array<vk::SubpassDependency, 1> coreDependencies;
-  // Color + depth subpass
-  coreDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-  coreDependencies[0].dstSubpass = 0;
-  coreDependencies[0].srcStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
-  coreDependencies[0].dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-  coreDependencies[0].srcAccessMask = vk::AccessFlagBits::eMemoryRead;
-  coreDependencies[0].dstAccessMask
-      = vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
-  coreDependencies[0].dependencyFlags = vk::DependencyFlagBits::eByRegion;
-
-  vk::RenderPassCreateInfo coreRenderPassInfo;
-  coreRenderPassInfo.attachmentCount = static_cast<uint32_t> (coreAttachments.size ());
-  coreRenderPassInfo.pAttachments = coreAttachments.data ();
-  coreRenderPassInfo.subpassCount = static_cast<uint32_t> (coreSubpasses.size ());
-  coreRenderPassInfo.pSubpasses = coreSubpasses.data ();
-  coreRenderPassInfo.dependencyCount = static_cast<uint32_t> (coreDependencies.size ());
-  coreRenderPassInfo.pDependencies = coreDependencies.data ();
-
-  vk::RenderPass tempCore = logicalDevice.createRenderPass (coreRenderPassInfo);
-
-  renderPasses.insert ({
-      eCore,
-      std::move (tempCore),
-  });
-  return;
-}
-
-// TODO
-// Re add call to this method
-// void MWindow::create_pipeline_cache(void)
-// {
-//     vk::PipelineCacheCreateInfo pcinfo;
-//     pipeline_cache =
-//     std::make_shared<vk::PipelineCache>(logical_device->createPipelineCache(pcinfo));
-//     return;
-// }
-
-void
-Window::setupFramebuffers (void)
-{
-  std::cout << "[+] Creating core framebuffers\n";
-  // Attachments for core engine rendering
-  std::array<vk::ImageView, 3> coreAttachments;
-
-  if (!depthStencil.view)
-    throw std::runtime_error ("Depth stencil view is nullptr");
-
-  // each frame buffer uses same depth image
-  coreAttachments[1] = depthStencil.view;
-
-  // core engine render will use color attachment buffer & depth buffer
-  vk::FramebufferCreateInfo coreFrameInfo;
-  coreFrameInfo.renderPass = renderPasses.at (eCore);
-  coreFrameInfo.attachmentCount = static_cast<uint32_t> (coreAttachments.size ());
-  coreFrameInfo.pAttachments = coreAttachments.data ();
-  coreFrameInfo.width = swapchain.swapExtent.width;
-  coreFrameInfo.height = swapchain.swapExtent.height;
-  coreFrameInfo.layers = 1;
-
-  // Framebuffer per swap image
-  if (!framebuffers.contains (eCoreFramebuffer))
-    {
-      framebuffers.insert ({
-          { eCoreFramebuffer, { {} } },
-      });
-    }
-  framebuffers.at (eCoreFramebuffer).resize (static_cast<uint32_t> (swapchain.buffers.size ()));
-  for (size_t i = 0; i < framebuffers.at (eCoreFramebuffer).size (); i++)
-    {
-      if (!swapchain.buffers.at (i).image)
-        throw std::runtime_error ("Swapchain buffer at index " + std::to_string (i)
-                                  + " has nullptr image");
-      if (!swapchain.buffers.at (i).view)
-        throw std::runtime_error ("Swapchain buffer at index " + std::to_string (i)
-                                  + " has nullptr view");
-      // Assign msaa buffer -- main target
-      coreAttachments[0] = swapchain.buffers.at (i).msaaImage->imageView;
-      // Assign each swapchain image to a frame buffer
-      coreAttachments[2] = swapchain.buffers.at (i).view;
-
-      framebuffers.at (eCoreFramebuffer).at (i) = logicalDevice.createFramebuffer (coreFrameInfo);
-      std::cout << "Created core frame buffer => " << framebuffers.at (eCoreFramebuffer).at (i)
-                << "\n";
-    }
+  *logicalDevice = physicalDevice->createDevice (deviceCreateInfo);
   return;
 }
 
@@ -897,10 +440,10 @@ Window::checkInstanceExt (void)
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
-debug_message_processor (VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
-                         [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
-                         const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
-                         [[maybe_unused]] void *p_UserData)
+initialDebugProcessor (VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
+                       [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT p_MessageType,
+                       const VkDebugUtilsMessengerCallbackDataEXT *p_CallbackData,
+                       [[maybe_unused]] void *p_UserData)
 {
   if (p_MessageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
     {
@@ -984,169 +527,7 @@ generalDebugCallback (VkDebugUtilsMessageSeverityFlagBitsEXT p_MessageSeverity,
           << "\n"
           << p_CallbackData->pMessage << "\n\n";
       std::cout << oss.str ();
-      // throw std::runtime_error ("Vulkan error");
+      throw std::runtime_error ("Vulkan error");
     }
   return false;
-}
-
-std::vector<char>
-Window::readFile (std::string p_Filename)
-{
-  size_t fileSize;
-  std::ifstream file;
-  std::vector<char> buffer;
-
-  // check if file exists
-  try
-    {
-      if (!std::filesystem::exists (p_Filename))
-        throw std::runtime_error ("Shader file " + p_Filename + " does not exist");
-
-      file.open (p_Filename, std::ios::ate | std::ios::binary);
-
-      if (!file.is_open ())
-        {
-          std::ostringstream oss;
-          oss << "Failed to open file " << p_Filename;
-          throw std::runtime_error (oss.str ());
-        }
-
-      // prepare buffer to hold shader bytecode
-      fileSize = (size_t)file.tellg ();
-      buffer.resize (fileSize);
-
-      // go back to beginning of file and read in
-      file.seekg (0);
-      file.read (buffer.data (), fileSize);
-      file.close ();
-    }
-  catch (std::filesystem::filesystem_error &e)
-    {
-      std::ostringstream oss;
-      oss << "Filesystem Exception : " << e.what () << std::endl;
-      throw std::runtime_error (oss.str ());
-    }
-  catch (std::exception &e)
-    {
-      std::ostringstream oss;
-      oss << "Standard Exception : " << e.what ();
-      throw std::runtime_error (oss.str ());
-    }
-  catch (...)
-    {
-      throw std::runtime_error ("Unhandled exception while loading a file");
-    }
-
-  if (buffer.empty ())
-    {
-      throw std::runtime_error ("File reading operation returned empty buffer :: shaders?");
-    }
-
-  return buffer;
-}
-
-vk::ShaderModule
-Window::createShaderModule (const std::vector<char> &p_ShaderCharBuffer)
-{
-  vk::ShaderModuleCreateInfo moduleInfo;
-  moduleInfo.codeSize = p_ShaderCharBuffer.size ();
-  moduleInfo.pCode = reinterpret_cast<const uint32_t *> (p_ShaderCharBuffer.data ());
-
-  vk::ShaderModule module = logicalDevice.createShaderModule (moduleInfo);
-
-  return module;
-}
-
-vk::CommandPool
-Window::createCommandPool (uint32_t p_QueueIndex, vk::CommandPoolCreateFlags p_CreateFlags)
-{
-  vk::CommandPoolCreateInfo poolInfo;
-  poolInfo.flags = p_CreateFlags;
-  poolInfo.queueFamilyIndex = p_QueueIndex;
-
-  return logicalDevice.createCommandPool (poolInfo);
-}
-
-vk::Format
-Window::getSupportedDepthFormat (void) const
-{
-  std::vector<vk::Format> depthFormats = {
-    vk::Format::eD32SfloatS8Uint, vk::Format::eD32Sfloat, vk::Format::eD24UnormS8Uint,
-    vk::Format::eD16UnormS8Uint,  vk::Format::eD16Unorm,
-  };
-
-  for (auto &format : depthFormats)
-    {
-      vk::FormatProperties formatProperties = physicalDevice.getFormatProperties (format);
-      if (formatProperties.optimalTilingFeatures
-          & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
-        {
-          if (!(formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImage))
-            continue;
-        }
-      return format;
-    }
-  throw std::runtime_error ("Failed to find good format");
-}
-
-uint32_t
-Window::getMemoryType (uint32_t p_MemoryTypeBits,
-                       vk::MemoryPropertyFlags p_MemoryProperties,
-                       vk::Bool32 *p_IsMemoryTypeFound) const
-{
-  for (uint32_t i = 0; i < physicalMemoryProperties.memoryTypeCount; i++)
-    {
-      if ((p_MemoryTypeBits & 1) == 1)
-        {
-          if ((physicalMemoryProperties.memoryTypes[i].propertyFlags & p_MemoryProperties))
-            {
-              if (p_IsMemoryTypeFound)
-                {
-                  *p_IsMemoryTypeFound = true;
-                }
-              return i;
-            }
-        }
-      p_MemoryTypeBits >>= 1;
-    }
-
-  if (p_IsMemoryTypeFound)
-    {
-      *p_IsMemoryTypeFound = false;
-      return 0;
-    }
-  else
-    {
-      throw std::runtime_error ("Could not find a matching memory type");
-    }
-}
-
-uint32_t
-Window::getQueueFamilyIndex (vk::QueueFlagBits p_QueueFlagBits) const
-{
-  for (const auto &queueProperty : queueFamilyProperties)
-    {
-      if ((queueProperty.queueFlags & p_QueueFlagBits))
-        {
-          return (&queueProperty - &queueFamilyProperties[0]);
-        }
-    }
-
-  throw std::runtime_error ("Could not find requested queue family :: "
-                            + std::to_string (static_cast<uint32_t> (p_QueueFlagBits)));
-}
-
-std::vector<std::pair<vk::CommandPool, std::vector<vk::CommandBuffer>>> *
-Window::getPoolBufferList (vk::QueueFlagBits p_QueueType)
-{
-  for (auto &pair : commandPoolsBuffers)
-    {
-      if (pair.first == p_QueueType)
-        {
-          return &pair.second;
-        }
-    }
-  std::cout << "[+] Failed to find command pools belonging to queue type :: "
-            << std::to_string (static_cast<uint32_t> (p_QueueType)) << "\n";
-  return nullptr;
 }

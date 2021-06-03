@@ -3,154 +3,69 @@
 #include "mvCollection.h"
 #include "mvHelper.h"
 #include "mvModel.h"
+#include "mvRender.h"
 
 extern LogHandler logger;
 
-Engine::Engine (int w, int h, const char *title) : Window (w, h, title), mapHandler (this)
+Engine::Engine (int w, int h, const char *title) : Window (w, h, title)
 {
+
+  auto rawMouseSupport = glfwRawMouseMotionSupported ();
+
+  if (!rawMouseSupport)
+    throw std::runtime_error ("Raw mouse motion not supported");
+  // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  // glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, true);
+
+  // Set keyboard callback
+  glfwSetKeyCallback (window, keyCallback);
+
+  // Set mouse motion callback
+  glfwSetCursorPosCallback (window, mouseMotionCallback);
+
+  // Set mouse button callback
+  glfwSetMouseButtonCallback (window, mouseButtonCallback);
+
+  // Set mouse wheel callback
+  glfwSetScrollCallback (window, mouseScrollCallback);
+
+  // For imgui circular callback when recreating swap
+  glfwSetCharCallback (window, NULL);
+
+  // Add our base app class to glfw window for callbacks
+  glfwSetWindowUserPointer (window, this);
   return;
 }
 
 Engine::~Engine ()
 {
-  logicalDevice.waitIdle ();
-  if (!pipelines.empty ())
-    {
-      for (auto &pipeline : pipelines)
-        {
-          if (pipeline.second)
-            logicalDevice.destroyPipeline (pipeline.second);
-        }
-      pipelines.clear ();
-    }
+  logicalDevice->waitIdle ();
 
-  if (!pipelineLayouts.empty ())
-    {
-      for (auto &layout : pipelineLayouts)
-        {
-          if (layout.second)
-            logicalDevice.destroyPipelineLayout (layout.second);
-        }
-      pipelineLayouts.clear ();
-    }
+  // render related methods
+  if (renderer)
+    renderer->cleanup ();
 
   // cleanup map handler
-  mapHandler.cleanup ();
+  if (scene)
+    scene->cleanup ();
 
   // collection struct will handle cleanup of models & objs
-  collectionHandler->cleanup ();
-  allocator->cleanup ();
+  if (collection)
+    collection->cleanup ();
+
+  if (allocator)
+    allocator->cleanup ();
 }
 
 void
 Engine::cleanupSwapchain (void)
 {
   std::cout << "--cleaning up swap chain--\n";
-  // destroy command buffers
-  if (!commandPoolsBuffers.empty ())
-    {
-      for (const auto &pair : commandPoolsBuffers)
-        {
-          auto poolBufferList = getPoolBufferList (pair.first);
-          if (!poolBufferList)
-            continue;
 
-          // cleanup
-          if (!poolBufferList->empty ())
-            {
-              for (auto &poolBuffer : *poolBufferList)
-                {
-                  if (poolBuffer.first && !poolBuffer.second.empty ())
-                    {
-                      logicalDevice.freeCommandBuffers (poolBuffer.first, poolBuffer.second);
-                    }
-                }
-            }
-        }
-    }
-
-  // destroy framebuffers
-  // cleanup framebuffers
-  if (!framebuffers.empty ())
-    {
-      for (auto &pair : framebuffers)
-        {
-          if (!pair.second.empty ())
-            {
-              for (auto &buffer : pair.second)
-                {
-                  logicalDevice.destroyFramebuffer (buffer);
-                }
-            }
-        }
-      framebuffers.clear ();
-    }
-
-  if (depthStencil.image)
-    {
-      logicalDevice.destroyImage (depthStencil.image, nullptr);
-    }
-  if (depthStencil.view)
-    {
-      logicalDevice.destroyImageView (depthStencil.view, nullptr);
-    }
-  if (depthStencil.mem)
-    {
-      logicalDevice.freeMemory (depthStencil.mem, nullptr);
-    }
-
-  // destroy pipelines
-  if (!pipelines.empty ())
-    {
-      for (auto &pipeline : pipelines)
-        {
-          if (pipeline.second)
-            logicalDevice.destroyPipeline (pipeline.second);
-        }
-      pipelines.clear ();
-    }
-
-  // destroy pipeline layouts
-  if (!pipelineLayouts.empty ())
-    {
-      for (auto &layout : pipelineLayouts)
-        {
-          if (layout.second)
-            logicalDevice.destroyPipelineLayout (layout.second);
-        }
-      pipelineLayouts.clear ();
-    }
-
-  // destroy render pass
-  if (!renderPasses.empty ())
-    {
-      for (auto &pass : renderPasses)
-        {
-          if (pass.second)
-            logicalDevice.destroyRenderPass (pass.second, nullptr);
-        }
-      renderPasses.clear ();
-    }
-
-  // cleanup command pools
-  for (auto &pair : commandPoolsBuffers)
-    {
-      auto list = getPoolBufferList (pair.first);
-      if (!list)
-        continue;
-      if (!list->empty ())
-        {
-          for (auto &pair : *list)
-            {
-              if (pair.first)
-                logicalDevice.destroyCommandPool (pair.first);
-            }
-        }
-    }
-  commandPoolsBuffers.clear ();
+  renderer->reset ();
 
   // cleanup swapchain
-  swapchain.cleanup (instance, logicalDevice, false);
+  swapchain->cleanup (*instance, *logicalDevice, false);
 
   return;
 }
@@ -161,50 +76,15 @@ Engine::recreateSwapchain (void)
 {
   logger.logMessage ("Recreating swap chain");
 
-  logicalDevice.waitIdle ();
+  logicalDevice->waitIdle ();
 
   // Cleanup
   cleanupSwapchain ();
 
-  // recreate pools
-
-  // graphics
-  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eGraphics))
-    {
-      std::cout << "no graphics pool, creating\n";
-      commandPoolsBuffers.insert ({
-          { vk::QueueFlagBits::eGraphics, { { createCommandPool (queueIdx.graphics), {} } } },
-      });
-      std::cout << "graphics pool is => "
-                << commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first << "\n";
-    }
-  else
-    {
-      std::cout << "graphics pool exists\n";
-      commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).second = { {} };
-      std::cout << "graphics pool is => "
-                << commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first << "\n";
-    }
-  // compute
-  if (!commandPoolsBuffers.contains (vk::QueueFlagBits::eCompute))
-    {
-      std::cout << "no compute pool, creating\n";
-      commandPoolsBuffers.insert ({
-          { vk::QueueFlagBits::eCompute, { { createCommandPool (queueIdx.compute), {} } } },
-      });
-      std::cout << "compute pool created, => "
-                << commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).first << "\n";
-    }
-  else
-    {
-      std::cout << "compute pool exists\n";
-      commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).second = { {} };
-      std::cout << "compute pool created, => "
-                << commandPoolsBuffers.at (vk::QueueFlagBits::eCompute).at (0).first << "\n";
-    }
+  render->createCommandPools (REQUESTED_COMMAND_QUEUES);
 
   // create swapchain
-  swapchain.create (physicalDevice, logicalDevice, windowWidth, windowHeight);
+  swapchain->create (*physicalDevice, *logicalDevice, windowWidth, windowHeight);
 
   // Create layouts for render passes
   prepareLayouts ();
@@ -272,6 +152,8 @@ Engine::go (void)
 
   // Initialize here before use in later methods
   allocator = std::make_unique<Allocator> (this);
+  allocator->allocatePool (2000);
+
   collectionHandler = std::make_unique<Collection> (this);
 
   // setup descriptor allocator, collection handler & camera
@@ -289,6 +171,7 @@ Engine::go (void)
 
   fps.startTimer ();
 
+  using namespace std::chrono_literals;
   using chrono = std::chrono::high_resolution_clock;
 
   constexpr std::chrono::nanoseconds timestep (16ms);
@@ -340,29 +223,6 @@ Engine::go (void)
   try
     {
       mapHandler.readHeightMap (gui.get (), "heightmaps/scaled.png");
-      // TODO
-      // modify to allow device local buffer creation
-      // Create buffer for terrain vertices
-      std::cout << "Creating storage buffer for compute\n";
-      createBuffer (vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                    vk::MemoryPropertyFlagBits::eDeviceLocal,
-                    collectionHandler->computeStorageBuffer.get (),
-                    mapHandler.vertices.size () * sizeof (Vertex),
-                    mapHandler.vertices.data ());
-
-      // Compute shader descriptor set
-      // auto storageLayout = allocator->getLayout (vk::DescriptorType::eStorageBuffer);
-      // allocator->allocateSet (storageLayout, mapHandler.vertexData->descriptor); // vertex buffer
-      // allocator->updateSet (mapHandler.vertexData->bufferInfo,
-      //                       mapHandler.vertexData->descriptor,
-      //                       vk::DescriptorType::eStorageBuffer,
-      //                       0);
-
-      // allocator->allocateSet (storageLayout, mapHandler.indexData->descriptor); // index buffer
-      // allocator->updateSet (mapHandler.indexData->bufferInfo,
-      //                       mapHandler.indexData->descriptor,
-      //                       vk::DescriptorType::eStorageBuffer,
-      //                       0);
     }
   catch (std::exception &e)
     {
@@ -370,49 +230,6 @@ Engine::go (void)
       std::exit (1);
     }
 #endif
-
-  // cameraSpace is just the projection * view matrix; the resulting matrix
-  // will be used to convert any point we wish to test into camera clip space
-
-  // glm::vec4 frustumLeft = { 0.0f, 0.0f, 0.0f, 0.0f };
-  // glm::vec4 frustumRight = { 0.0f, 0.0f, 0.0f, 0.0f };
-  // glm::vec4 frustumTop = { 0.0f, 0.0f, 0.0f, 0.0f };
-  // glm::vec4 frustumBottom = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-  // clang-format off
-
-  // // left plane
-  // frustumLeft.x = vertexContainer->at (*index).position.x * (cameraSpace[0].w + cameraSpace[0].x);
-  // frustumLeft.y = vertexContainer->at (*index).position.y * (cameraSpace[1].w + cameraSpace[1].x);
-  // frustumLeft.z = vertexContainer->at (*index).position.z * (cameraSpace[2].w + cameraSpace[2].x);
-  // frustumLeft.w = cameraSpace[3].w + cameraSpace[3].x;
-
-  // frustumRight.x = vertexContainer->at (*index).position.x * (cameraSpace[0].w - cameraSpace[0].x);
-  // frustumRight.y = vertexContainer->at (*index).position.y * (cameraSpace[1].w - cameraSpace[1].x);
-  // frustumRight.z = vertexContainer->at (*index).position.z * (cameraSpace[2].w - cameraSpace[2].x);
-  // frustumRight.w = cameraSpace[3].w - cameraSpace[3].x;
-
-  // frustumTop.x = vertexContainer->at (*index).position.x * (cameraSpace[0].w - cameraSpace[0].y);
-  // frustumTop.y = vertexContainer->at (*index).position.y * (cameraSpace[1].w - cameraSpace[1].y);
-  // frustumTop.z = vertexContainer->at (*index).position.z * (cameraSpace[2].w - cameraSpace[2].y);
-  // frustumTop.w = cameraSpace[3].w - cameraSpace[3].y;
-
-  // frustumBottom.x = vertexContainer->at (*index).position.x * (cameraSpace[0].w + cameraSpace[0].y);
-  // frustumBottom.y = vertexContainer->at (*index).position.y * (cameraSpace[1].w + cameraSpace[1].y);
-  // frustumBottom.z = vertexContainer->at (*index).position.z * (cameraSpace[2].w + cameraSpace[2].y);
-  // frustumBottom.w = cameraSpace[3].w + cameraSpace[3].y;
-
-  // clang-format on
-
-  // auto totalLeft = frustumLeft.x + frustumLeft.y + frustumLeft.z + frustumLeft.w;
-  // auto totalRight = frustumRight.x + frustumRight.y + frustumRight.z + frustumRight.w;
-  // auto totalTop = frustumTop.x + frustumTop.y + frustumTop.z + frustumTop.w;
-  // auto totalBottom = frustumBottom.x + frustumBottom.y + frustumBottom.z + frustumBottom.w;
-
-  // // draw
-  // if (totalLeft > -2.5f && totalRight > -2.5f && totalTop > -2.5f && totalBottom > -2.5f)
-  //   {
-  //   }
 
   while (!glfwWindowShouldClose (window))
     {
@@ -484,6 +301,13 @@ Engine::go (void)
                 camera.move (camera.rotation.y,
                              { 1.0f, 0.0f, 0.0f },
                              (keyboard.isKeyState (GLFW_KEY_LEFT_SHIFT)));
+
+              // t -- freeze frustum updates to compute
+              if (kbdEvent.code == GLFW_KEY_T && kbdEvent.type == Keyboard::Event::Type::ePress)
+                {
+                  mapHandler.freezeCull = !mapHandler.freezeCull;
+                  std::cout << "Freeze cull status: " << mapHandler.freezeCull << "\n";
+                }
 
               // space + alt
               if (keyboard.isKeyState (GLFW_KEY_SPACE))
@@ -664,6 +488,12 @@ Engine::go (void)
 
           // update view and projection matrices
           camera.update ();
+          if (!mapHandler.freezeCull)
+            {
+              mapHandler.clipSpace->matrix = collectionHandler->projectionUniform->matrix
+                                             * collectionHandler->viewUniform->matrix;
+              mapHandler.update ();
+            }
 
           /*
               Update ray cast vertices
@@ -819,8 +649,7 @@ Engine::prepareComputePipelines (void)
   auto storageBuffer = allocator->getLayout (vk::DescriptorType::eStorageBuffer);
   auto uniformBuffer = allocator->getLayout (vk::DescriptorType::eUniformBuffer);
   std::vector<vk::DescriptorSetLayout> computeDescriptors = {
-    uniformBuffer, // projection matrix
-    uniformBuffer, // view matrix
+    uniformBuffer, // clip space matrix
     storageBuffer, // vertex buffer
     storageBuffer, // index buffer
   };
@@ -875,7 +704,7 @@ Engine::prepareGraphicsPipelines (void)
   vk::PipelineRasterizationStateCreateInfo rsState;
   rsState.depthClampEnable = VK_FALSE;
   rsState.rasterizerDiscardEnable = VK_FALSE;
-  rsState.polygonMode = vk::PolygonMode::eFill;
+  rsState.polygonMode = vk::PolygonMode::eLine;
   rsState.cullMode = vk::CullModeFlagBits::eBack;
   rsState.frontFace = vk::FrontFace::eCounterClockwise;
   rsState.depthBiasEnable = VK_FALSE;
@@ -1197,8 +1026,7 @@ Engine::computePass (uint32_t p_ImageIndex)
   vk::CommandBufferBeginInfo beginInfo;
 
   std::vector<vk::DescriptorSet> toBind = {
-    collectionHandler->viewUniform->descriptor,
-    collectionHandler->projectionUniform->descriptor,
+    mapHandler.clipSpace->mvBuffer.descriptor,
     mapHandler.vertexData->descriptor, // vertex
     mapHandler.indexData->descriptor,  // index
   };
@@ -1276,17 +1104,15 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
       mapHandler.bindBuffer (curGraphicsCommandBuffer);
 
       curGraphicsCommandBuffer.bindPipeline (vk::PipelineBindPoint::eGraphics,
-                                             pipelines.at (eVPWSampler));
-      currentlyBound = eVPWSampler;
+                                             pipelines.at (eVPNoSampler));
+      currentlyBound = eVPNoSampler;
 
       std::vector<vk::DescriptorSet> toBind = {
-        collectionHandler->viewUniform->descriptor,
-        collectionHandler->projectionUniform->descriptor,
-        mapHandler.terrainTextureDescriptor,
-        mapHandler.terrainNormalDescriptor,
+        collectionHandler->projectionUniform->mvBuffer.descriptor,
+        collectionHandler->viewUniform->mvBuffer.descriptor,
       };
       curGraphicsCommandBuffer.bindDescriptorSets (
-          vk::PipelineBindPoint::eGraphics, pipelineLayouts.at (eVPWSampler), 0, toBind, nullptr);
+          vk::PipelineBindPoint::eGraphics, pipelineLayouts.at (eVPNoSampler), 0, toBind, nullptr);
       curGraphicsCommandBuffer.drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
     }
 
@@ -1317,9 +1143,9 @@ Engine::recordCommandBuffer (uint32_t p_ImageIndex)
             {
               // { vk::DescriptorSet, Buffer }
               std::vector<vk::DescriptorSet> toBind = {
+                collectionHandler->projectionUniform->mvBuffer.descriptor,
+                collectionHandler->viewUniform->mvBuffer.descriptor,
                 object.uniform.first,
-                collectionHandler->viewUniform->descriptor,
-                collectionHandler->projectionUniform->descriptor,
               };
               if (offset.first.second >= 0)
                 {
@@ -1510,14 +1336,10 @@ Engine::draw (size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
 /*
   initialize descriptor allocator, collection handler & camera
 */
-inline void
+void
 Engine::goSetup (void)
 {
   using enum vk::ShaderStageFlagBits;
-  /*
-      init pool
-  */
-  allocator->allocatePool (2000);
 
   /*
       uniform for vertex/compute
@@ -1539,24 +1361,26 @@ Engine::goSetup (void)
       CREATES BUFFERS FOR VIEW & PROJECTION MATRICES
   */
 
-  auto uniformLayout = allocator->getLayout (vk::DescriptorType::eUniformBuffer);
+  // auto uniformLayout = allocator->getLayout (vk::DescriptorType::eUniformBuffer);
   /*
       VIEW MATRIX UNIFORM OBJECT
   */
-  allocator->allocateSet (uniformLayout, collectionHandler->viewUniform->descriptor);
-  allocator->updateSet (collectionHandler->viewUniform->mvBuffer.bufferInfo,
-                        collectionHandler->viewUniform->descriptor,
-                        vk::DescriptorType::eUniformBuffer,
-                        0);
+  // DONE BY INTERNAL MV BUFFER OF UNIFORM OBJECT
+  // allocator->allocateSet (uniformLayout, collectionHandler->viewUniform->descriptor);
+  // allocator->updateSet (collectionHandler->viewUniform->mvBuffer.bufferInfo,
+  //                       collectionHandler->viewUniform->descriptor,
+  //                       vk::DescriptorType::eUniformBuffer,
+  //                       0);
 
   /*
       PROJECTION MATRIX UNIFORM OBJECT
   */
-  allocator->allocateSet (uniformLayout, collectionHandler->projectionUniform->descriptor);
-  allocator->updateSet (collectionHandler->projectionUniform->mvBuffer.bufferInfo,
-                        collectionHandler->projectionUniform->descriptor,
-                        vk::DescriptorType::eUniformBuffer,
-                        0);
+  // DONE BY INTERNAL MV BUFFER OF UNIFORM OBJECT
+  // allocator->allocateSet (uniformLayout, collectionHandler->projectionUniform->descriptor);
+  // allocator->updateSet (collectionHandler->projectionUniform->mvBuffer.bufferInfo,
+  //                       collectionHandler->projectionUniform->descriptor,
+  //                       vk::DescriptorType::eUniformBuffer,
+  //                       0);
 
   /*
       LOAD MODELS
@@ -1707,208 +1531,5 @@ glfwErrCallback (int p_Error, const char *p_Description)
   logger.logMessage (LogHandlerMessagePriority::eError,
                      "GLFW Error...\nCode => " + std::to_string (p_Error) + "\nMessage=> "
                          + std::string (p_Description));
-  return;
-}
-
-// Create buffer with Vulkan buffer/memory objects
-void
-Engine::createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
-                      vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                      vk::DeviceSize p_DeviceSize,
-                      vk::Buffer *p_VkBuffer,
-                      vk::DeviceMemory *p_DeviceMemory,
-                      void *p_InitialData) const
-{
-  logger.logMessage ("Allocating buffer of size => "
-                     + std::to_string (static_cast<uint32_t> (p_DeviceSize)));
-
-  vk::BufferCreateInfo bufferInfo;
-  bufferInfo.usage = p_BufferUsageFlags;
-  bufferInfo.size = p_DeviceSize;
-  bufferInfo.sharingMode = vk::SharingMode::eExclusive;
-
-  // create vulkan buffer
-  *p_VkBuffer = logicalDevice.createBuffer (bufferInfo);
-
-  // allocate memory for buffer
-  vk::MemoryRequirements memRequirements;
-  vk::MemoryAllocateInfo allocInfo;
-
-  memRequirements = logicalDevice.getBufferMemoryRequirements (*p_VkBuffer);
-
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = getMemoryType (memRequirements.memoryTypeBits, p_MemoryPropertyFlags);
-
-  // Allocate memory
-  *p_DeviceMemory = logicalDevice.allocateMemory (allocInfo);
-
-  // Bind newly allocated memory to buffer
-  logicalDevice.bindBufferMemory (*p_VkBuffer, *p_DeviceMemory, 0);
-
-  // If data was passed to creation, load it
-  if (p_InitialData != nullptr)
-    {
-      void *mapped = logicalDevice.mapMemory (*p_DeviceMemory, 0, p_DeviceSize);
-
-      memcpy (mapped, p_InitialData, p_DeviceSize);
-
-      logicalDevice.unmapMemory (*p_DeviceMemory);
-    }
-
-  return;
-}
-
-// create buffer with custom Buffer interface
-void
-Engine::createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
-                      vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                      MvBuffer *p_MvBuffer,
-                      vk::DeviceSize p_DeviceSize,
-                      void *p_InitialData) const
-{
-  // sanity check
-  if (static_cast<uint32_t> (p_DeviceSize) == 0)
-    throw std::runtime_error ("Invalid device size");
-  logger.logMessage ("Allocating buffer of size => "
-                     + std::to_string (static_cast<uint32_t> (p_DeviceSize)));
-
-  // create buffer
-  vk::BufferCreateInfo bufferInfo;
-  bufferInfo.usage = p_BufferUsageFlags;
-  bufferInfo.size = p_DeviceSize;
-  bufferInfo.sharingMode = vk::SharingMode::eExclusive;
-
-  p_MvBuffer->buffer = logicalDevice.createBuffer (bufferInfo);
-
-  vk::MemoryRequirements memRequirements;
-  vk::MemoryAllocateInfo allocInfo;
-
-  memRequirements = logicalDevice.getBufferMemoryRequirements (p_MvBuffer->buffer);
-
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = getMemoryType (memRequirements.memoryTypeBits, p_MemoryPropertyFlags);
-
-  // allocate memory
-  p_MvBuffer->memory = logicalDevice.allocateMemory (allocInfo);
-
-  p_MvBuffer->alignment = memRequirements.alignment;
-  p_MvBuffer->size = p_DeviceSize;
-  p_MvBuffer->usageFlags = p_BufferUsageFlags;
-  p_MvBuffer->memoryPropertyFlags = p_MemoryPropertyFlags;
-
-  // bind buffer & memory
-  p_MvBuffer->bind (logicalDevice);
-
-  p_MvBuffer->setupBufferInfo ();
-
-  if (p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eHostCoherent
-      && p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eHostVisible)
-    p_MvBuffer->canMap = true;
-
-  // copy if necessary
-  if (p_InitialData != nullptr)
-    {
-      if (p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eHostCoherent
-          && p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eHostVisible)
-        {
-
-          p_MvBuffer->map (logicalDevice);
-
-          memcpy (p_MvBuffer->mapped, p_InitialData, p_DeviceSize);
-
-          p_MvBuffer->unmap (logicalDevice);
-        }
-      else
-        {
-          if (p_MemoryPropertyFlags & vk::MemoryPropertyFlagBits::eDeviceLocal)
-            {
-              vk::Buffer stagingBuffer;
-              vk::DeviceMemory stagingMemory;
-              void *stagingMapped = nullptr;
-
-              // create staging buffer
-              createStagingBuffer (p_DeviceSize, stagingBuffer, stagingMemory);
-
-              // fill stage
-              stagingMapped = logicalDevice.mapMemory (stagingMemory, 0, p_DeviceSize);
-              memcpy (stagingMapped, p_InitialData, static_cast<size_t> (p_DeviceSize));
-              logicalDevice.unmapMemory (stagingMemory);
-
-              // copyto device local
-              auto pool = commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first;
-              auto cmdbuf = Helper::beginCommandBuffer (logicalDevice, pool);
-
-              {
-                vk::BufferCopy region;
-                region.srcOffset = 0;
-                region.dstOffset = 0;
-                region.size = p_DeviceSize;
-                cmdbuf.copyBuffer (stagingBuffer, p_MvBuffer->buffer, region);
-              }
-
-              // end, submit
-              endCommandBuffer (pool, cmdbuf);
-
-              logicalDevice.destroyBuffer (stagingBuffer);
-              logicalDevice.freeMemory (stagingMemory);
-            }
-        }
-    }
-
-  return;
-}
-
-void
-Engine::createStagingBuffer (vk::DeviceSize &p_BufferSize,
-                             vk::Buffer &p_StagingBuffer,
-                             vk::DeviceMemory &p_StagingMemory) const
-{
-  vk::MemoryRequirements stagingReq;
-
-  vk::BufferCreateInfo bufferInfo;
-  bufferInfo.size = p_BufferSize;
-  bufferInfo.sharingMode = vk::SharingMode::eExclusive;
-  bufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
-
-  // create staging buffer
-  p_StagingBuffer = logicalDevice.createBuffer (bufferInfo);
-
-  // get memory requirements
-  stagingReq = logicalDevice.getBufferMemoryRequirements (p_StagingBuffer);
-
-  vk::MemoryAllocateInfo allocInfo;
-  allocInfo.allocationSize = stagingReq.size;
-  allocInfo.memoryTypeIndex = getMemoryType (stagingReq.memoryTypeBits,
-                                             vk::MemoryPropertyFlagBits::eHostVisible
-                                                 | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-  // allocate staging memory
-  p_StagingMemory = logicalDevice.allocateMemory (allocInfo);
-
-  // bind staging buffer & memory
-  logicalDevice.bindBufferMemory (p_StagingBuffer, p_StagingMemory, 0);
-  return;
-}
-
-void
-Engine::endCommandBuffer (const vk::CommandPool &p_CommandPool,
-                          vk::CommandBuffer p_CommandBuffer) const
-{
-
-  if (!p_CommandPool)
-    throw std::runtime_error ("Invalid command pool handle passed to image");
-
-  p_CommandBuffer.end ();
-
-  vk::SubmitInfo submitInfo;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &p_CommandBuffer;
-
-  auto queue = commandQueues.at (vk::QueueFlagBits::eGraphics).at (0);
-
-  queue.submit (submitInfo);
-  queue.waitIdle ();
-
-  logicalDevice.freeCommandBuffers (p_CommandPool, p_CommandBuffer);
   return;
 }

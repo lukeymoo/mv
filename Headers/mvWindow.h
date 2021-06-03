@@ -33,13 +33,6 @@ constexpr std::array<const char *, 3> requestedDeviceExtensions = {
   "VK_EXT_extended_dynamic_state",
 };
 
-// GLFW CALLBACKS -- DEFINED IN ENGINE CPP
-void keyCallback (GLFWwindow *window, int key, int scancode, int action, int mods);
-void mouseMotionCallback (GLFWwindow *window, double xpos, double ypos);
-void mouseScrollCallback (GLFWwindow *p_GLFWwindow, double p_XOffset, double p_YOffset);
-void mouseButtonCallback (GLFWwindow *window, int button, int action, int mods);
-void glfwErrCallback (int error, const char *desc);
-
 class Window
 {
   friend struct Collection;
@@ -58,62 +51,8 @@ public:
   Window (int p_WindowWidth, int p_WindowHeight, std::string p_WindowTitle);
   ~Window ();
 
-  // Create Vulkan instance
-  void createInstance (void);
-
-  // calls all other initialization functions
-  void prepare (void);
-
-protected:
-  void initVulkan (void);
-
-  void checkValidationSupport (void);
-
-  void checkInstanceExt (void);
-
-  void createCommandBuffers (void);
-
-  void createSynchronizationPrimitives (void);
-
-  void setupDepthStencil (void);
-
-  void setupRenderPass (void);
-
-  // TODO re implement
-  // void create_pipeline_cache(void);
-
-  void setupFramebuffers (void);
-
-  std::vector<char> readFile (std::string p_Filename);
-  vk::ShaderModule createShaderModule (const std::vector<char> &p_ShaderCharBuffer);
-
-protected:
-  void createLogicalDevice (void);
-
-  /*
-    Helper
-  */
-  vk::CommandPool createCommandPool (uint32_t p_QueueIndex,
-                                     vk::CommandPoolCreateFlags p_CreateFlags
-                                     = vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
-
-  uint32_t getMemoryType (uint32_t p_TypeBits,
-                          vk::MemoryPropertyFlags p_MemoryPropertyFlags,
-                          vk::Bool32 *p_IsMemoryTypeFound = nullptr) const;
-
-  // Returns an index to queue families which supports provided queue flag bit
-  uint32_t getQueueFamilyIndex (vk::QueueFlagBits p_QueueFlagBit) const;
-
-  // Gets depth format supported by physical device
-  vk::Format getSupportedDepthFormat (void) const;
-
-  // get pointer to array of command pools + their buffers for specified queue type
-  std::vector<std::pair<vk::CommandPool, std::vector<vk::CommandBuffer>>> *
-  getPoolBufferList (vk::QueueFlagBits p_QueueType);
-
 public:
   bool good_init = true;
-  vk::ClearColorValue defaultClearColor = std::array<float, 4> ({ { 0.0f, 0.0f, 0.0f, 1.0f } });
 
   // handlers
   Mouse mouse;
@@ -136,49 +75,14 @@ public:
   // Final list of extensions/layers
   std::vector<std::string> instanceExtensions;
 
-  vk::Instance instance;
-  vk::PhysicalDevice physicalDevice;
-  vk::Device logicalDevice;
-
-  std::unordered_map<vk::QueueFlagBits, std::vector<vk::Queue>> commandQueues;
-  // std::unordered_map<vk::QueueFlagBits, std::vector<vk::CommandPool>> commandPools;
-  std::unordered_map<RenderPassType, vk::RenderPass> renderPasses;
-
-  Swap swapchain;
-
-  std::unordered_map<vk::QueueFlagBits,
-                     std::vector<std::pair<vk::CommandPool, std::vector<vk::CommandBuffer>>>>
-      commandPoolsBuffers;
-  std::unordered_map<FramebufferType, std::vector<vk::Framebuffer>> framebuffers;
-
-  std::vector<vk::Fence> inFlightFences;
-  std::vector<vk::Fence> waitFences; // not allocated
-
-  struct SemaphoresStruct
-  {
-    vk::Semaphore presentComplete;
-    vk::Semaphore renderComplete;
-    vk::Semaphore computeComplete;
-  } semaphores;
-
-  // TODO
-  // Move to somewhere more appropriate, perhaps allocator
-  // with the view/projection matrices
-  struct DepthStencilStruct
-  {
-    vk::Image image;
-    vk::DeviceMemory mem;
-    vk::ImageView view;
-  } depthStencil;
+  std::unique_ptr<vk::Instance> instance;
+  std::unique_ptr<vk::PhysicalDevice> physicalDevice;
+  std::unique_ptr<vk::Device> logicalDevice;
+  std::unique_ptr<Swap> swapchain;
 
   // clang-format off
     // info structures
-    struct
-    {
-        uint32_t graphics = UINT32_MAX;
-        uint32_t compute = UINT32_MAX;
-        uint32_t transfer = UINT32_MAX;
-    } queueIdx;
+    QueueIndexInfo queueIdx;
     std::vector<std::string>                          requestedLogicalDeviceExtensions;
     vk::PhysicalDeviceFeatures                        physicalFeatures;
     vk::PhysicalDeviceFeatures2                       physicalFeatures2;
@@ -188,15 +92,31 @@ public:
     std::vector<vk::ExtensionProperties>              physicalDeviceExtensions;
     std::vector<vk::QueueFamilyProperties>            queueFamilyProperties;
   // clang-format on
+
+public:
+  // Create Vulkan instance
+  void createInstance (void);
+
+  // calls all other initialization functions
+  void prepare (void);
+
+protected:
+  void initVulkan (void);
+
+  void checkValidationSupport (void);
+
+  void checkInstanceExt (void);
+
+  void createLogicalDevice (vk::QueueFlags p_RequestedQueueFlags);
 }; // end window
 
 // Instance creation/destruction callback
 VKAPI_ATTR
 VkBool32 VKAPI_CALL
-debug_message_processor (VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                         VkDebugUtilsMessageTypeFlagsEXT message_type,
-                         const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-                         void *user_data);
+initialDebugProcessor (VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+                       VkDebugUtilsMessageTypeFlagsEXT message_type,
+                       const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+                       void *user_data);
 
 // Persistent vulkan debug callback
 VKAPI_ATTR
