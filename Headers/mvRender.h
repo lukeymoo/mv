@@ -58,6 +58,9 @@ struct IndirectDrawCommand
   uint32_t firstInstance;
 };
 
+class StateMachine;
+class GuiHandler;
+
 class Renderer
 {
   friend class Engine;
@@ -66,12 +69,16 @@ public:
   explicit Renderer (vk::PhysicalDevice *p_PhysicalDevice,
                      vk::Device *p_LogicalDevice,
                      Swap *p_Swapchain,
+                     GuiHandler *p_Gui,
+                     StateMachine *p_StateMachine,
                      QueueIndexInfo p_QueueIndices);
   ~Renderer ();
 
   vk::PhysicalDevice *physicalDevice = nullptr;
   vk::Device *logicalDevice = nullptr;
   Swap *swapchain = nullptr;
+  GuiHandler *gui = nullptr;
+  StateMachine *stateMachine = nullptr;
   QueueIndexInfo queueIdx;
 
   mv::PipelineType currentlyBound;
@@ -145,16 +152,24 @@ private:
   void setupFramebuffers (void);
 
   void prepareUniforms (void);
+
   void prepareLayouts (void);
   void prepareGraphicsPipelines (void);
   void prepareComputePipelines (void);
   void recordCommandBuffer (uint32_t imageIndex);
   void computePass (uint32_t p_ImageIndex);
-  void draw (size_t &current_frame, uint32_t &current_image_index);
+
+  // Returns false if swapchain recreate is needed
+  bool draw (size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex);
 
 protected:
+  inline vk::DescriptorSetLayout getLayout (vk::DescriptorType p_DescriptorType);
+
   inline void createCommandPools (vk::QueueFlags p_QueueFlags);
   inline void getCommandQueues (vk::QueueFlags p_QueueFlags);
+  inline void createPipelineLayout (PipelineLayoutMap &p_LayoutMap,
+                                    mv::PipelineType p_PipelineType,
+                                    std::vector<vk::DescriptorSetLayout> &p_Layout);
   // cleanup
   inline void destroyCommandPools (void) noexcept;
   inline void destroyFramebuffers (void) noexcept;

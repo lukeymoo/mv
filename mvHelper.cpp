@@ -44,7 +44,7 @@ Helper::beginCommandBuffer (const vk::Device &p_LogicalDevice, const vk::Command
   allocInfo.commandBufferCount = 1;
 
   // allocate command buffer
-  std::vector<vk::CommandBuffer> cmdbuf = p_LogicalDevice.allocateCommandBuffers (allocInfo);
+  std::vector<vk::CommandBuffer> cmdbuf = p_logicalDevice->allocateCommandBuffers (allocInfo);
 
   if (cmdbuf.size () < 1)
     throw std::runtime_error ("Failed to create one time submit command buffer");
@@ -61,15 +61,15 @@ Helper::beginCommandBuffer (const vk::Device &p_LogicalDevice, const vk::Command
               toDestroy.push_back (buf);
             }
         }
-      p_LogicalDevice.freeCommandBuffers (p_CommandPool, toDestroy);
+      p_logicalDevice->freeCommandBuffers (p_CommandPool, toDestroy);
     }
 
   vk::CommandBufferBeginInfo beginInfo;
   beginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
 
-  cmdbuf.at (0).begin (beginInfo);
+  cmdbuf->at (0).begin (beginInfo);
 
-  return cmdbuf.at (0);
+  return cmdbuf->at (0);
 }
 
 void
@@ -102,7 +102,7 @@ Helper::endCommandBuffer (const vk::Device &p_LogicalDevice,
   p_GraphicsQueue.waitIdle ();
 
   // free buffer
-  p_LogicalDevice.freeCommandBuffers (p_CommandPool, p_CommandBuffer);
+  p_logicalDevice->freeCommandBuffers (p_CommandPool, p_CommandBuffer);
   return;
 }
 
@@ -203,7 +203,7 @@ Helper::createShaderModule (const std::vector<char> &p_ShaderCharBuffer)
   moduleInfo.codeSize = p_ShaderCharBuffer.size ();
   moduleInfo.pCode = reinterpret_cast<const uint32_t *> (p_ShaderCharBuffer.data ());
 
-  vk::ShaderModule module = logicalDevice.createShaderModule (moduleInfo);
+  vk::ShaderModule module = logicalDevice->createShaderModule (moduleInfo);
 
   return module;
 }
@@ -217,7 +217,7 @@ Helper::createCommandPool (const vk::Device &p_LogicalDevice,
   poolInfo.flags = p_CreateFlags;
   poolInfo.queueFamilyIndex = p_QueueIndex;
 
-  return p_LogicalDevice.createCommandPool (poolInfo);
+  return p_logicalDevice->createCommandPool (poolInfo);
 }
 
 vk::CommandPool
@@ -318,31 +318,31 @@ Helper::createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
   bufferInfo.sharingMode = vk::SharingMode::eExclusive;
 
   // create vulkan buffer
-  *p_VkBuffer = logicalDevice.createBuffer (bufferInfo);
+  *p_VkBuffer = logicalDevice->createBuffer (bufferInfo);
 
   // allocate memory for buffer
   vk::MemoryRequirements memRequirements;
   vk::MemoryAllocateInfo allocInfo;
 
-  memRequirements = logicalDevice.getBufferMemoryRequirements (*p_VkBuffer);
+  memRequirements = logicalDevice->getBufferMemoryRequirements (*p_VkBuffer);
 
   allocInfo.allocationSize = memRequirements.size;
   allocInfo.memoryTypeIndex = getMemoryType (memRequirements.memoryTypeBits, p_MemoryPropertyFlags);
 
   // Allocate memory
-  *p_DeviceMemory = logicalDevice.allocateMemory (allocInfo);
+  *p_DeviceMemory = logicalDevice->allocateMemory (allocInfo);
 
   // Bind newly allocated memory to buffer
-  logicalDevice.bindBufferMemory (*p_VkBuffer, *p_DeviceMemory, 0);
+  logicalDevice->bindBufferMemory (*p_VkBuffer, *p_DeviceMemory, 0);
 
   // If data was passed to creation, load it
   if (p_InitialData != nullptr)
     {
-      void *mapped = logicalDevice.mapMemory (*p_DeviceMemory, 0, p_DeviceSize);
+      void *mapped = logicalDevice->mapMemory (*p_DeviceMemory, 0, p_DeviceSize);
 
       memcpy (mapped, p_InitialData, p_DeviceSize);
 
-      logicalDevice.unmapMemory (*p_DeviceMemory);
+      logicalDevice->unmapMemory (*p_DeviceMemory);
     }
 
   return;
@@ -368,18 +368,18 @@ Helper::createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
   bufferInfo.size = p_DeviceSize;
   bufferInfo.sharingMode = vk::SharingMode::eExclusive;
 
-  p_MvBuffer->buffer = logicalDevice.createBuffer (bufferInfo);
+  p_MvBuffer->buffer = logicalDevice->createBuffer (bufferInfo);
 
   vk::MemoryRequirements memRequirements;
   vk::MemoryAllocateInfo allocInfo;
 
-  memRequirements = logicalDevice.getBufferMemoryRequirements (p_MvBuffer->buffer);
+  memRequirements = logicalDevice->getBufferMemoryRequirements (p_MvBuffer->buffer);
 
   allocInfo.allocationSize = memRequirements.size;
   allocInfo.memoryTypeIndex = getMemoryType (memRequirements.memoryTypeBits, p_MemoryPropertyFlags);
 
   // allocate memory
-  p_MvBuffer->memory = logicalDevice.allocateMemory (allocInfo);
+  p_MvBuffer->memory = logicalDevice->allocateMemory (allocInfo);
 
   p_MvBuffer->alignment = memRequirements.alignment;
   p_MvBuffer->size = p_DeviceSize;
@@ -420,12 +420,12 @@ Helper::createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
               createStagingBuffer (p_DeviceSize, stagingBuffer, stagingMemory);
 
               // fill stage
-              stagingMapped = logicalDevice.mapMemory (stagingMemory, 0, p_DeviceSize);
+              stagingMapped = logicalDevice->mapMemory (stagingMemory, 0, p_DeviceSize);
               memcpy (stagingMapped, p_InitialData, static_cast<size_t> (p_DeviceSize));
-              logicalDevice.unmapMemory (stagingMemory);
+              logicalDevice->unmapMemory (stagingMemory);
 
               // copyto device local
-              auto pool = commandPoolsBuffers.at (vk::QueueFlagBits::eGraphics).at (0).first;
+              auto pool = commandPoolsBuffers->at (vk::QueueFlagBits::eGraphics)->at (0).first;
               auto cmdbuf = Helper::beginCommandBuffer (logicalDevice, pool);
 
               {
@@ -439,8 +439,8 @@ Helper::createBuffer (vk::BufferUsageFlags p_BufferUsageFlags,
               // end, submit
               endCommandBuffer (pool, cmdbuf);
 
-              logicalDevice.destroyBuffer (stagingBuffer);
-              logicalDevice.freeMemory (stagingMemory);
+              logicalDevice->destroyBuffer (stagingBuffer);
+              logicalDevice->freeMemory (stagingMemory);
             }
         }
     }
@@ -461,10 +461,10 @@ Helper::createStagingBuffer (vk::DeviceSize &p_BufferSize,
   bufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
 
   // create staging buffer
-  p_StagingBuffer = logicalDevice.createBuffer (bufferInfo);
+  p_StagingBuffer = logicalDevice->createBuffer (bufferInfo);
 
   // get memory requirements
-  stagingReq = logicalDevice.getBufferMemoryRequirements (p_StagingBuffer);
+  stagingReq = logicalDevice->getBufferMemoryRequirements (p_StagingBuffer);
 
   vk::MemoryAllocateInfo allocInfo;
   allocInfo.allocationSize = stagingReq.size;
@@ -473,9 +473,9 @@ Helper::createStagingBuffer (vk::DeviceSize &p_BufferSize,
                                                  | vk::MemoryPropertyFlagBits::eHostCoherent);
 
   // allocate staging memory
-  p_StagingMemory = logicalDevice.allocateMemory (allocInfo);
+  p_StagingMemory = logicalDevice->allocateMemory (allocInfo);
 
   // bind staging buffer & memory
-  logicalDevice.bindBufferMemory (p_StagingBuffer, p_StagingMemory, 0);
+  logicalDevice->bindBufferMemory (p_StagingBuffer, p_StagingMemory, 0);
   return;
 }

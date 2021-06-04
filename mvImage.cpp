@@ -415,9 +415,9 @@ Image::beginCommandBuffer (const vk::Device &p_LogicalDevice, const vk::CommandP
   vk::CommandBufferBeginInfo begin_info;
   begin_info.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
 
-  cmdBuffers.at (0).begin (begin_info);
+  cmdBuffers->at (0).begin (begin_info);
 
-  return cmdBuffers.at (0);
+  return cmdBuffers->at (0);
 }
 
 void
