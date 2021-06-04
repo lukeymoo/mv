@@ -164,6 +164,9 @@ private:
 
 protected:
   inline vk::DescriptorSetLayout getLayout (vk::DescriptorType p_DescriptorType);
+  inline vk::CommandPool &getCommandPool (vk::QueueFlagBits p_QueueFlag);
+  inline vk::CommandBuffer &getCommandBuffer (vk::QueueFlagBits p_QueueFlag, size_t p_Index);
+  inline std::vector<vk::CommandBuffer> &getCommandBuffers (vk::QueueFlagBits p_QueueFlag);
 
   inline void createCommandPools (vk::QueueFlags p_QueueFlags);
   inline void getCommandQueues (vk::QueueFlags p_QueueFlags);

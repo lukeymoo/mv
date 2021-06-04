@@ -87,15 +87,15 @@ Engine::recreateSwapchain (void)
   swapchain->create (*physicalDevice, *logicalDevice, windowWidth, windowHeight);
 
   // Create layouts for render passes
-  prepareLayouts ();
+  render->prepareLayouts ();
 
   // create render pass : core
-  setupRenderPass ();
+  render->setupRenderPass ();
 
   // If ImGui enabled, recreate it's resources
   if (gui)
     {
-      gui->cleanup (logicalDevice);
+      gui->cleanup (*logicalDevice);
       // Reinstall glfw callbacks to avoid ImGui creating
       // an infinite callback circle
       glfwSetKeyCallback (window, keyCallback);
@@ -105,18 +105,20 @@ Engine::recreateSwapchain (void)
       glfwSetCharCallback (window, NULL);
       // Add our base app class to glfw window for callbacks
       glfwSetWindowUserPointer (window, this);
-      gui = std::make_unique<GuiHandler> (
-          window,
-          &mapHandler,
-          &camera,
-          instance,
-          physicalDevice,
-          logicalDevice,
-          swapchain,
-          commandPoolsBuffers->at (vk::QueueFlagBits::eGraphics)->at (0).first,
-          commandQueues->at (vk::QueueFlagBits::eGraphics)->at (0),
-          renderPasses,
-          allocator->get ()->pool);
+
+      auto &[pool, commandBuffers] = commandPools->at (vk::QueueFlagBits::eGraphics);
+
+      gui = std::make_unique<GuiHandler> (window,
+                                          scene.get (),
+                                          &camera,
+                                          instance,
+                                          physicalDevice,
+                                          logicalDevice,
+                                          swapchain,
+                                          pool,
+                                          commandQueues->at (vk::QueueFlagBits::eGraphics)->at (0),
+                                          renderPasses,
+                                          allocator->get ()->pool);
 
       if (!framebuffers.contains (eImGuiFramebuffer))
         {

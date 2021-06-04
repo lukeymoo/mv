@@ -312,24 +312,26 @@ Renderer::setupRenderPass (void)
   coreRenderPassInfo.dependencyCount = static_cast<uint32_t> (coreDependencies.size ());
   coreRenderPassInfo.pDependencies = coreDependencies.data ();
 
-  using enum mv::RenderPassType;
-  try
-    {
-      renderPasses->insert ({
-          eCore,
-          logicalDevice->createRenderPass (coreRenderPassInfo),
-      });
-    }
-  catch (vk::SystemError &e)
-    {
-      throw std::runtime_error ("Vulkan error creating core render pass => "
-                                + std::string (e.what ()));
-    }
-  catch (std::exception &e)
-    {
-      throw std::runtime_error ("Std error creating core render pass => "
-                                + std::string (e.what ()));
-    }
+  {
+    using enum mv::RenderPassType;
+    try
+      {
+        renderPasses->insert ({
+            eCore,
+            logicalDevice->createRenderPass (coreRenderPassInfo),
+        });
+      }
+    catch (vk::SystemError &e)
+      {
+        throw std::runtime_error ("Vulkan error creating core render pass => "
+                                  + std::string (e.what ()));
+      }
+    catch (std::exception &e)
+      {
+        throw std::runtime_error ("Std error creating core render pass => "
+                                  + std::string (e.what ()));
+      }
+  }
   return;
 }
 
@@ -837,8 +839,11 @@ Renderer::computePass (uint32_t p_ImageIndex)
 
   vk::CommandBufferBeginInfo beginInfo;
 
+  // PSEUDO CODE
+  auto &lastFrame = stateMachine->getLastFrame ();
+
   std::vector<vk::DescriptorSet> toBind = {
-    mapHandler->clipSpace->mvBuffer.descriptor,
+    lastFrame.viewProjection.descriptor,
     mapHandler->vertexData->descriptor, // vertex
     mapHandler->indexData->descriptor,  // index
   };
@@ -907,33 +912,28 @@ Renderer::recordCommandBuffer (uint32_t p_ImageIndex)
   passInfo.pClearValues = cls.data ();
 
   // begin recording
-  auto &[pool, commandBuffers] = commandPools->at (eGraphics);
-  commandBuffers.at (p_ImageIndex).begin (beginInfo);
+  auto &commandBuffer = getCommandBuffer (eGraphics, p_ImageIndex);
+  commandBuffer.begin (beginInfo);
 
   // start render pass
-  commandBuffers.at (p_ImageIndex).beginRenderPass (passInfo, vk::SubpassContents::eInline);
+  commandBuffer.beginRenderPass (passInfo, vk::SubpassContents::eInline);
 
   // Render heightmap
   if (mapHandler.isMapLoaded)
     {
-      mapHandler.bindBuffer (commandBuffers.at (p_ImageIndex));
+      mapHandler.bindBuffer (commandBuffer);
 
-      commandBuffers.at (p_ImageIndex)
-          .bindPipeline (vk::PipelineBindPoint::eGraphics, pipelines->at (eVPNoSampler));
+      commandBuffer.bindPipeline (vk::PipelineBindPoint::eGraphics, pipelines->at (eVPNoSampler));
       currentlyBound = eVPNoSampler;
 
       std::vector<vk::DescriptorSet> toBind = {
         collectionHandler->projectionUniform->mvBuffer.descriptor,
         collectionHandler->viewUniform->mvBuffer.descriptor,
       };
-      commandBuffers.at (p_ImageIndex)
-          .bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
-                               pipelineLayouts->at (eVPNoSampler),
-                               0,
-                               toBind,
-                               nullptr);
+      commandBuffer.bindDescriptorSets (
+          vk::PipelineBindPoint::eGraphics, pipelineLayouts->at (eVPNoSampler), 0, toBind, nullptr);
 
-      commandBuffers.at (p_ImageIndex).drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
+      commandBuffer.drawIndexed (mapHandler.indexCount, 1, 0, 0, 0);
     }
 
   for (auto &model : *collectionHandler->models)
@@ -941,19 +941,19 @@ Renderer::recordCommandBuffer (uint32_t p_ImageIndex)
       // for each model select the appropriate pipeline
       if (model.hasTexture && currentlyBound != eMVPWSampler)
         {
-          commandBuffers.at (p_ImageIndex)
-              .bindPipeline (vk::PipelineBindPoint::eGraphics, pipelines->at (eMVPWSampler));
+          commandBuffer.bindPipeline (vk::PipelineBindPoint::eGraphics,
+                                      pipelines->at (eMVPWSampler));
           currentlyBound = eMVPWSampler;
         }
       else if (!model.hasTexture && currentlyBound != eMVPNoSampler)
         {
-          commandBuffers.at (p_ImageIndex)
-              .bindPipeline (vk::PipelineBindPoint::eGraphics, pipelines->at (eMVPNoSampler));
+          commandBuffer.bindPipeline (vk::PipelineBindPoint::eGraphics,
+                                      pipelines->at (eMVPNoSampler));
           currentlyBound = eMVPNoSampler;
         }
 
       // Bind vertex & index buffer for model
-      model.bindBuffers (commandBuffers.at (p_ImageIndex));
+      model.bindBuffers (commandBuffer);
 
       // For each object
       for (auto &object : *model.objects)
@@ -970,46 +970,43 @@ Renderer::recordCommandBuffer (uint32_t p_ImageIndex)
               if (offset.first.second >= 0)
                 {
                   toBind.push_back (model.textureDescriptors->at (offset.first.second).first);
-                  commandBuffers.at (p_ImageIndex)
-                      .bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
-                                           pipelineLayouts->at (eMVPWSampler),
-                                           0,
-                                           toBind,
-                                           nullptr);
+                  commandBuffer.bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
+                                                    pipelineLayouts->at (eMVPWSampler),
+                                                    0,
+                                                    toBind,
+                                                    nullptr);
                 }
               else
                 {
-                  commandBuffers.at (p_ImageIndex)
-                      .bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
-                                           pipelineLayouts->at (eMVPNoSampler),
-                                           0,
-                                           toBind,
-                                           nullptr);
+                  commandBuffer.bindDescriptorSets (vk::PipelineBindPoint::eGraphics,
+                                                    pipelineLayouts->at (eMVPNoSampler),
+                                                    0,
+                                                    toBind,
+                                                    nullptr);
                 }
 
               // { { vertex offset, Texture index }, { Index start, Index count
               // } }
-              commandBuffers.at (p_ImageIndex)
-                  .drawIndexed (
-                      offset.second.second, 1, offset.second.first, offset.first.first, 0);
+              commandBuffer.drawIndexed (
+                  offset.second.second, 1, offset.second.first, offset.first.first, 0);
             }
         }
     }
 
-  commandBuffers.at (p_ImageIndex).endRenderPass ();
+  commandBuffer.endRenderPass ();
 
   /*
    IMGUI RENDER
   */
   gui->doRenderPass (renderPasses->at (eImGui),
                      framebuffers->at (eImGuiFramebuffer).at (p_ImageIndex),
-                     commandBuffers.at (p_ImageIndex),
+                     commandBuffer,
                      swapchain->swapExtent);
   /*
     END IMGUI RENDER
   */
 
-  commandBuffers.at (p_ImageIndex).end ();
+  commandBuffer.end ();
 
   return;
 }
@@ -1066,8 +1063,6 @@ Renderer::draw (size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
   // mark in use
   waitFences->at (p_CurrentImageIndex) = inFlightFences->at (p_CurrentFrame);
 
-  auto &[pool, commandBuffers] = commandPools->at (vk::QueueFlagBits::eGraphics);
-
   vk::SubmitInfo submitInfo;
   std::vector<vk::Semaphore> waitSemaphores = {
     semaphores->at (ePresentComplete),
@@ -1081,7 +1076,7 @@ Renderer::draw (size_t &p_CurrentFrame, uint32_t &p_CurrentImageIndex)
   submitInfo.pWaitSemaphores = waitSemaphores.data ();
   submitInfo.pWaitDstStageMask = waitStages.data ();
   submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffers.at (p_CurrentImageIndex);
+  submitInfo.pCommandBuffers = &getCommandBuffer (eGraphics, p_CurrentImageIndex);
   vk::Semaphore renderSemaphores[] = { semaphores->at (eRenderComplete) };
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = renderSemaphores;
@@ -1239,6 +1234,24 @@ Renderer::createPipelineLayout (PipelineLayoutMap &p_LayoutMap,
       throw std::runtime_error ("Std error creating pipeline layout => " + std::string (e.what ()));
     }
   return;
+}
+
+inline vk::CommandPool &
+Renderer::getCommandPool (vk::QueueFlagBits p_QueueFlag)
+{
+  return commandPools->at (p_QueueFlag).first;
+}
+
+inline vk::CommandBuffer &
+Renderer::getCommandBuffer (vk::QueueFlagBits p_QueueFlag, size_t p_Index)
+{
+  return commandPools->at (p_QueueFlag).second.at (p_Index);
+}
+
+inline std::vector<vk::CommandBuffer> &
+Renderer::getCommandBuffers (vk::QueueFlagBits p_QueueFlag)
+{
+  return commandPools->at (p_QueueFlag).second;
 }
 
 /*
