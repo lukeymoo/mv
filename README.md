@@ -1,3 +1,4 @@
+Gone private.
 Most of the boilerplate for this project was established at <a href='https://github.com/lukeymoo/mv/tree/440b7d80a350951a198a85682adc2c3e45cc5e1e'>about this time.</a>
 
 Still have no clue what type of game this may end up being used in or if I'll even finish it but it's great learning experience.
